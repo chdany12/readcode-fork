@@ -1,0 +1,37 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.security.authorization_checks",
+      "count": 5
+    },
+    {
+      "label": "backend.resilience.rate_limiting",
+      "count": 3
+    },
+    {
+      "label": "backend.data.n_plus_one_queries",
+      "count": 2
+    },
+    {
+      "label": "backend.caching.cache_invalidation",
+      "count": 2
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "count": 2
+    },
+    {
+      "label": "backend.data.orm_pitfalls",
+      "count": 2
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.metrics",
+      "count": 2
+    }
+  ]
+}

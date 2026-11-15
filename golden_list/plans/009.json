@@ -1,0 +1,37 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.caching.cache_invalidation",
+      "count": 4
+    },
+    {
+      "label": "backend.caching.stale_reads",
+      "count": 4
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.graceful_degradation",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.metrics",
+      "count": 2
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "count": 2
+    },
+    {
+      "label": "backend.concurrency.race_conditions",
+      "count": 2
+    },
+    {
+      "label": "backend.concurrency.async_await_pitfalls",
+      "count": 2
+    }
+  ]
+}

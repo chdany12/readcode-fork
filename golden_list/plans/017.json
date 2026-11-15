@@ -1,0 +1,37 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.caching.cache_invalidation",
+      "count": 3
+    },
+    {
+      "label": "backend.caching.ttls_and_expiry",
+      "count": 3
+    },
+    {
+      "label": "backend.api.rest_design",
+      "count": 3
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "count": 3
+    },
+    {
+      "label": "backend.messaging.at_least_once_delivery",
+      "count": 2
+    },
+    {
+      "label": "backend.messaging.message_ordering",
+      "count": 2
+    },
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "count": 2
+    },
+    {
+      "label": "backend.data.nosql_modeling",
+      "count": 2
+    }
+  ]
+}

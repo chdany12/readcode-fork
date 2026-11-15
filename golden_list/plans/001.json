@@ -1,0 +1,21 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.testing.unit_test_design",
+      "count": 9
+    },
+    {
+      "label": "backend.design.interface_design",
+      "count": 5
+    },
+    {
+      "label": "backend.testing.integration_tests",
+      "count": 3
+    },
+    {
+      "label": "backend.design.coupling_and_cohesion",
+      "count": 3
+    }
+  ]
+}

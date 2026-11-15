@@ -1,0 +1,21 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.resilience.rate_limiting",
+      "count": 5
+    },
+    {
+      "label": "backend.data.connection_pooling",
+      "count": 5
+    },
+    {
+      "label": "backend.caching.cache_invalidation",
+      "count": 5
+    },
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "count": 5
+    }
+  ]
+}

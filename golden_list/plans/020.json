@@ -1,0 +1,29 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.config.feature_flags",
+      "count": 6
+    },
+    {
+      "label": "backend.integrations.third_party_adapters",
+      "count": 6
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.graceful_degradation",
+      "count": 2
+    },
+    {
+      "label": "backend.api.rest_design",
+      "count": 2
+    }
+  ]
+}

@@ -1,0 +1,281 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.integrations.third_party_adapters",
+      "count": 8
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "count": 7
+    },
+    {
+      "label": "backend.config.feature_flags",
+      "count": 7
+    },
+    {
+      "label": "backend.design.interface_design",
+      "count": 6
+    },
+    {
+      "label": "backend.concurrency.locking_and_lock_ordering",
+      "count": 6
+    },
+    {
+      "label": "backend.security.audit_logging",
+      "count": 6
+    },
+    {
+      "label": "backend.testing.flaky_tests",
+      "count": 6
+    },
+    {
+      "label": "backend.api.rest_design",
+      "count": 5
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "count": 5
+    },
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "count": 5
+    },
+    {
+      "label": "backend.data.money_and_ledgers",
+      "count": 5
+    },
+    {
+      "label": "backend.distributed.replication_and_consensus",
+      "count": 5
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "count": 4
+    },
+    {
+      "label": "backend.security.authorization_checks",
+      "count": 4
+    },
+    {
+      "label": "backend.api.idempotency",
+      "count": 4
+    },
+    {
+      "label": "backend.data.transactions_and_isolation_levels",
+      "count": 4
+    },
+    {
+      "label": "backend.data.n_plus_one_queries",
+      "count": 4
+    },
+    {
+      "label": "backend.security.authentication",
+      "count": 4
+    },
+    {
+      "label": "backend.messaging.deduplication",
+      "count": 4
+    },
+    {
+      "label": "backend.observability.structured_logging",
+      "count": 4
+    },
+    {
+      "label": "backend.resilience.rate_limiting",
+      "count": 4
+    },
+    {
+      "label": "backend.data.nosql_modeling",
+      "count": 4
+    },
+    {
+      "label": "backend.resources.streaming_large_payloads",
+      "count": 4
+    },
+    {
+      "label": "backend.security.secrets_handling",
+      "count": 4
+    },
+    {
+      "label": "backend.caching.stale_reads",
+      "count": 4
+    },
+    {
+      "label": "backend.security.encryption_at_rest_and_in_transit",
+      "count": 4
+    },
+    {
+      "label": "backend.observability.metrics",
+      "count": 3
+    },
+    {
+      "label": "backend.concurrency.race_conditions",
+      "count": 3
+    },
+    {
+      "label": "backend.caching.cache_invalidation",
+      "count": 3
+    },
+    {
+      "label": "backend.testing.integration_tests",
+      "count": 3
+    },
+    {
+      "label": "backend.messaging.at_least_once_delivery",
+      "count": 3
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "count": 3
+    },
+    {
+      "label": "backend.data.orm_pitfalls",
+      "count": 3
+    },
+    {
+      "label": "backend.observability.tracing",
+      "count": 3
+    },
+    {
+      "label": "backend.resilience.graceful_degradation",
+      "count": 3
+    },
+    {
+      "label": "backend.security.multi_tenant_isolation",
+      "count": 3
+    },
+    {
+      "label": "backend.testing.mocking_and_fakes",
+      "count": 3
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "count": 2
+    },
+    {
+      "label": "backend.data.migrations",
+      "count": 2
+    },
+    {
+      "label": "backend.concurrency.thread_and_worker_pools",
+      "count": 2
+    },
+    {
+      "label": "backend.api.request_validation",
+      "count": 2
+    },
+    {
+      "label": "backend.data.pagination",
+      "count": 2
+    },
+    {
+      "label": "backend.messaging.backpressure",
+      "count": 2
+    },
+    {
+      "label": "backend.concurrency.async_await_pitfalls",
+      "count": 2
+    },
+    {
+      "label": "backend.design.coupling_and_cohesion",
+      "count": 2
+    },
+    {
+      "label": "backend.messaging.message_ordering",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.health_checks",
+      "count": 2
+    },
+    {
+      "label": "backend.caching.ttls_and_expiry",
+      "count": 2
+    },
+    {
+      "label": "backend.config.configuration_loading",
+      "count": 2
+    },
+    {
+      "label": "backend.config.environment_specific_behaviour",
+      "count": 2
+    },
+    {
+      "label": "backend.errors.error_propagation",
+      "count": 2
+    },
+    {
+      "label": "backend.security.input_sanitization",
+      "count": 2
+    },
+    {
+      "label": "backend.api.status_codes_and_error_responses",
+      "count": 2
+    },
+    {
+      "label": "backend.api.versioning",
+      "count": 2
+    },
+    {
+      "label": "backend.concurrency.deadlocks",
+      "count": 2
+    },
+    {
+      "label": "backend.data.connection_pooling",
+      "count": 2
+    },
+    {
+      "label": "backend.design.code_duplication",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.logging_sensitive_data",
+      "count": 2
+    },
+    {
+      "label": "backend.resources.context_cancellation",
+      "count": 2
+    },
+    {
+      "label": "backend.resources.memory_leaks",
+      "count": 2
+    },
+    {
+      "label": "backend.security.session_and_token_handling",
+      "count": 2
+    },
+    {
+      "label": "backend.concurrency.atomic_operations",
+      "count": 2
+    },
+    {
+      "label": "backend.design.layering",
+      "count": 2
+    },
+    {
+      "label": "backend.errors.error_wrapping_and_context",
+      "count": 2
+    },
+    {
+      "label": "backend.messaging.dead_letter_queues",
+      "count": 2
+    },
+    {
+      "label": "backend.realtime.connection_fanout",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.graceful_shutdown",
+      "count": 2
+    },
+    {
+      "label": "backend.resources.file_and_socket_handle_leaks",
+      "count": 2
+    }
+  ]
+}

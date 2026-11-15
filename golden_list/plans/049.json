@@ -1,0 +1,33 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.data.transactions_and_isolation_levels",
+      "count": 3
+    },
+    {
+      "label": "backend.data.migrations",
+      "count": 3
+    },
+    {
+      "label": "backend.api.idempotency",
+      "count": 3
+    },
+    {
+      "label": "backend.observability.structured_logging",
+      "count": 3
+    },
+    {
+      "label": "backend.observability.metrics",
+      "count": 3
+    },
+    {
+      "label": "backend.observability.tracing",
+      "count": 3
+    },
+    {
+      "label": "backend.data.money_and_ledgers",
+      "count": 2
+    }
+  ]
+}

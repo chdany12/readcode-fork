@@ -1,0 +1,29 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.testing.flaky_tests",
+      "count": 7
+    },
+    {
+      "label": "backend.caching.cache_invalidation",
+      "count": 3
+    },
+    {
+      "label": "backend.testing.integration_tests",
+      "count": 3
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "count": 3
+    },
+    {
+      "label": "backend.concurrency.thread_and_worker_pools",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.metrics",
+      "count": 2
+    }
+  ]
+}

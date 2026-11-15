@@ -1,0 +1,29 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.data.n_plus_one_queries",
+      "count": 6
+    },
+    {
+      "label": "backend.data.orm_pitfalls",
+      "count": 6
+    },
+    {
+      "label": "backend.data.transactions_and_isolation_levels",
+      "count": 2
+    },
+    {
+      "label": "backend.data.migrations",
+      "count": 2
+    },
+    {
+      "label": "backend.data.pagination",
+      "count": 2
+    },
+    {
+      "label": "backend.caching.cache_invalidation",
+      "count": 2
+    }
+  ]
+}

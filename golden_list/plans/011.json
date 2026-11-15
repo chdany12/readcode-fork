@@ -1,0 +1,33 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "count": 8
+    },
+    {
+      "label": "backend.concurrency.race_conditions",
+      "count": 2
+    },
+    {
+      "label": "backend.concurrency.thread_and_worker_pools",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "count": 2
+    },
+    {
+      "label": "backend.caching.cache_invalidation",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.metrics",
+      "count": 2
+    }
+  ]
+}

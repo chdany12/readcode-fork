@@ -1,0 +1,21 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.api.rest_design",
+      "count": 6
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "count": 6
+    },
+    {
+      "label": "backend.data.nosql_modeling",
+      "count": 6
+    },
+    {
+      "label": "backend.concurrency.race_conditions",
+      "count": 2
+    }
+  ]
+}

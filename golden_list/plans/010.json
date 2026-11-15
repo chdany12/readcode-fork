@@ -1,0 +1,33 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "count": 4
+    },
+    {
+      "label": "backend.integrations.third_party_adapters",
+      "count": 4
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "count": 3
+    },
+    {
+      "label": "backend.observability.metrics",
+      "count": 3
+    },
+    {
+      "label": "backend.api.idempotency",
+      "count": 2
+    },
+    {
+      "label": "backend.messaging.at_least_once_delivery",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.tracing",
+      "count": 2
+    }
+  ]
+}

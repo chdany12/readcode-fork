@@ -1,0 +1,21 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.data.transactions_and_isolation_levels",
+      "count": 6
+    },
+    {
+      "label": "backend.api.idempotency",
+      "count": 6
+    },
+    {
+      "label": "backend.data.money_and_ledgers",
+      "count": 6
+    },
+    {
+      "label": "backend.concurrency.race_conditions",
+      "count": 2
+    }
+  ]
+}

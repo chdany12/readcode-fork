@@ -1,0 +1,21 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.data.transactions_and_isolation_levels",
+      "count": 5
+    },
+    {
+      "label": "backend.api.rest_design",
+      "count": 5
+    },
+    {
+      "label": "backend.api.idempotency",
+      "count": 5
+    },
+    {
+      "label": "backend.data.money_and_ledgers",
+      "count": 5
+    }
+  ]
+}

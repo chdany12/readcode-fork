@@ -1,0 +1,33 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.integrations.third_party_adapters",
+      "count": 8
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "count": 2
+    },
+    {
+      "label": "backend.api.rest_design",
+      "count": 2
+    },
+    {
+      "label": "backend.api.idempotency",
+      "count": 2
+    },
+    {
+      "label": "backend.security.secrets_handling",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.logging_sensitive_data",
+      "count": 2
+    }
+  ]
+}

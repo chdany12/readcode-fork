@@ -1,0 +1,29 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "count": 6
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "count": 6
+    },
+    {
+      "label": "backend.concurrency.race_conditions",
+      "count": 2
+    },
+    {
+      "label": "backend.concurrency.locking_and_lock_ordering",
+      "count": 2
+    },
+    {
+      "label": "backend.concurrency.thread_and_worker_pools",
+      "count": 2
+    },
+    {
+      "label": "backend.caching.cache_invalidation",
+      "count": 2
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.concurrency.race_conditions",
+      "count": 3
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "count": 3
+    },
+    {
+      "label": "backend.resources.context_cancellation",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.health_checks",
+      "count": 2
+    },
+    {
+      "label": "backend.distributed.replication_and_consensus",
+      "count": 2
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "count": 2
+    },
+    {
+      "label": "backend.errors.error_wrapping_and_context",
+      "count": 2
+    },
+    {
+      "label": "backend.resources.file_and_socket_handle_leaks",
+      "count": 2
+    },
+    {
+      "label": "backend.config.configuration_loading",
+      "count": 2
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.resilience.rate_limiting",
+      "count": 6
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "count": 6
+    },
+    {
+      "label": "backend.integrations.third_party_adapters",
+      "count": 6
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "count": 2
+    }
+  ]
+}

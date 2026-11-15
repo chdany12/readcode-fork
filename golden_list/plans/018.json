@@ -1,0 +1,33 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.integrations.third_party_adapters",
+      "count": 8
+    },
+    {
+      "label": "backend.concurrency.thread_and_worker_pools",
+      "count": 2
+    },
+    {
+      "label": "backend.concurrency.async_await_pitfalls",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "count": 2
+    },
+    {
+      "label": "backend.data.transactions_and_isolation_levels",
+      "count": 2
+    },
+    {
+      "label": "backend.data.connection_pooling",
+      "count": 2
+    }
+  ]
+}

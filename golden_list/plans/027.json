@@ -1,0 +1,29 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.observability.structured_logging",
+      "count": 5
+    },
+    {
+      "label": "backend.observability.metrics",
+      "count": 5
+    },
+    {
+      "label": "backend.observability.tracing",
+      "count": 4
+    },
+    {
+      "label": "backend.messaging.backpressure",
+      "count": 2
+    },
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "count": 2
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "count": 2
+    }
+  ]
+}

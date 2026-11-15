@@ -1,0 +1,29 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.config.feature_flags",
+      "count": 7
+    },
+    {
+      "label": "backend.security.authentication",
+      "count": 4
+    },
+    {
+      "label": "backend.observability.metrics",
+      "count": 3
+    },
+    {
+      "label": "backend.security.session_and_token_handling",
+      "count": 2
+    },
+    {
+      "label": "backend.data.migrations",
+      "count": 2
+    },
+    {
+      "label": "backend.api.rest_design",
+      "count": 2
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.observability.structured_logging",
+      "count": 6
+    },
+    {
+      "label": "backend.observability.metrics",
+      "count": 4
+    },
+    {
+      "label": "backend.observability.tracing",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.logging_sensitive_data",
+      "count": 2
+    },
+    {
+      "label": "backend.messaging.backpressure",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.health_checks",
+      "count": 2
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "count": 2
+    }
+  ]
+}

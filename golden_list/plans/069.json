@@ -1,0 +1,33 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.api.rest_design",
+      "count": 8
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "count": 2
+    },
+    {
+      "label": "backend.caching.cache_invalidation",
+      "count": 2
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "count": 2
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "count": 2
+    },
+    {
+      "label": "backend.design.coupling_and_cohesion",
+      "count": 2
+    }
+  ]
+}

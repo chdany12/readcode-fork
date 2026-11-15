@@ -1,0 +1,29 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.api.rest_design",
+      "count": 6
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "count": 6
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "count": 2
+    },
+    {
+      "label": "backend.data.transactions_and_isolation_levels",
+      "count": 2
+    },
+    {
+      "label": "backend.api.request_validation",
+      "count": 2
+    }
+  ]
+}
