@@ -1,17 +1,81 @@
 "use client";
 
-import Editor from "@monaco-editor/react";
-import { useState } from "react";
+import Editor, { type OnMount } from "@monaco-editor/react";
+import { useEffect, useRef, useState } from "react";
 import type { LoadedExample } from "@/lib/examples";
+import type { DefectLocation, LocateAnswer } from "../../../../shared/types";
+
+type MonacoEditor = Parameters<OnMount>[0];
+type Decorations = ReturnType<MonacoEditor["createDecorationsCollection"]>;
+
+// A candidate's answer to a locate question: marked lines, "no defect", or nothing yet.
+type LocateMark = DefectLocation | "none" | null;
+
+// A marked range counts as correct if it overlaps the defect, allowing this many lines either side.
+const LINE_TOLERANCE = 1;
 
 // NOTE: the answer key is sent to the browser. Fine for a prototype, not for real use.
 export default function ExampleViewer({ example }: { example: LoadedExample }) {
     const [current, setCurrent] = useState(example.files[0]?.path ?? "");
-    const [picked, setPicked] = useState<(number | null)[]>(example.public.questions.map(() => null));
-    const [checked, setChecked] = useState(false);
+    const questions = example.public.questions;
+    const [picked, setPicked] = useState<(number | null)[]>(questions.map(() => null));
+    const [marks, setMarks] = useState<LocateMark[]>(questions.map(() => null));
+    const [submitted, setSubmitted] = useState<boolean[]>(questions.map(() => false));
+
+    const editorRef = useRef<MonacoEditor | null>(null);
+    const decorationsRef = useRef<Decorations | null>(null);
+    const [editorReady, setEditorReady] = useState(false);
 
     const file = example.files.find((f) => f.path === current);
-    const score = picked.filter((p, i) => p === example.key.answers[i]).length;
+    const isCorrect = (qi: number) => {
+        const answer = example.key.answers[qi];
+        return typeof answer === "number" ? picked[qi] === answer : locateCorrect(marks[qi], answer);
+    };
+    const doneCount = submitted.filter(Boolean).length;
+    const score = questions.filter((_, qi) => submitted[qi] && isCorrect(qi)).length;
+
+    // Highlight, in the open file: the candidate's marked lines, and after submission the actual defect.
+    useEffect(() => {
+        const editor = editorRef.current;
+        if (!editor || !editorReady) return;
+        const ranges: { range: { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number }; options: { isWholeLine: boolean; className: string } }[] = [];
+        questions.forEach((q, qi) => {
+            if (q.kind !== "locate") return;
+            const mark = marks[qi];
+            if (mark && mark !== "none" && mark.path === current) {
+                ranges.push(lineRange(mark, "rc-marked"));
+            }
+            const answer = example.key.answers[qi];
+            if (submitted[qi] && typeof answer !== "number" && answer.defect && answer.defect.path === current) {
+                ranges.push(lineRange(answer.defect, "rc-defect"));
+            }
+        });
+        if (!decorationsRef.current) decorationsRef.current = editor.createDecorationsCollection(ranges);
+        else decorationsRef.current.set(ranges);
+    }, [current, marks, submitted, editorReady, questions, example.key.answers]);
+
+    const onMount: OnMount = (editor) => {
+        editorRef.current = editor;
+        setEditorReady(true);
+    };
+
+    // Mark the lines currently selected in the editor (or the cursor's line) for question qi.
+    const markSelection = (qi: number) => {
+        const sel = editorRef.current?.getSelection();
+        if (!sel) return;
+        let endLine = sel.endLineNumber;
+        if (sel.endColumn === 1 && endLine > sel.startLineNumber) endLine--; // selection ending at a line start
+        const mark: DefectLocation = { path: current, startLine: sel.startLineNumber, endLine };
+        setMarks((m) => m.map((v, i) => (i === qi ? mark : v)));
+    };
+
+    const jumpTo = (loc: DefectLocation) => {
+        setCurrent(loc.path);
+        // after the editor switches files, scroll to the range
+        setTimeout(() => editorRef.current?.revealLinesInCenter(loc.startLine, loc.endLine), 0);
+    };
+
+    const canSubmit = (qi: number) => (questions[qi].kind === "locate" ? marks[qi] !== null : picked[qi] !== null);
 
     return (
         <div className="flex min-h-0 flex-1">
@@ -28,64 +92,136 @@ export default function ExampleViewer({ example }: { example: LoadedExample }) {
                     value={file?.content ?? ""}
                     language={languageFor(current)}
                     theme="vs-dark"
+                    onMount={onMount}
                     options={{ readOnly: true, minimap: { enabled: false }, fontSize: 13, scrollBeyondLastLine: false }}
                 />
             </section>
 
             {/* questions */}
             <aside className="w-[28rem] shrink-0 overflow-auto border-l border-neutral-400 p-3">
-                {example.public.questions.map((q, qi) => (
-                    <fieldset key={qi} className="mb-4 border border-neutral-400 p-2">
-                        <legend className="px-1 font-bold">Q{qi + 1}</legend>
-                        <p className="mb-2 whitespace-pre-wrap">{q.prompt}</p>
-                        {q.choices.map((c, ci) => {
-                            const correct = checked && ci === example.key.answers[qi];
-                            const wrong = checked && picked[qi] === ci && ci !== example.key.answers[qi];
-                            return (
-                                <label
-                                    key={ci}
-                                    className={`flex gap-2 px-1 py-0.5 ${correct ? "bg-green-200 text-black" : ""} ${wrong ? "bg-red-200 text-black" : ""}`}
+                {questions.map((q, qi) => {
+                    const done = submitted[qi];
+                    const answer = example.key.answers[qi];
+                    const explanation = example.key.explanations?.[qi];
+                    return (
+                        <fieldset key={qi} className="mb-4 border border-neutral-400 p-2">
+                            <legend className="px-1 font-bold">Q{qi + 1}</legend>
+                            <p className="mb-2 whitespace-pre-wrap">{q.prompt}</p>
+
+                            {q.kind === "locate" ? (
+                                <div>
+                                    {!done && (
+                                        <div className="mb-1 flex flex-wrap gap-2">
+                                            <button className={btn} onClick={() => markSelection(qi)}>
+                                                mark selected lines
+                                            </button>
+                                            <button className={btn} onClick={() => setMarks((m) => m.map((v, i) => (i === qi ? "none" : v)))}>
+                                                no defect
+                                            </button>
+                                        </div>
+                                    )}
+                                    <p className="text-neutral-500">
+                                        {marks[qi] === null && "select the line(s) in the editor, then mark them"}
+                                    </p>
+                                    {marks[qi] === "none" && <p>your answer: no defect</p>}
+                                    {marks[qi] && marks[qi] !== "none" && (
+                                        <p>
+                                            your answer:{" "}
+                                            <button className="underline" onClick={() => jumpTo(marks[qi] as DefectLocation)}>
+                                                {describe(marks[qi] as DefectLocation)}
+                                            </button>
+                                        </p>
+                                    )}
+                                </div>
+                            ) : (
+                                q.choices.map((c, ci) => {
+                                    const correct = done && ci === answer;
+                                    const wrong = done && picked[qi] === ci && ci !== answer;
+                                    return (
+                                        <label
+                                            key={ci}
+                                            className={`flex gap-2 px-1 py-0.5 ${correct ? "bg-green-200 text-black" : ""} ${wrong ? "bg-red-200 text-black" : ""}`}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name={`q${qi}`}
+                                                checked={picked[qi] === ci}
+                                                disabled={done}
+                                                onChange={() => setPicked((p) => p.map((v, i) => (i === qi ? ci : v)))}
+                                            />
+                                            <span>{String.fromCharCode(65 + ci)}. {c}</span>
+                                        </label>
+                                    );
+                                })
+                            )}
+
+                            {!done ? (
+                                <button
+                                    className={`mt-2 ${btn}`}
+                                    disabled={!canSubmit(qi)}
+                                    onClick={() => setSubmitted((s) => s.map((v, i) => (i === qi ? true : v)))}
                                 >
-                                    <input
-                                        type="radio"
-                                        name={`q${qi}`}
-                                        checked={picked[qi] === ci}
-                                        disabled={checked}
-                                        onChange={() => setPicked((p) => p.map((v, i) => (i === qi ? ci : v)))}
-                                    />
-                                    <span>{String.fromCharCode(65 + ci)}. {c}</span>
-                                </label>
-                            );
-                        })}
-                    </fieldset>
-                ))}
+                                    submit
+                                </button>
+                            ) : (
+                                <div className="mt-2 border-t border-neutral-400 pt-2">
+                                    <div className="font-bold">{isCorrect(qi) ? "correct" : "incorrect"}</div>
+                                    {typeof answer === "number" ? (
+                                        !isCorrect(qi) && <p>the answer is {String.fromCharCode(65 + answer)}</p>
+                                    ) : answer.defect ? (
+                                        <p>
+                                            the defect is at{" "}
+                                            <button className="underline" onClick={() => jumpTo(answer.defect!)}>
+                                                {describe(answer.defect)}
+                                            </button>
+                                        </p>
+                                    ) : (
+                                        <p>there is no defect in this code</p>
+                                    )}
+                                    {explanation && <p className="mt-1 whitespace-pre-wrap">{explanation}</p>}
+                                </div>
+                            )}
+                        </fieldset>
+                    );
+                })}
                 <div className="flex items-center gap-3">
-                    {!checked ? (
+                    <span>score: {score}/{doneCount} submitted ({questions.length} total)</span>
+                    {doneCount > 0 && (
                         <button
-                            className="border border-neutral-600 px-2 py-1 hover:bg-neutral-200 hover:text-black disabled:opacity-40"
-                            disabled={picked.some((p) => p === null)}
-                            onClick={() => setChecked(true)}
+                            className={btn}
+                            onClick={() => {
+                                setPicked(questions.map(() => null));
+                                setMarks(questions.map(() => null));
+                                setSubmitted(questions.map(() => false));
+                            }}
                         >
-                            check answers
+                            reset
                         </button>
-                    ) : (
-                        <>
-                            <span>score: {score}/{example.public.questions.length}</span>
-                            <button
-                                className="border border-neutral-600 px-2 py-1 hover:bg-neutral-200 hover:text-black"
-                                onClick={() => {
-                                    setChecked(false);
-                                    setPicked(example.public.questions.map(() => null));
-                                }}
-                            >
-                                reset
-                            </button>
-                        </>
                     )}
                 </div>
             </aside>
         </div>
     );
+}
+
+const btn = "border border-neutral-600 px-2 py-1 hover:bg-neutral-200 hover:text-black disabled:opacity-40";
+
+function locateCorrect(mark: LocateMark, answer: LocateAnswer): boolean {
+    if (mark === null) return false;
+    if (answer.defect === null) return mark === "none";
+    if (mark === "none" || mark.path !== answer.defect.path) return false;
+    return mark.startLine <= answer.defect.endLine + LINE_TOLERANCE && mark.endLine >= answer.defect.startLine - LINE_TOLERANCE;
+}
+
+function describe(loc: DefectLocation): string {
+    return loc.startLine === loc.endLine ? `${loc.path} line ${loc.startLine}` : `${loc.path} lines ${loc.startLine}–${loc.endLine}`;
+}
+
+function lineRange(loc: DefectLocation, className: string) {
+    return {
+        range: { startLineNumber: loc.startLine, startColumn: 1, endLineNumber: loc.endLine, endColumn: 1 },
+        options: { isWholeLine: true, className },
+    };
 }
 
 // ---- file tree ----
