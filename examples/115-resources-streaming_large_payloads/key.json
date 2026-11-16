@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/replayRoutes.ts",
+        "startLine": 46,
+        "endLine": 47
+      }
+    },
+    2,
+    0,
+    3
+  ],
+  "explanations": [
+    "fsp.readFile loads the entire replay into a Buffer before sending. Every concurrent download holds a whole file in memory for as long as the client takes to receive it, so a burst of downloads after a tournament final can exhaust the heap. The file should be streamed, e.g. pipeline(createReadStream(filePath), res), so memory per request stays at a small chunk size.",
+    "The player is authenticated (playerId present) and the metadata exists, so the request reaches the participants/visibility check, which returns 403 replay_private. 401 is only for a missing playerId, 404 for missing metadata, 410 for a missing file.",
+    "fsp.stat is caught and turned into null, which yields 410 replay_expired. The error never reaches next(), and the not_found path is only for missing metadata.",
+    "recordDownload runs after res.end and is fire-and-forget with .catch(() => undefined), so its failure neither touches the response nor produces an unhandled rejection. It only loses the download record."
+  ]
+}

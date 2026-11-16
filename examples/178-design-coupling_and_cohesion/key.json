@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/bookingService.ts",
+        "startLine": 69,
+        "endLine": 70
+      }
+    },
+    1,
+    2,
+    1
+  ],
+  "explanations": [
+    "In BookingService.applyLoyalty, the discount is applied by mutating the FareQuote object that PricingEngine.quote returned. That object is the same instance stored in the engine's private quotes map, so the discount is written into the cache. For up to 60 seconds every later caller for that route (including travelers with no loyalty tier) gets the discounted price, and further loyalty bookings stack discounts on top of it, so the fare keeps dropping. Taxes are also left at the pre-discount amount. The booking service is coupled to the engine's internal caching without knowing it; applyLoyalty should build a new object (e.g. { ...quote, baseFareCents, totalCents }) or the engine should hand out copies.",
+    "quote() builds routeKey from origin, destination and date and returns the cached entry when now - computedAt < 60_000 ms. 10 seconds is inside that window, so only the first request fetches. Nothing pre-loads quotes, and the key does not include the traveler or tier.",
+    "book() awaits payments.charge and then bookings.insert with no try/catch, so an insert failure propagates to the caller after money was taken. There is no refund, retry, or swallowing of the error in this code.",
+    "loyalty.ts exports a type and a pure function mapping a tier to a rate; it imports nothing. Only bookingService.ts imports it. PricingEngine never references loyalty, and loyalty never touches the repository."
+  ]
+}

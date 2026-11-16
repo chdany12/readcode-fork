@@ -1,0 +1,51 @@
+{
+  "id": "6e431642-2177-47ad-ad38-40ad997d636a",
+  "title": "Verifying signed courier status webhooks with rotatable keys",
+  "name": "Courier webhook verifier",
+  "createdAt": "2026-11-15T09:41:31.662Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code handles the webhook signing secrets (loading, comparing, or exposing them)? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Operations rotate the key: the old value is moved to COURIER_WEBHOOK_PREVIOUS_KEY_FILE and a new one written to COURIER_WEBHOOK_KEY_FILE, then the service restarts. The courier platform switches to the new key an hour later. What happens to webhooks during that hour?",
+      "choices": [
+        "They are rejected, because only the current key is used to verify",
+        "They are accepted, because verify tries both the current and the previous key",
+        "They are accepted only if the timestamp is within 300 seconds of the rotation",
+        "They are rejected until the courier platform sends an x-courier-key-id header"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "COURIER_WEBHOOK_KEY_FILE points to a file that does not exist. What does the error thrown at startup contain?",
+      "choices": [
+        "The full file path and the stack of readFile",
+        "Nothing; loadCourierSigningKeys returns a key of empty bytes",
+        "The secret name courier_webhook_key and the errno code such as ENOENT",
+        "The first bytes of whatever was read before the failure"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "An attacker sends a signature header that is 32 hex characters (16 bytes) long. What does verify do?",
+      "choices": [
+        "Rejects it as malformed before computing any HMAC",
+        "Throws from timingSafeEqual because the buffers differ in length",
+        "Computes HMACs and rejects with reason bad_signature",
+        "Accepts it if its first 16 bytes match the expected MAC"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.security.secrets_handling",
+    "backend.integrations.webhooks_outbound",
+    "backend.observability.logging_sensitive_data",
+    "backend.config.configuration_loading"
+  ]
+}

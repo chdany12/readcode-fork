@@ -1,0 +1,50 @@
+{
+  "id": "bd4c724f-a8d2-4b47-aa0f-a3c147a5bd54",
+  "title": "Ride dispatcher and its tests",
+  "name": "Ride dispatcher tests",
+  "createdAt": "2026-11-15T09:41:31.557Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in these tests that would make them pass or fail nondeterministically? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "submit() is called twice in the same synchronous block. How many times does drain() start?",
+      "choices": [
+        "Twice, once per submit, running concurrently",
+        "Once; the second submit sees draining === true and only pushes onto pending",
+        "Zero times until a third submit arrives",
+        "Twice, but the second drain() waits for the first to finish"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "In the first test, could the `dispatcher.once(\"assigned\", ...)` listener be registered on the line right after submit() instead of before it?",
+      "choices": [
+        "No, submit() emits 'assigned' synchronously, so a later listener would miss it",
+        "No, EventEmitter drops listeners added after a submit",
+        "Yes, because assignment is emitted on a later tick (after setImmediate and the awaited locator call)",
+        "Only if the locator has non-zero latency"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The 'drivers' array is rebuilt in beforeEach. What would go wrong if it were a single module-level array instead?",
+      "choices": [
+        "Nothing, because each Dispatcher copies the driver list",
+        "Only the unassigned test would be affected, because it is the only one that mutates drivers",
+        "The TypeScript compiler would reject the shared mutable array",
+        "Test results would depend on run order, since Dispatcher sets available = false on the shared Driver objects"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.testing.flaky_tests",
+    "backend.testing.unit_test_design",
+    "backend.testing.mocking_and_fakes"
+  ]
+}

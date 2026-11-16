@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "There is no defect. with() copies bindings into a new object, so per-request context never leaks between requests. Errors go through serializeError, which reads name, message and stack explicitly (they are not enumerable on Error, so spreading would lose them). The success log includes the whole session object, which looks risky, but redact() walks nested objects and replaces the token key with \"[redacted]\"; the password is never passed to the logger. level, event and time are written after the spread, so caller fields cannot overwrite them.",
+    "redact() recurses into the session object; only the key 'token' is in REDACTED_KEYS, so it is replaced while expiresAt is kept. 'session' itself is not a redacted key, so the object is not replaced wholesale, and objects are not dropped.",
+    "The catch around verify calls log.error with the error, which serializeError turns into { type, message, stack } by reading those properties directly, then returns reason 'unavailable'. The exception is not rethrown; 'invalid_credentials' is the null-user path.",
+    "with() constructs a new JsonLogger whose bindings are a new object made by spreading, and the shared root logger is never mutated. Each login uses its own local log. Sharing the root is safe because it is read-only here, and error() also only builds new objects."
+  ]
+}

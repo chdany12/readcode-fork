@@ -1,0 +1,51 @@
+{
+  "id": "312f587c-8ff6-43f8-b9ab-4a1f278b9ccc",
+  "title": "Row-level security for file sync",
+  "name": "File sync service",
+  "createdAt": "2026-11-15T09:44:41.995Z",
+  "durationMinutes": 15,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code keeps one tenant's files separate from another's? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "withTenant uses set_config('app.tenant_id', $1, true). What would change if the third argument were false?",
+      "choices": [
+        "Nothing; the setting always ends with the transaction",
+        "The setting would last for the whole session, so a pooled connection could carry one tenant's id into a later request",
+        "The policy would stop being enforced",
+        "Postgres would reject the call"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two devices of the same tenant both commit an edit to the same path with baseRevision 4 at the same moment. What happens?",
+      "choices": [
+        "Both succeed and the revision ends at 6",
+        "Both fail with ConflictError",
+        "One UPDATE matches revision = 4 and returns 5; the other matches no row and gets ConflictError with currentRevision 5",
+        "The second one overwrites the first and returns 5"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A tenant calls commit with baseRevision 0 for a path that already exists for that tenant. What is the result?",
+      "choices": [
+        "The existing file is replaced and revision resets to 1",
+        "A unique-violation error is thrown to the caller",
+        "ConflictError carrying the existing row's revision",
+        "A duplicate row is inserted"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.security.multi_tenant_isolation",
+    "backend.data.optimistic_vs_pessimistic_locking",
+    "backend.data.transactions_and_isolation_levels",
+    "backend.data.connection_pooling"
+  ]
+}

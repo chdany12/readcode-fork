@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    2,
+    0,
+    3
+  ],
+  "explanations": [
+    "There is none. The limiter prunes timestamps at or before now - windowMs before counting, so the window truly slides; rejected requests do not record a hit, so a client hammering the endpoint cannot lock itself out forever; retryAfterMs is computed from the oldest live hit, which is exactly when a slot frees up; and memory is bounded both per key (at most `limit` timestamps, since pushes happen only below the limit) and across keys via the LRU eviction in touch(). Node runs check() synchronously, so there is no interleaving between the read and the push.",
+    "Five hits are live (none is at or before 45-60 = -15s), which reaches the limit of 5. retryAfterMs = oldest (0) + 60000 - 45000 = 15000, so Retry-After is 15. The window slides rather than resetting on clock minutes; 60 would ignore elapsed time; 55 would use the newest hit instead of the oldest.",
+    "check() pushes the timestamp as soon as the request is allowed, before any repository or inventory call, and placeOrder never undoes it. So the 409 attempt still uses a slot. Nothing removes hits on rejection, repo calls do not touch the limiter, and history is never cleared explicitly.",
+    "touch() deletes and re-inserts the key so Map insertion order tracks recency, then removes the first (least recently used) key whenever size exceeds maxTrackedKeys. There is no timer, and the per-key cap alone does not bound the number of keys. Note this also means a flood of new keys can evict real customers' history, a deliberate memory-vs-accuracy tradeoff."
+  ]
+}

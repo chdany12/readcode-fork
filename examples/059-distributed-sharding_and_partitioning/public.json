@@ -1,0 +1,48 @@
+{
+  "id": "270cc6b5-e533-4635-bd9b-6ac29eda68c4",
+  "title": "Consistent-hash feed timeline",
+  "name": "Feed timeline ring",
+  "createdAt": "2026-11-15T09:41:31.582Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how keys are assigned to nodes on the ring? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A user follows 500 authors spread across 6 feed nodes. How many calls to recentPosts does homeTimeline make?",
+      "choices": [
+        "500, one per author",
+        "1, to the node owning the user's id",
+        "At most 6, one per distinct node owning any followed author",
+        "Always exactly 6, one per node in the cluster"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does each node get 128 virtual points instead of one?",
+      "choices": [
+        "To spread each node's ownership across many small arcs so load is more even and a node's removal spreads its keys over many survivors",
+        "To store 128 replicas of every post for durability",
+        "So that locate() can be O(1)",
+        "To allow keys to be routed to 128 nodes in parallel"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Node C is removed via remove('C'). Which posts can homeTimeline no longer find, assuming no data is moved?",
+      "choices": [
+        "None; the ring re-sorts and finds them elsewhere",
+        "Posts by every author, since all routing changes",
+        "Only posts published after the removal",
+        "Posts previously written to C, because their authors now route to other nodes that never stored them"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.distributed.sharding_and_partitioning"
+  ]
+}

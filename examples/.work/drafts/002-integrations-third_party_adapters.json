@@ -1,0 +1,63 @@
+{
+  "title": "ParcelHub shipping label adapter",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "shipping/types.ts",
+      "content": "export type Money = { amountCents: number; currency: string };\n\nexport interface Address {\n  name: string;\n  line1: string;\n  line2?: string;\n  city: string;\n  region: string;\n  postalCode: string;\n  country: string;\n}\n\nexport interface ShipmentRequest {\n  orderId: string;\n  from: Address;\n  to: Address;\n  weightGrams: number;\n  serviceLevel: \"ground\" | \"express\";\n}\n\nexport interface Label {\n  carrierShipmentId: string;\n  trackingNumber: string;\n  labelUrl: string;\n  cost: Money;\n}\n\nexport class CarrierError extends Error {\n  constructor(message: string, readonly retryable: boolean, readonly cause?: unknown) {\n    super(message);\n    this.name = new.target.name;\n  }\n}\n\nexport class InvalidAddressError extends CarrierError {\n  constructor(readonly field: string, message: string) {\n    super(message, false);\n  }\n}\n\nexport class CarrierRateLimitedError extends CarrierError {\n  constructor(readonly retryAfterMs: number) {\n    super(`carrier rate limited, retry after ${retryAfterMs}ms`, true);\n  }\n}\n\nexport class CarrierUnavailableError extends CarrierError {\n  constructor(message: string, cause?: unknown) {\n    super(message, true, cause);\n  }\n}\n"
+    },
+    {
+      "path": "shipping/parcelHubClient.ts",
+      "content": "import {\n  CarrierError,\n  CarrierRateLimitedError,\n  CarrierUnavailableError,\n  InvalidAddressError,\n  Label,\n  ShipmentRequest,\n} from \"./types\";\n\nexport interface ParcelHubConfig {\n  baseUrl: string;\n  apiKey: string;\n  timeoutMs: number;\n  maxAttempts: number;\n  baseBackoffMs: number;\n  maxRetryWaitMs: number;\n}\n\ntype ParcelHubLabelResponse = {\n  id: string;\n  tracking_code: string;\n  label: { url: string };\n  rate: { amount: string; currency: string };\n};\n\ntype ParcelHubErrorBody = { error?: { code?: string; field?: string; message?: string } };\n\nconst sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));\n\nexport class ParcelHubClient {\n  constructor(private readonly cfg: ParcelHubConfig) {}\n\n  async createLabel(req: ShipmentRequest): Promise<Label> {\n    const idempotencyKey = `label-${req.orderId}`;\n    const body = {\n      shipment: {\n        reference: req.orderId,\n        from_address: toProviderAddress(req.from),\n        to_address: toProviderAddress(req.to),\n        parcel: { weight_oz: Math.ceil(req.weightGrams / 28.3495) },\n        service: req.serviceLevel === \"express\" ? \"NEXT_DAY\" : \"GROUND\",\n      },\n    };\n    const res = await this.withRetries(() =>\n      this.send<ParcelHubLabelResponse>(\"POST\", \"/v2/labels\", body, idempotencyKey),\n    );\n    return {\n      carrierShipmentId: res.id,\n      trackingNumber: res.tracking_code,\n      labelUrl: res.label.url,\n      cost: { amountCents: toCents(res.rate.amount), currency: res.rate.currency },\n    };\n  }\n\n  private async withRetries<T>(op: () => Promise<T>): Promise<T> {\n    let lastError: unknown;\n    for (let attempt = 1; attempt <= this.cfg.maxAttempts; attempt++) {\n      try {\n        return await op();\n      } catch (err) {\n        lastError = err;\n        if (!(err instanceof CarrierError) || !err.retryable || attempt === this.cfg.maxAttempts) {\n          throw err;\n        }\n        let waitMs = this.cfg.baseBackoffMs * 2 ** (attempt - 1);\n        if (err instanceof CarrierRateLimitedError) {\n          if (err.retryAfterMs > this.cfg.maxRetryWaitMs) throw err;\n          waitMs = Math.max(waitMs, err.retryAfterMs);\n        }\n        await sleep(Math.min(waitMs, this.cfg.maxRetryWaitMs));\n      }\n    }\n    throw lastError;\n  }\n\n  private async send<T>(method: string, path: string, body: unknown, idempotencyKey?: string): Promise<T> {\n    const controller = new AbortController();\n    const timer = setTimeout(() => controller.abort(), this.cfg.timeoutMs);\n    try {\n      let res: Response;\n      try {\n        res = await fetch(`${this.cfg.baseUrl}${path}`, {\n          method,\n          signal: controller.signal,\n          headers: {\n            Authorization: `Bearer ${this.cfg.apiKey}`,\n            \"Content-Type\": \"application/json\",\n            ...(idempotencyKey ? { \"Idempotency-Key\": idempotencyKey } : {}),\n          },\n          body: JSON.stringify(body),\n        });\n      } catch (err) {\n        throw new CarrierUnavailableError(`parcelhub ${method} ${path} failed before response`, err);\n      }\n\n      if (res.ok) return (await res.json()) as T;\n\n      const errBody = (await res.json().catch(() => ({}))) as ParcelHubErrorBody;\n      if (res.status === 429) {\n        const seconds = Number(res.headers.get(\"Retry-After\"));\n        throw new CarrierRateLimitedError(Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 1000);\n      }\n      if (res.status === 422 && errBody.error?.code === \"address_invalid\") {\n        throw new InvalidAddressError(errBody.error.field ?? \"unknown\", errBody.error.message ?? \"invalid address\");\n      }\n      if (res.status >= 500) {\n        throw new CarrierUnavailableError(`parcelhub ${method} ${path} returned ${res.status}`);\n      }\n      throw new CarrierError(\n        `parcelhub ${method} ${path} rejected: ${res.status} ${errBody.error?.code ?? \"unknown\"}`,\n        false,\n      );\n    } finally {\n      clearTimeout(timer);\n    }\n  }\n}\n\nfunction toProviderAddress(a: ShipmentRequest[\"to\"]) {\n  return {\n    name: a.name,\n    street1: a.line1,\n    street2: a.line2 ?? \"\",\n    city: a.city,\n    state: a.region,\n    zip: a.postalCode,\n    country: a.country,\n  };\n}\n\nfunction toCents(decimal: string): number {\n  const match = /^(\\d+)(?:\\.(\\d{1,2}))?$/.exec(decimal.trim());\n  if (!match) throw new CarrierError(`unexpected rate amount \"${decimal}\"`, false);\n  const [, whole, frac = \"\"] = match;\n  return Number(whole) * 100 + Number(frac.padEnd(2, \"0\"));\n}\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this adapter calls the ParcelHub API (timeouts, retries, error mapping)? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is no defect. The idempotency key is derived from orderId once, outside the retry loop, so a retried POST cannot create a second label. Each attempt gets its own AbortController and timer, and the timer is cleared in finally, including while the body is read. Only CarrierErrors marked retryable (network failures, 429, 5xx) are retried; 4xx such as invalid addresses fail fast. A Retry-After longer than maxRetryWaitMs is surfaced immediately instead of blocking the caller, and money is parsed from the decimal string into integer cents without floating-point math."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "The first createLabel attempt for order A-17 reaches ParcelHub, which creates the label, but the response is lost when the client's timeout fires. The second attempt gets a 200. What is the most likely outcome?",
+      "choices": [
+        "Two labels are created and the customer is charged twice, because the second POST is a new request",
+        "One label exists; the retry carries the same Idempotency-Key (label-A-17), so ParcelHub returns the original label",
+        "The call fails with CarrierError because aborted requests are not retryable",
+        "The call fails with InvalidAddressError because ParcelHub rejects the duplicate reference"
+      ],
+      "answer": 1,
+      "explanation": "idempotencyKey is computed from req.orderId before withRetries and the same value is passed to every send call, so the provider can deduplicate the retried POST. An abort makes fetch throw, which send wraps in CarrierUnavailableError (retryable), so the retry does happen. Nothing maps a duplicate to InvalidAddressError; that only comes from a 422 with code address_invalid."
+    },
+    {
+      "prompt": "With maxAttempts=4, baseBackoffMs=200, maxRetryWaitMs=5000, ParcelHub answers the first attempt with 429 and Retry-After: 30. What does createLabel do?",
+      "choices": [
+        "Sleeps 5000 ms (the cap) and retries",
+        "Sleeps 200 ms and retries, ignoring Retry-After",
+        "Sleeps 30 seconds and retries",
+        "Throws CarrierRateLimitedError immediately without retrying"
+      ],
+      "answer": 3,
+      "explanation": "Retry-After of 30 seconds becomes retryAfterMs=30000. In withRetries, a CarrierRateLimitedError whose retryAfterMs exceeds maxRetryWaitMs is rethrown right away, letting the caller decide (for example re-queue the job). The cap with Math.min is only reached for smaller Retry-After values, the 200 ms backoff is replaced by Math.max with retryAfterMs, and the code never sleeps past maxRetryWaitMs."
+    },
+    {
+      "prompt": "ParcelHub returns HTTP 400 with body {\"error\":{\"code\":\"parcel_too_heavy\"}}. How many HTTP requests are made and what does the caller see?",
+      "choices": [
+        "One request; a non-retryable CarrierError mentioning 400 parcel_too_heavy",
+        "Four requests; a CarrierUnavailableError after retries are exhausted",
+        "One request; an InvalidAddressError with field \"unknown\"",
+        "One request; the label is returned with an empty tracking number"
+      ],
+      "answer": 0,
+      "explanation": "A 400 is not ok, not 429, not a 422 address_invalid, and not >= 500, so send throws the generic CarrierError with retryable=false, and withRetries rethrows it on the first attempt. CarrierUnavailableError is only for network failures and 5xx; InvalidAddressError requires status 422 with that specific code; and a non-ok response never reaches the label mapping."
+    }
+  ],
+  "concepts": [
+    "backend.integrations.third_party_adapters",
+    "backend.resilience.retries_and_backoff",
+    "backend.resilience.timeouts",
+    "backend.api.idempotency",
+    "backend.resilience.rate_limiting",
+    "backend.errors.error_wrapping_and_context"
+  ]
+}

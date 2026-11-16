@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/visitBilling.ts",
+        "startLine": 32,
+        "endLine": 32
+      }
+    },
+    1,
+    0,
+    2
+  ],
+  "explanations": [
+    "patientCoins and payerShare are each rounded independently. When remainder * rate lands exactly on .5 (e.g. remainder 1001 cents, rate 0.5), both round up and the shares total one cent more than remainder, so the entry no longer sums to zero. Ledger.post rejects it as unbalanced and the visit is never billed. The payer share should be computed as remainder - patientCoins.",
+    "The store receives a deterministic key derived from appointmentId, so a repeated call maps to the same key and appendEntry can return false instead of writing again. The UUID is new on every call, and the balance check only validates a single entry's arithmetic.",
+    "Money is held in integer minor units so sums are exact; fractional values in IEEE doubles (0.1 + 0.2) accumulate errors and break zero-sum checks. JS numbers can represent negative fractions, and payload size or column type are not why the check exists.",
+    "In the payerId === null branch the full allowed amount is posted to ar:patient, balanced against revenue; copay and coinsurance are only used in the insured branch. So the receivable grows by 15000, not the copay (2000) or the remainder (13000), and nothing in the code handles up-front collection."
+  ]
+}

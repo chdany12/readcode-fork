@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    3,
+    0
+  ],
+  "explanations": [
+    "There is no defect. The middleware rejects unauthenticated users, hides projects from non-members with a 404, and enforces a minimum role per route. Secret lookups are always scoped by both projectId (from the URL that was authorized) and secretId, so a member of one project cannot read or delete another project's secret by guessing an id. Protected secrets additionally require maintainer or site admin, and the role used for that check is the membership resolved by the middleware for this same project. The site-admin bypass leaves req.membership undefined, which the value route handles explicitly.",
+    "requireProjectRole returns 404 project_not_found when no membership exists and the user is not a site admin, which avoids confirming the project exists. 403 is only returned when a membership exists but its role is too low; 401 is for missing req.user; the list handler is never reached.",
+    "The handler calls secrets.get(req.params.projectId, secretId), scoping the lookup to project A, which was the project authorized by the middleware. A secret from B is not found, so 404 is returned. Passing the role check for A grants nothing on B; protected_secret only applies to a found secret; reveal is never called.",
+    "The middleware lets site admins through without a membership and sets req.membership to undefined. In the handler, canReadProtected short-circuits on req.user!.isSiteAdmin, and the role is only used behind a role !== undefined guard, so nothing throws and the value is returned. The 404 branch requires !isSiteAdmin."
+  ]
+}

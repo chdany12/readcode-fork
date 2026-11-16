@@ -1,0 +1,62 @@
+{
+  "title": "Versioned availability cache for hotel bookings",
+  "name": "Hotel availability cache",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/availabilityCache.ts",
+      "content": "import { Redis } from \"ioredis\";\n\nexport interface RoomAvailability {\n  hotelId: string;\n  date: string;\n  roomsLeft: number;\n  priceMinor: number;\n}\n\nexport interface AvailabilityRepo {\n  load(hotelId: string, date: string): Promise<RoomAvailability | null>;\n  decrementRooms(hotelId: string, dates: string[], count: number): Promise<boolean>;\n  setPrice(hotelId: string, date: string, priceMinor: number): Promise<void>;\n}\n\nconst TTL_SECONDS = 300;\n\nfunction dataKey(hotelId: string, date: string, version: string): string {\n  return `avail:${hotelId}:${date}:v${version}`;\n}\n\nfunction versionKey(hotelId: string): string {\n  return `avail-ver:${hotelId}`;\n}\n\nexport class AvailabilityCache {\n  constructor(private readonly redis: Redis, private readonly repo: AvailabilityRepo) {}\n\n  private async currentVersion(hotelId: string): Promise<string> {\n    return (await this.redis.get(versionKey(hotelId))) ?? \"0\";\n  }\n\n  async get(hotelId: string, date: string): Promise<RoomAvailability | null> {\n    const version = await this.currentVersion(hotelId);\n    const cached = await this.redis.get(dataKey(hotelId, date, version));\n    if (cached) {\n      return JSON.parse(cached) as RoomAvailability;\n    }\n\n    const fresh = await this.repo.load(hotelId, date);\n    if (fresh) {\n      await this.redis.set(dataKey(hotelId, date, version), JSON.stringify(fresh), \"EX\", TTL_SECONDS);\n    }\n    return fresh;\n  }\n\n  async invalidateHotel(hotelId: string): Promise<void> {\n    await this.redis.incr(versionKey(hotelId));\n  }\n}\n"
+    },
+    {
+      "path": "src/bookingService.ts",
+      "content": "import { AvailabilityCache, AvailabilityRepo } from \"./availabilityCache\";\n\nexport class BookingError extends Error {}\n\nexport class BookingService {\n  constructor(private readonly repo: AvailabilityRepo, private readonly cache: AvailabilityCache) {}\n\n  async reserve(hotelId: string, nights: string[], rooms: number): Promise<void> {\n    if (nights.length === 0 || rooms <= 0) {\n      throw new BookingError(\"invalid reservation request\");\n    }\n    const ok = await this.repo.decrementRooms(hotelId, nights, rooms);\n    if (!ok) {\n      throw new BookingError(\"not enough rooms\");\n    }\n    await this.cache.invalidateHotel(hotelId);\n  }\n\n  async updatePrice(hotelId: string, date: string, priceMinor: number): Promise<void> {\n    if (!Number.isInteger(priceMinor) || priceMinor <= 0) {\n      throw new BookingError(\"invalid price\");\n    }\n    await this.repo.setPrice(hotelId, date, priceMinor);\n    await this.cache.invalidateHotel(hotelId);\n  }\n\n  async quote(hotelId: string, nights: string[], rooms: number): Promise<number> {\n    let total = 0;\n    for (const night of nights) {\n      const day = await this.cache.get(hotelId, night);\n      if (!day || day.roomsLeft < rooms) {\n        throw new BookingError(`no availability on ${night}`);\n      }\n      total += day.priceMinor * rooms;\n    }\n    return total;\n  }\n}\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code invalidates cached availability after reservations or price changes? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is no defect. Every write path (reserve and updatePrice) commits to the repository first and then bumps the hotel's version counter. Readers build the data key from the version they read, so after the INCR every reader uses a new key and the old entries become unreachable; they expire via the 300s TTL. A reader that read the old version before the bump and then fills the cache writes under the old version key, which no later reader looks at, so a slow fill cannot resurrect stale data under the current key. Failed reservations never reach invalidateHotel, which is fine because nothing changed. quote() is only an estimate: the authoritative check happens in decrementRooms."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Why does invalidateHotel increment a counter instead of deleting the cached keys?",
+      "choices": [
+        "DEL is not supported by ioredis for string keys",
+        "Incrementing also refreshes the TTL of every cached day",
+        "It invalidates every date for the hotel in one atomic command without knowing which date keys exist",
+        "It makes the cache write-through instead of cache-aside"
+      ],
+      "answer": 2,
+      "explanation": "Data keys embed the version, so one INCR on avail-ver:<hotel> makes all of that hotel's date keys unreachable at once, with no need to enumerate or SCAN dates. INCR does not touch TTLs of other keys, ioredis supports DEL fine, and reads still populate the cache lazily (cache-aside)."
+    },
+    {
+      "prompt": "A get() call reads version 4, then misses and starts loading from the repo. Meanwhile a reservation commits and bumps the version to 5. The get() then writes its result. What does the next get() for that date see?",
+      "choices": [
+        "It misses under version 5 and loads fresh data from the repo",
+        "It hits the entry just written and returns pre-reservation availability",
+        "It hits the entry just written, but the entry has the post-reservation data",
+        "It throws, because the version changed during the fill"
+      ],
+      "answer": 0,
+      "explanation": "The slow fill writes to avail:<hotel>:<date>:v4. The next get() reads version 5 and looks up the v5 key, which does not exist, so it loads from the repo. The v4 entry is orphaned and expires. Nothing in get() detects version changes or throws."
+    },
+    {
+      "prompt": "What is the main cost of this invalidation scheme under a hotel with heavy booking traffic?",
+      "choices": [
+        "Old versioned entries are never removed and leak memory forever",
+        "Every reservation drops the cache for all dates of that hotel, lowering the hit rate and sending more reads to the repo",
+        "Each read needs a SCAN over all keys of the hotel",
+        "Reservations block until all readers finish"
+      ],
+      "answer": 1,
+      "explanation": "invalidateHotel bumps a hotel-wide version, so one booking for one night invalidates every cached date for that hotel. With frequent bookings, most reads miss. Orphaned entries do expire because each set uses EX 300. Reads use direct GETs, not SCAN, and nothing makes writes wait for readers."
+    }
+  ],
+  "concepts": [
+    "backend.caching.cache_invalidation",
+    "backend.caching.cache_aside_vs_write_through",
+    "backend.caching.ttls_and_expiry",
+    "backend.caching.stale_reads"
+  ]
+}

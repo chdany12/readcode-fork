@@ -1,0 +1,51 @@
+{
+  "id": "d553b02a-c352-49d0-bf73-fb8100ddadab",
+  "title": "Payments client secret handling",
+  "name": "Payments API client",
+  "createdAt": "2026-11-15T09:41:31.659Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code obtains, uses, or protects the payment provider's secrets? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The provider rotates the API key and revokes the old one immediately. What happens to the next capture call on an instance that cached the old key two minutes ago?",
+      "choices": [
+        "It fails until the 5-minute TTL expires",
+        "The first request gets 401, the cached key is invalidated, and the retry fetches and uses the new key",
+        "It succeeds because the old key is still in the cache",
+        "The SecretStore detects rotation and refreshes before the request"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Fifty requests arrive at once on a cold instance. How many GetSecretValue calls for the API key are made?",
+      "choices": [
+        "Fifty, one per request",
+        "Zero, because the key is loaded at startup",
+        "Two, because of the 401 retry path",
+        "One, because concurrent callers share the in-flight promise"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A webhook arrives with a signature header of 'abc'. What does verifyWebhook do?",
+      "choices": [
+        "Returns false without fetching the secret or computing an HMAC",
+        "Throws a RangeError from timingSafeEqual",
+        "Computes the HMAC and returns false after comparison",
+        "Returns true because Buffer.from ignores invalid hex"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.security.secrets_handling",
+    "backend.caching.ttls_and_expiry",
+    "backend.observability.logging_sensitive_data",
+    "backend.integrations.third_party_adapters"
+  ]
+}

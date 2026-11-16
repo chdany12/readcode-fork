@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    0,
+    2,
+    1
+  ],
+  "explanations": [
+    "There is none. The body is parsed with safeParse and only parsed.data is used afterwards. The path is NFC-normalized before checks, must be absolute, cannot end in '/', and every segment is rejected if it is '.', '..', empty (which also catches '//'), too long, or contains control characters or backslashes, so traversal is blocked. sizeBytes is a bounded non-negative integer, sha256 is strictly 64 lowercase hex, modifiedAt must be an ISO timestamp, conflictPolicy is an enum with a safe default, and .strict() rejects unknown fields.",
+    "`p.slice(1).split('/')` yields ['photos', '', '2024', 'a.jpg']; the empty segment fails pathSegment's min(1), so the refine fails and the handler returns 400. NFC normalization only affects Unicode composition, not slashes. Validation happens before any revision check, so 409 is not reached.",
+    "startUploadSchema ends with .strict(), which makes unknown keys a validation error, so safeParse fails and the handler returns 400 with details. Without .strict() zod would strip the key; it never passes unknown keys through by default. 409 is only for revision conflicts.",
+    "conflictPolicy has .default('fail'), so parsed.data contains 'fail'. Since baseRevision 3 !== 5 and the policy is 'fail', the handler responds 409 with currentRevision. The field is optional thanks to the default, so it is not a 400, and no session is created."
+  ]
+}

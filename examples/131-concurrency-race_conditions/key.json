@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/budgetPacer.ts",
+        "startLine": 41,
+        "endLine": 41
+      }
+    },
+    2,
+    1,
+    0
+  ],
+  "explanations": [
+    "chargeImpression reads the spend, checks it, then writes back an absolute value with setSpentMicros. Concurrent charges (across requests or ad server instances) for the same campaign can all read the same spent value and each write spent + bid, so increments are lost: the counter under-reports spend and the budget check passes for impressions that exceed the daily budget. The update needs to be atomic, for example Redis INCRBY and checking the returned total (or a Lua script / WATCH transaction).",
+    "next = 900,000 + 300,000 = 1,200,000 which exceeds the budget, so the method returns budget_exhausted without writing. It never returns a negative remaining value from this path, and the campaign is active.",
+    "utcDay produces the date string used in the spend:<id>:<day> key, and a missing key returns 0. The TTL only cleans up old keys and does not drive the reset; there is no scheduled job.",
+    "toISOString is always UTC, so the day boundary is UTC midnight, which is 4pm in UTC-8. Nothing converts to the advertiser's local timezone."
+  ]
+}

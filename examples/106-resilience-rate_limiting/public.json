@@ -1,0 +1,50 @@
+{
+  "id": "e9cd2113-16d7-4592-b702-59af849bd1cb",
+  "title": "Token bucket for driver location pings",
+  "name": "Driver ping limiter",
+  "createdAt": "2026-11-15T09:41:31.647Z",
+  "durationMinutes": 10,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code throttles location pings per driver? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A new driver sends 5 pings in the same millisecond. How many are accepted?",
+      "choices": [
+        "1",
+        "3",
+        "5",
+        "0, because the first ping has no prior state"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Right after its bucket empties, a driver is denied. It retries every 100 ms. What happens to its retries?",
+      "choices": [
+        "Each denied retry resets the refill, so it is locked out indefinitely",
+        "The first retry after about 1 second is accepted",
+        "Retries are accepted immediately because denial stores no state",
+        "It must wait burst / ratePerSec = 3 seconds"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Pings with lat = 200 arrive rapidly from one driver. How do they interact with the limiter?",
+      "choices": [
+        "They consume tokens and then get 400",
+        "They get 429 once the bucket empties",
+        "They are rejected with 400 before the limiter is consulted and consume no tokens",
+        "They are clamped to 90 and accepted"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.resilience.rate_limiting",
+    "backend.api.request_validation",
+    "backend.observability.metrics"
+  ]
+}

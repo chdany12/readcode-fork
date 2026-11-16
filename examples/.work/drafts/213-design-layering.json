@@ -1,0 +1,68 @@
+{
+  "title": "Order cancellation across controller, service, and repository layers",
+  "name": "Order cancellation endpoints",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "orderRoutes.ts",
+      "content": "import { Router, Request, Response, NextFunction } from \"express\";\nimport { OrderService, OrderNotFoundError, InvalidOrderStateError } from \"./orderService\";\nimport { OrderRepository } from \"./orderRepository\";\n\nexport function orderRoutes(service: OrderService, orders: OrderRepository): Router {\n  const router = Router();\n\n  router.post(\"/orders\", async (req: Request, res: Response, next: NextFunction) => {\n    try {\n      const { customerId, lines } = req.body;\n      if (!customerId || !Array.isArray(lines) || lines.length === 0) {\n        return res.status(400).json({ error: \"customerId and lines are required\" });\n      }\n      const order = await service.placeOrder(customerId, lines);\n      res.status(201).json(order);\n    } catch (err) {\n      next(err);\n    }\n  });\n\n  router.get(\"/orders/:id\", async (req: Request, res: Response, next: NextFunction) => {\n    try {\n      const order = await service.getOrder(req.params.id);\n      res.json(order);\n    } catch (err) {\n      next(err);\n    }\n  });\n\n  router.post(\"/orders/:id/cancel\", async (req: Request, res: Response, next: NextFunction) => {\n    try {\n      const order = await orders.findById(req.params.id);\n      if (!order) return res.status(404).json({ error: \"order not found\" });\n      if (order.status !== \"pending\" && order.status !== \"paid\") {\n        return res.status(409).json({ error: `cannot cancel order in status ${order.status}` });\n      }\n      await orders.updateStatus(order.id, \"cancelled\");\n      res.json({ ...order, status: \"cancelled\" });\n    } catch (err) {\n      next(err);\n    }\n  });\n\n  router.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {\n    if (err instanceof OrderNotFoundError) return res.status(404).json({ error: err.message });\n    if (err instanceof InvalidOrderStateError) return res.status(409).json({ error: err.message });\n    next(err);\n  });\n\n  return router;\n}\n"
+    },
+    {
+      "path": "orderService.ts",
+      "content": "import { OrderRepository, Order, OrderLine } from \"./orderRepository\";\nimport { InventoryRepository } from \"./inventoryRepository\";\nimport { Db } from \"./db\";\n\nexport class OrderNotFoundError extends Error {}\nexport class InvalidOrderStateError extends Error {}\nexport class OutOfStockError extends Error {}\n\nconst CANCELLABLE = new Set([\"pending\", \"paid\"]);\n\nexport class OrderService {\n  constructor(\n    private readonly db: Db,\n    private readonly orders: OrderRepository,\n    private readonly inventory: InventoryRepository,\n  ) {}\n\n  async placeOrder(customerId: string, lines: OrderLine[]): Promise<Order> {\n    return this.db.transaction(async (tx) => {\n      for (const line of lines) {\n        const reserved = await this.inventory.reserve(tx, line.sku, line.quantity);\n        if (!reserved) throw new OutOfStockError(`insufficient stock for ${line.sku}`);\n      }\n      return this.orders.insert(tx, { customerId, lines, status: \"pending\" });\n    });\n  }\n\n  async getOrder(id: string): Promise<Order> {\n    const order = await this.orders.findById(id);\n    if (!order) throw new OrderNotFoundError(`order ${id} not found`);\n    return order;\n  }\n\n  async cancelOrder(id: string): Promise<Order> {\n    return this.db.transaction(async (tx) => {\n      const order = await this.orders.findByIdForUpdate(tx, id);\n      if (!order) throw new OrderNotFoundError(`order ${id} not found`);\n      if (!CANCELLABLE.has(order.status)) {\n        throw new InvalidOrderStateError(`cannot cancel order in status ${order.status}`);\n      }\n      for (const line of order.lines) {\n        await this.inventory.release(tx, line.sku, line.quantity);\n      }\n      await this.orders.updateStatus(order.id, \"cancelled\", tx);\n      return { ...order, status: \"cancelled\" };\n    });\n  }\n}\n"
+    },
+    {
+      "path": "orderRepository.ts",
+      "content": "import { Db, Tx } from \"./db\";\n\nexport type OrderStatus = \"pending\" | \"paid\" | \"shipped\" | \"cancelled\";\nexport interface OrderLine { sku: string; quantity: number; }\nexport interface Order { id: string; customerId: string; lines: OrderLine[]; status: OrderStatus; }\n\nexport class OrderRepository {\n  constructor(private readonly db: Db) {}\n\n  async findById(id: string): Promise<Order | null> {\n    const rows = await this.db.query(\"SELECT id, customer_id, lines, status FROM orders WHERE id = $1\", [id]);\n    return rows[0] ? this.toOrder(rows[0]) : null;\n  }\n\n  async findByIdForUpdate(tx: Tx, id: string): Promise<Order | null> {\n    const rows = await tx.query(\"SELECT id, customer_id, lines, status FROM orders WHERE id = $1 FOR UPDATE\", [id]);\n    return rows[0] ? this.toOrder(rows[0]) : null;\n  }\n\n  async insert(tx: Tx, o: Omit<Order, \"id\">): Promise<Order> {\n    const rows = await tx.query(\n      \"INSERT INTO orders (customer_id, lines, status) VALUES ($1, $2, $3) RETURNING id, customer_id, lines, status\",\n      [o.customerId, JSON.stringify(o.lines), o.status],\n    );\n    return this.toOrder(rows[0]);\n  }\n\n  async updateStatus(id: string, status: OrderStatus, tx?: Tx): Promise<void> {\n    await (tx ?? this.db).query(\"UPDATE orders SET status = $1 WHERE id = $2\", [status, id]);\n  }\n\n  private toOrder(row: any): Order {\n    return { id: row.id, customerId: row.customer_id, lines: row.lines, status: row.status };\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "orderRoutes.ts",
+    "snippet": "      const order = await orders.findById(req.params.id);\n      if (!order) return res.status(404).json({ error: \"order not found\" });"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how responsibilities are split between the HTTP routes, the service, and the repository? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The cancel route in orderRoutes.ts bypasses OrderService.cancelOrder and talks to OrderRepository directly. It re-implements the status check but skips the business rule that releases reserved inventory, and it runs without a transaction or row lock. Every cancelled order permanently leaks its reserved stock, so products drift toward showing out of stock, and two concurrent cancel/ship requests can race. The route should call service.cancelOrder and let the error handler map OrderNotFoundError/InvalidOrderStateError."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "In OrderService.placeOrder, what happens if the second line's SKU cannot be reserved?",
+      "choices": [
+        "The first line's reservation stays in place and the order is inserted with only one line",
+        "OutOfStockError is thrown inside the transaction, so the first reservation is rolled back and no order is inserted",
+        "The order is inserted with status pending and the missing stock is back-ordered",
+        "The route returns 409 because the error handler maps OutOfStockError"
+      ],
+      "answer": 1,
+      "explanation": "placeOrder reserves each line inside db.transaction and throws OutOfStockError when reserve returns false, which aborts the transaction and undoes earlier reservations; the insert is never reached. Nothing partial is committed, there is no back-order logic, and the error handler only maps OrderNotFoundError and InvalidOrderStateError, so OutOfStockError falls through to next(err) rather than a 409."
+    },
+    {
+      "prompt": "Why does OrderService.cancelOrder load the order with findByIdForUpdate instead of findById?",
+      "choices": [
+        "findById does not map snake_case columns to the Order shape",
+        "findByIdForUpdate caches the row for the rest of the request",
+        "It locks the order row in the transaction so a concurrent status change cannot slip in between the check and the update",
+        "FOR UPDATE is required for any SELECT that is later followed by an UPDATE in Postgres"
+      ],
+      "answer": 2,
+      "explanation": "SELECT ... FOR UPDATE on the transaction's connection holds a row lock until commit, so the cancellable-status check and the inventory release/status update see a stable row. Both methods use the same toOrder mapper, nothing is cached, and FOR UPDATE is not syntactically required before an UPDATE."
+    },
+    {
+      "prompt": "Which layer in this code is responsible for translating domain errors like InvalidOrderStateError into HTTP status codes?",
+      "choices": [
+        "The router's error-handling middleware in orderRoutes.ts",
+        "OrderService, which throws errors carrying status codes",
+        "OrderRepository, which inspects database error codes",
+        "Express's default error handler, which reads the error class name"
+      ],
+      "answer": 0,
+      "explanation": "The router.use error middleware checks instanceof OrderNotFoundError and InvalidOrderStateError and maps them to 404 and 409. The service throws plain domain error classes with no status codes, the repository does no error mapping, and Express's default handler would just return 500."
+    }
+  ],
+  "concepts": [
+    "backend.design.layering",
+    "backend.data.transactions_and_isolation_levels",
+    "backend.api.status_codes_and_error_responses"
+  ]
+}

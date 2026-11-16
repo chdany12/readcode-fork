@@ -1,0 +1,51 @@
+{
+  "id": "d0b59edb-4fef-449a-bfcc-30b0399850ee",
+  "title": "Per-trip event sequencing for dispatch",
+  "name": "Trip event sequencer",
+  "createdAt": "2026-11-15T09:41:31.739Z",
+  "durationMinutes": 15,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code preserves the order of events for a trip? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "For a new trip, events arrive in the order seq 2, seq 3, seq 1. When is TripStore.save first called?",
+      "choices": [
+        "When seq 2 arrives, saving lastSeq 2",
+        "When seq 3 arrives, saving lastSeq 3",
+        "When seq 1 arrives, saving lastSeq 3 after applying 1, 2 and 3",
+        "Never, because seq 2 and 3 are dropped as out of order"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The broker redelivers seq 4 for a trip whose stored lastSeq is already 6. What happens?",
+      "choices": [
+        "process returns early without changing state, and the consumer acks the message",
+        "The event is buffered until seq 7 arrives",
+        "The trip status reverts to the type of event 4",
+        "An error is thrown and the message is nacked"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Within one batch, messages for trip A and trip B both need slow store calls. How are they processed?",
+      "choices": [
+        "Strictly one at a time across the whole batch",
+        "A and B run concurrently, while messages for the same trip run one after another",
+        "All messages run fully concurrently, including those for the same trip",
+        "Only the first message per trip is processed; the rest are nacked"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.messaging.message_ordering",
+    "backend.messaging.deduplication",
+    "backend.concurrency.race_conditions",
+    "backend.messaging.at_least_once_delivery"
+  ]
+}

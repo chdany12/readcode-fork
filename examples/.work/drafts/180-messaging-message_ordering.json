@@ -1,0 +1,68 @@
+{
+  "title": "Order status projection from a partitioned topic",
+  "name": "Order status projector",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/model.ts",
+      "content": "export type OrderStatus = \"placed\" | \"accepted\" | \"preparing\" | \"ready\" | \"picked_up\" | \"delivered\" | \"cancelled\";\n\nexport interface OrderStatusEvent {\n  orderId: string;\n  restaurantId: string;\n  status: OrderStatus;\n  version: number;\n  emittedAt: string;\n}\n\nexport interface OrderView {\n  orderId: string;\n  status: OrderStatus;\n  version: number;\n  updatedAt: string;\n}\n\nexport interface OrderViewRepository {\n  get(orderId: string): Promise<OrderView | null>;\n  put(view: OrderView): Promise<void>;\n}\n\nexport interface CustomerNotifier {\n  statusChanged(orderId: string, status: OrderStatus): Promise<void>;\n}\n"
+    },
+    {
+      "path": "src/orderStatusProjector.ts",
+      "content": "import { CustomerNotifier, OrderStatusEvent, OrderView, OrderViewRepository } from \"./model\";\n\nconst TERMINAL = new Set([\"delivered\", \"cancelled\"]);\n\nexport class OrderStatusProjector {\n  constructor(private readonly repo: OrderViewRepository, private readonly notifier: CustomerNotifier) {}\n\n  async apply(event: OrderStatusEvent): Promise<boolean> {\n    const existing = await this.repo.get(event.orderId);\n\n    if (existing && TERMINAL.has(existing.status)) {\n      return false;\n    }\n    if (existing && event.version <= existing.version) {\n      return false;\n    }\n\n    const view: OrderView = {\n      orderId: event.orderId,\n      status: event.status,\n      version: event.version,\n      updatedAt: event.emittedAt,\n    };\n    await this.repo.put(view);\n    await this.notifier.statusChanged(event.orderId, event.status);\n    return true;\n  }\n}\n"
+    },
+    {
+      "path": "src/orderEventsConsumer.ts",
+      "content": "import { OrderStatusEvent } from \"./model\";\nimport { OrderStatusProjector } from \"./orderStatusProjector\";\n\nexport interface PartitionBatch {\n  topic: string;\n  partition: number;\n  messages: { offset: string; key: string; value: Buffer }[];\n}\n\nexport interface OffsetCommitter {\n  commit(topic: string, partition: number, offset: string): Promise<void>;\n}\n\nexport interface Metrics {\n  increment(name: string, tags?: Record<string, string>): void;\n}\n\nexport class OrderEventsConsumer {\n  constructor(\n    private readonly projector: OrderStatusProjector,\n    private readonly offsets: OffsetCommitter,\n    private readonly metrics: Metrics,\n  ) {}\n\n  async handleBatch(batch: PartitionBatch): Promise<void> {\n    if (batch.messages.length === 0) {\n      return;\n    }\n\n    const events = batch.messages\n      .map((m) => this.decode(m.key, m.value))\n      .filter((e): e is OrderStatusEvent => e !== null);\n\n    const results = await Promise.all(events.map((e) => this.projector.apply(e)));\n\n    for (const applied of results) {\n      this.metrics.increment(applied ? \"order_status.applied\" : \"order_status.skipped\", {\n        partition: String(batch.partition),\n      });\n    }\n\n    const last = batch.messages[batch.messages.length - 1];\n    await this.offsets.commit(batch.topic, batch.partition, last.offset);\n  }\n\n  private decode(key: string, value: Buffer): OrderStatusEvent | null {\n    try {\n      const parsed = JSON.parse(value.toString(\"utf8\")) as OrderStatusEvent;\n      if (parsed.orderId !== key || typeof parsed.version !== \"number\") {\n        this.metrics.increment(\"order_status.malformed\");\n        return null;\n      }\n      return parsed;\n    } catch {\n      this.metrics.increment(\"order_status.unparseable\");\n      return null;\n    }\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/orderEventsConsumer.ts",
+    "snippet": "    const results = await Promise.all(events.map((e) => this.projector.apply(e)));"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this consumer preserves the order of status updates for an order? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "handleBatch applies every event in the partition batch concurrently with Promise.all. Events for the same order (same key, same partition) arrive in order, but their apply calls interleave: both can read the same existing view before either writes, both pass the version check, and the put that finishes last wins. An older status such as 'preparing' can overwrite 'ready', and customers can be notified out of order. The version check only works if reads and writes for one order are serialized; events should be applied sequentially (or grouped by orderId and run sequentially per group)."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "The order view is at version 5 with status 'picked_up' and an event with version 4 arrives on its own in a batch. What happens?",
+      "choices": [
+        "The view is overwritten with version 4",
+        "apply returns false without writing or notifying, and the offset is still committed",
+        "The consumer throws and the batch is retried",
+        "The event is buffered until version 6 arrives"
+      ],
+      "answer": 1,
+      "explanation": "apply returns false when event.version <= existing.version, so no put and no notification occur. handleBatch records an 'order_status.skipped' metric and commits the last offset. Nothing throws, and there is no buffering."
+    },
+    {
+      "prompt": "A message's value is not valid JSON. How does the consumer treat it?",
+      "choices": [
+        "It crashes the batch so the message is redelivered forever",
+        "It sends it to a dead-letter topic",
+        "It counts it as unparseable, skips it, and its offset is covered by the batch commit",
+        "It retries parsing with a different encoding"
+      ],
+      "answer": 2,
+      "explanation": "decode catches the JSON error, increments 'order_status.unparseable' and returns null; the filter drops it. The commit uses the last message in the batch, so the bad message's offset is committed too. There is no DLQ or re-parse."
+    },
+    {
+      "prompt": "Once an order view is 'cancelled', what happens to a later event with a higher version and status 'ready'?",
+      "choices": [
+        "It is ignored because terminal statuses are never overwritten",
+        "It overwrites the view because its version is higher",
+        "It is applied but no notification is sent",
+        "It reopens the order and notifies the restaurant"
+      ],
+      "answer": 0,
+      "explanation": "apply checks TERMINAL.has(existing.status) before the version check and returns false, so neither put nor notify runs. The version comparison is never reached, and the notifier only ever targets the customer."
+    }
+  ],
+  "concepts": [
+    "backend.messaging.message_ordering",
+    "backend.concurrency.race_conditions",
+    "backend.messaging.queues_and_consumers"
+  ]
+}

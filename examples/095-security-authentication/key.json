@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    3,
+    1,
+    0
+  ],
+  "explanations": [
+    "There is none. jwt.verify pins the algorithm to RS256, so tokens with alg=none or tokens HMAC-signed with the public key are rejected. It also checks issuer, audience and expiry, with only 30 seconds of clock tolerance. The middleware then requires typ=driver and string sub/sid claims, and checks the session in Redis. Sessions that are revoked or unknown are rejected, so logout takes effect right away. If Redis fails, the middleware returns 503 and never calls next().",
+    "After jwt.verify succeeds, the middleware checks `claims.typ !== \"driver\"` and returns 401 invalid_token right away, before calling the directory. A valid signature alone is not enough. The token has not expired, so it is not token_expired, and Redis is never queried, so session state cannot affect the result.",
+    "logout calls directory.revoke, which sets the session key to 'revoked'. On the next request, sessionStatus returns 'revoked', which is not 'active', so the middleware returns 401 session_revoked. That per-request lookup is what makes revocation take effect before exp. The clock tolerance only applies to time-based claims, and nothing here produces a 503.",
+    "Only 'active' passes. If the session key is gone (evicted under memory pressure, or never written), a token with a good signature is still rejected. That fails closed: drivers may have to log in again, but revocation is never silently lost. Revoked keys are rejected immediately, sessionStatus makes a single GET, and when Redis is down the middleware returns 503 rather than accepting anything."
+  ]
+}

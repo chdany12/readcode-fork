@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/payrollReplica.ts",
+        "startLine": 35,
+        "endLine": 40
+      }
+    },
+    2,
+    1,
+    0
+  ],
+  "explanations": [
+    "handleAppendEntries never rejects a request whose term is lower than currentTerm. A deposed leader (for example one partitioned away that still thinks it leads) can keep sending AppendEntries; this replica resets its election timer, adopts the stale leader, truncates conflicting entries, appends the old leader's entries, and even advances commitIndex from the stale leaderCommit. That can overwrite entries committed by the real leader and apply payroll entries that were never committed. The method must return { success: false, term: currentTerm } when req.term < currentTerm before touching any state.",
+    "In handleRequestVote, a higher term updates currentTerm, resets votedFor and steps down to follower. upToDate then compares last log terms first: a lower lastLogTerm makes it false, so voteGranted is false. A higher term alone does not win the vote, the term is still adopted, and nothing here starts an election.",
+    "index is the last entry this request confirmed matches the leader's log. The leader's commit point can be ahead of that; committing past index could apply a leftover entry from an old term at that position. It is not a throttle, leaderCommit is an index, and leaderCommit is by definition already committed on the leader.",
+    "truncateFrom explicitly refuses to truncate at or below lastApplied and throws. handleAppendEntries has no commitIndex check in its loop, applyPayrollRun's idempotency is not shown anywhere, and truncation is not silent because of that guard."
+  ]
+}

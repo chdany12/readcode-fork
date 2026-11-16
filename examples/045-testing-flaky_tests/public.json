@@ -1,0 +1,50 @@
+{
+  "id": "bc45d854-40dc-4139-9833-0342df610b28",
+  "title": "Transcode status poller and its tests",
+  "name": "Transcode status poller",
+  "createdAt": "2026-11-15T09:41:31.562Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in these tests that could make any of them pass on some runs and fail on others? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "With maxPolls 4 and a job that never leaves \"transcoding\", how long does waitForRenditions spend sleeping in production (realSleeper, intervalMs 2000)?",
+      "choices": [
+        "8 seconds",
+        "2 seconds",
+        "6 seconds",
+        "0 seconds; it throws on the first poll"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "ScriptedTranscoder is given the script [\"transcoding\"] and polled 4 times. What state does it return on the 4th call?",
+      "choices": [
+        "undefined, because the index is past the end of the script",
+        "\"transcoding\", because the index is clamped to the last script entry",
+        "\"queued\", the default state",
+        "It throws a RangeError"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What is the main benefit of passing a Sleeper into waitForRenditions instead of calling setTimeout directly?",
+      "choices": [
+        "It lets the tests run instantly and assert on the exact delays requested, with no dependence on wall-clock timing",
+        "It makes production polling more accurate than setTimeout",
+        "It allows several jobs to be polled in parallel",
+        "It lets the caller cancel a poll in progress"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.testing.flaky_tests",
+    "backend.testing.mocking_and_fakes",
+    "backend.design.dependency_injection"
+  ]
+}

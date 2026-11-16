@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/accountRoutes.ts",
+        "startLine": 47,
+        "endLine": 47
+      }
+    },
+    1,
+    2,
+    1
+  ],
+  "explanations": [
+    "The transfer check uses && so it only rejects when the caller owns neither account. A caller who owns only the destination account passes, so any customer can move money out of someone else's account into their own just by knowing its ID. The check should require that the caller owns the source account (from.customerId === user.customerId); the destination can belong to anyone.",
+    "canView fails because the caller is not a support agent and does not own the account, and the route answers with the same 404 it uses for a missing account. That keeps attackers from learning which account IDs exist. It does not return 403 here, does not leak the balance, and the request itself is valid, so not 400.",
+    "execute receives the same idempotencyKey and reports replayed: true, and the route maps that to status 200 with the original result. A first-time transfer returns 201. Nothing in the route returns 409, and a replay does not create a new transfer or debit again.",
+    "The route checks from.currency !== to.currency (422) and from.frozen (423) before execute. Insufficient funds is left to TransferService inside its transaction, the destination's frozen flag is never checked, and there is no daily limit logic."
+  ]
+}

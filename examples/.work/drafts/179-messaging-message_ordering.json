@@ -1,0 +1,66 @@
+{
+  "title": "Per-trip event sequencing for dispatch",
+  "name": "Trip event sequencer",
+  "language": "TypeScript",
+  "durationMinutes": 15,
+  "files": [
+    {
+      "path": "src/types.ts",
+      "content": "export type TripEventType = \"requested\" | \"driver_assigned\" | \"driver_arrived\" | \"started\" | \"completed\" | \"cancelled\";\n\nexport interface TripEvent {\n  tripId: string;\n  seq: number;\n  type: TripEventType;\n  driverId?: string;\n  occurredAt: string;\n}\n\nexport interface TripState {\n  tripId: string;\n  lastSeq: number;\n  status: TripEventType;\n  driverId: string | null;\n}\n\nexport interface TripStore {\n  load(tripId: string): Promise<TripState | null>;\n  save(state: TripState): Promise<void>;\n}\n"
+    },
+    {
+      "path": "src/tripSequencer.ts",
+      "content": "import { TripEvent, TripState, TripStore } from \"./types\";\n\nconst MAX_PENDING_PER_TRIP = 50;\n\nexport class TripSequencer {\n  private readonly pending = new Map<string, Map<number, TripEvent>>();\n  private readonly chains = new Map<string, Promise<void>>();\n\n  constructor(\n    private readonly store: TripStore,\n    private readonly onGap: (tripId: string, expectedSeq: number) => void,\n  ) {}\n\n  handle(event: TripEvent): Promise<void> {\n    const prev = this.chains.get(event.tripId) ?? Promise.resolve();\n    const next = prev.then(() => this.process(event));\n    const tracked = next.catch(() => undefined);\n    this.chains.set(event.tripId, tracked);\n    tracked.then(() => {\n      if (this.chains.get(event.tripId) === tracked) {\n        this.chains.delete(event.tripId);\n      }\n    });\n    return next;\n  }\n\n  private async process(event: TripEvent): Promise<void> {\n    const state = (await this.store.load(event.tripId)) ?? this.initial(event.tripId);\n\n    if (event.seq <= state.lastSeq) {\n      return;\n    }\n\n    const buffer = this.pending.get(event.tripId) ?? new Map<number, TripEvent>();\n    buffer.set(event.seq, event);\n\n    let current = state;\n    let applied = false;\n    while (buffer.has(current.lastSeq + 1)) {\n      const nextEvent = buffer.get(current.lastSeq + 1)!;\n      buffer.delete(nextEvent.seq);\n      current = this.apply(current, nextEvent);\n      applied = true;\n    }\n\n    if (applied) {\n      await this.store.save(current);\n    }\n\n    if (buffer.size === 0) {\n      this.pending.delete(event.tripId);\n      return;\n    }\n\n    if (buffer.size > MAX_PENDING_PER_TRIP) {\n      this.pending.delete(event.tripId);\n      throw new Error(`trip ${event.tripId}: ${buffer.size} events stuck waiting for seq ${current.lastSeq + 1}`);\n    }\n\n    this.pending.set(event.tripId, buffer);\n    this.onGap(event.tripId, current.lastSeq + 1);\n  }\n\n  private initial(tripId: string): TripState {\n    return { tripId, lastSeq: 0, status: \"requested\", driverId: null };\n  }\n\n  private apply(state: TripState, event: TripEvent): TripState {\n    switch (event.type) {\n      case \"driver_assigned\":\n        return { ...state, lastSeq: event.seq, status: event.type, driverId: event.driverId ?? null };\n      case \"cancelled\":\n        return { ...state, lastSeq: event.seq, status: event.type, driverId: null };\n      default:\n        return { ...state, lastSeq: event.seq, status: event.type };\n    }\n  }\n}\n"
+    },
+    {
+      "path": "src/dispatchConsumer.ts",
+      "content": "import { TripEvent } from \"./types\";\nimport { TripSequencer } from \"./tripSequencer\";\n\nexport interface RawMessage {\n  key: string;\n  value: string;\n  ack(): void;\n  nack(): void;\n}\n\nexport class DispatchConsumer {\n  constructor(private readonly sequencer: TripSequencer, private readonly log: (msg: string) => void) {}\n\n  async onBatch(messages: RawMessage[]): Promise<void> {\n    await Promise.all(messages.map((m) => this.onMessage(m)));\n  }\n\n  private async onMessage(msg: RawMessage): Promise<void> {\n    let event: TripEvent;\n    try {\n      event = JSON.parse(msg.value) as TripEvent;\n    } catch {\n      this.log(`dropping unparseable message key=${msg.key}`);\n      msg.ack();\n      return;\n    }\n\n    if (event.tripId !== msg.key || !Number.isInteger(event.seq) || event.seq < 1) {\n      this.log(`dropping malformed trip event key=${msg.key} seq=${event.seq}`);\n      msg.ack();\n      return;\n    }\n\n    try {\n      await this.sequencer.handle(event);\n      msg.ack();\n    } catch (err) {\n      this.log(`trip ${event.tripId} seq ${event.seq} failed: ${(err as Error).message}`);\n      msg.nack();\n    }\n  }\n}\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code preserves the order of events for a trip? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is none. onBatch runs messages concurrently, which looks risky, but TripSequencer.handle chains each event onto the previous promise for the same tripId, so load/apply/save for one trip never interleave while different trips still run in parallel. Within a trip, events are only applied when their seq is exactly lastSeq + 1; later events wait in the pending buffer, and events with seq <= lastSeq (duplicates or redeliveries) are skipped. The chain uses a catch-wrapped promise so one failure does not poison later events, and the map entry is removed only if it is still the latest link."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "For a new trip, events arrive in the order seq 2, seq 3, seq 1. When is TripStore.save first called?",
+      "choices": [
+        "When seq 2 arrives, saving lastSeq 2",
+        "When seq 3 arrives, saving lastSeq 3",
+        "When seq 1 arrives, saving lastSeq 3 after applying 1, 2 and 3",
+        "Never, because seq 2 and 3 are dropped as out of order"
+      ],
+      "answer": 2,
+      "explanation": "A new trip starts at lastSeq 0, so seq 2 and 3 are buffered (applied stays false, no save) and onGap is called. When seq 1 arrives, the while loop applies 1, then the buffered 2 and 3, and saves once with lastSeq 3. Nothing is dropped since all seqs are above lastSeq."
+    },
+    {
+      "prompt": "The broker redelivers seq 4 for a trip whose stored lastSeq is already 6. What happens?",
+      "choices": [
+        "process returns early without changing state, and the consumer acks the message",
+        "The event is buffered until seq 7 arrives",
+        "The trip status reverts to the type of event 4",
+        "An error is thrown and the message is nacked"
+      ],
+      "answer": 0,
+      "explanation": "process checks event.seq <= state.lastSeq and returns immediately, so handle resolves and onMessage acks. It is not buffered (only seqs above lastSeq are), state is not rewritten, and no error is thrown."
+    },
+    {
+      "prompt": "Within one batch, messages for trip A and trip B both need slow store calls. How are they processed?",
+      "choices": [
+        "Strictly one at a time across the whole batch",
+        "A and B run concurrently, while messages for the same trip run one after another",
+        "All messages run fully concurrently, including those for the same trip",
+        "Only the first message per trip is processed; the rest are nacked"
+      ],
+      "answer": 1,
+      "explanation": "onBatch uses Promise.all, so messages start together, but handle keys its promise chain by tripId: different trips have independent chains and overlap, while events for the same trip wait for the previous link. Nothing nacks extra messages per trip."
+    }
+  ],
+  "concepts": [
+    "backend.messaging.message_ordering",
+    "backend.messaging.deduplication",
+    "backend.concurrency.race_conditions",
+    "backend.messaging.at_least_once_delivery"
+  ]
+}

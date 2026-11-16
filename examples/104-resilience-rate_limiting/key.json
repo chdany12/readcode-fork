@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/merchantRateLimiter.ts",
+        "startLine": 32,
+        "endLine": 32
+      }
+    },
+    0,
+    2,
+    1
+  ],
+  "explanations": [
+    "The refill adds elapsedSec * refillPerSecond to tokens without capping at config.capacity. A merchant that is quiet for a while (but not long enough to be evicted, under 10 minutes) accumulates tokens without bound: after 5 idle minutes it has 50 + 3000 tokens and can fire ~3000 charges in a burst, defeating the 50-request burst limit. The refill should be Math.min(capacity, tokens + elapsed * rate).",
+    "30 line items cost 2. With 1.5 tokens (assuming no further refill), tokens >= cost is false, deficit is 0.5 and Math.ceil(0.5 / 10) = Math.ceil(0.05) = 1, so 429 with Retry-After: 1. Tokens are not rounded before the comparison, Math.ceil never yields 0 for a positive deficit, and a denied request does not subtract tokens.",
+    "The limiter is a module-level object holding an in-process Map, so each instance has independent buckets for the same merchant. With requests spread across 4 instances, each allows 10/s, about 40/s overall. The key alone does not share state across processes, nothing divides the rate, and the Map is created once per process, not per request.",
+    "tryConsume subtracts cost before processor.charge is called, and the catch block only returns 502; it never touches the limiter. So the tokens stay spent. There is no refund or compensation logic, and eviction only happens in the periodic evictIdle sweep for buckets idle over 10 minutes."
+  ]
+}

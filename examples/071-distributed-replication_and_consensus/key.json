@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/clusterManager.ts",
+        "startLine": 48,
+        "endLine": 48
+      }
+    },
+    3,
+    2,
+    1
+  ],
+  "explanations": [
+    "Candidates are ranked by most recent heartbeat, not by replication progress. Every healthy follower heartbeats frequently, so the choice is essentially arbitrary with respect to appliedOffset. A lagging follower can be promoted while a peer holds more of the old primary's stock mutations; those reservations are lost and the more-current followers are told to follow a primary behind them, causing overselling or diverged inventory. The lag check only logs a warning and still promotes. Candidates should be sorted by appliedOffset descending, with heartbeat used only as a liveness filter.",
+    "Fencing with the new epoch tells a possibly-alive old primary to refuse older-epoch writes; reserveStock turns StaleEpochError into a retry message. It does not copy data, the old primary is only told to follow later via followPrimary, and it measures nothing.",
+    "fence(...).catch(() => undefined) ignores the failure, so promotion continues. Nothing aborts or waits, and the old primary is pushed back into the followers list rather than removed.",
+    "failoverInProgress is checked and set with no await in between, and JavaScript runs that code without interleaving, so the second call sees true and returns. It is cleared in finally. Nothing cancels calls, and the outcome does not depend on status timing because the guard is taken before any await."
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "title": "Authorizing shipment views, assignments, and carrier status updates",
+  "name": "Shipment status routes",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/principal.ts",
+      "content": "import { Request, Response, NextFunction } from \"express\";\n\nexport interface Principal {\n  kind: \"dispatcher\" | \"carrier\";\n  orgId: string;\n}\n\nexport function requirePrincipal(req: Request, res: Response, next: NextFunction): void {\n  const principal = (req as Request & { principal?: Principal }).principal;\n  if (!principal) {\n    res.status(401).json({ error: \"unauthenticated\" });\n    return;\n  }\n  res.locals.principal = principal;\n  next();\n}\n"
+    },
+    {
+      "path": "src/shipments.ts",
+      "content": "export type ShipmentStatus =\n  | \"created\"\n  | \"picked_up\"\n  | \"in_transit\"\n  | \"out_for_delivery\"\n  | \"delivered\"\n  | \"exception\";\n\nexport interface Shipment {\n  id: string;\n  shipperOrgId: string;\n  carrierId: string | null;\n  status: ShipmentStatus;\n  version: number;\n}\n\nexport interface StatusMeta {\n  location?: string;\n  actor: string;\n}\n\nexport interface ShipmentRepo {\n  get(id: string): Promise<Shipment | null>;\n  assign(id: string, carrierId: string): Promise<void>;\n  // Conditional on version; returns null if the row changed since it was read.\n  updateStatus(id: string, expectedVersion: number, status: ShipmentStatus, meta: StatusMeta): Promise<Shipment | null>;\n}\n"
+    },
+    {
+      "path": "src/shipmentRouter.ts",
+      "content": "import { Router } from \"express\";\nimport { ShipmentRepo, ShipmentStatus, Shipment } from \"./shipments\";\nimport { Principal, requirePrincipal } from \"./principal\";\n\nconst CARRIER_TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {\n  created: [],\n  picked_up: [\"in_transit\"],\n  in_transit: [\"out_for_delivery\", \"exception\"],\n  out_for_delivery: [\"delivered\", \"exception\"],\n  delivered: [],\n  exception: [\"in_transit\"],\n};\n\nexport function shipmentRouter(repo: ShipmentRepo): Router {\n  const router = Router();\n  router.use(requirePrincipal);\n\n  router.get(\"/shipments/:id\", async (req, res) => {\n    const principal = res.locals.principal as Principal;\n    const shipment = await repo.get(req.params.id);\n    if (!shipment || !canSee(principal, shipment)) {\n      return res.status(404).json({ error: \"not_found\" });\n    }\n    res.json(shipment);\n  });\n\n  router.post(\"/shipments/:id/assign\", async (req, res) => {\n    const principal = res.locals.principal as Principal;\n    if (principal.kind !== \"dispatcher\") {\n      return res.status(403).json({ error: \"forbidden\" });\n    }\n    const { carrierId } = req.body ?? {};\n    if (typeof carrierId !== \"string\") {\n      return res.status(400).json({ error: \"carrierId required\" });\n    }\n    const shipment = await repo.get(req.params.id);\n    if (!shipment || shipment.shipperOrgId !== principal.orgId) {\n      return res.status(404).json({ error: \"not_found\" });\n    }\n    if (shipment.status !== \"created\") {\n      return res.status(409).json({ error: \"already_assigned\" });\n    }\n    await repo.assign(shipment.id, carrierId);\n    res.status(204).end();\n  });\n\n  router.post(\"/shipments/:id/status\", async (req, res) => {\n    const principal = res.locals.principal as Principal;\n    if (principal.kind !== \"carrier\") {\n      return res.status(403).json({ error: \"forbidden\" });\n    }\n    const { status, location } = req.body ?? {};\n    const shipment = await repo.get(req.params.id);\n    if (!shipment) {\n      return res.status(404).json({ error: \"not_found\" });\n    }\n    const allowed = CARRIER_TRANSITIONS[shipment.status] ?? [];\n    if (!allowed.includes(status)) {\n      return res.status(409).json({ error: \"invalid_transition\", from: shipment.status, to: status });\n    }\n    const updated = await repo.updateStatus(shipment.id, shipment.version, status, {\n      location: typeof location === \"string\" ? location : undefined,\n      actor: `${principal.kind}:${principal.orgId}`,\n    });\n    if (!updated) {\n      return res.status(409).json({ error: \"concurrent_update\" });\n    }\n    res.json(updated);\n  });\n\n  return router;\n}\n\nfunction canSee(p: Principal, s: Shipment): boolean {\n  if (p.kind === \"dispatcher\") return s.shipperOrgId === p.orgId;\n  return s.carrierId === p.orgId;\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/shipmentRouter.ts",
+    "snippet": "    const shipment = await repo.get(req.params.id);\n    if (!shipment) {\n      return res.status(404).json({ error: \"not_found\" });\n    }"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how these routes check whether the caller may read or change a shipment? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The status route checks that the caller is a carrier but never checks that this carrier is the one assigned to the shipment (shipment.carrierId === principal.orgId), unlike canSee in the GET route. Any carrier can mark another carrier's shipment as delivered or exception just by knowing its ID, which corrupts tracking and can trigger payouts or customer notifications."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A dispatcher from org A calls GET /shipments/:id for a shipment created by org B. What is the response?",
+      "choices": [
+        "404 not_found",
+        "403 forbidden",
+        "200 with the shipment, since dispatchers can see all shipments",
+        "401 unauthenticated"
+      ],
+      "answer": 0,
+      "explanation": "canSee returns s.shipperOrgId === p.orgId for dispatchers, which is false here, and the route answers 404 just as it does for a missing shipment, so the shipment's existence is not revealed. The caller is authenticated, so not 401, and the route never returns 403 for a visibility failure."
+    },
+    {
+      "prompt": "Two requests from the assigned carrier try to move the same in_transit shipment, one to out_for_delivery and one to exception, at the same moment. What happens?",
+      "choices": [
+        "Both succeed and the last write wins",
+        "Both fail with invalid_transition",
+        "One succeeds; the other gets 409 concurrent_update because updateStatus is conditional on the version both requests read",
+        "The second request waits for a row lock and then applies on top of the first"
+      ],
+      "answer": 2,
+      "explanation": "Both read version N and both transitions are allowed from in_transit. updateStatus only applies when the stored version still equals N, so the first write bumps the version and the second gets null, which the route turns into 409 concurrent_update. There is no last-write-wins and no blocking row lock."
+    },
+    {
+      "prompt": "A carrier tries to move a shipment from created straight to in_transit. What happens?",
+      "choices": [
+        "It succeeds, because in_transit is a valid carrier status",
+        "409 invalid_transition, because created has no carrier transitions",
+        "403 forbidden, because only dispatchers can update created shipments",
+        "400, because the request body is invalid"
+      ],
+      "answer": 1,
+      "explanation": "CARRIER_TRANSITIONS.created is an empty list, so allowed.includes(\"in_transit\") is false and the route returns 409 with from and to. The role check passes for a carrier, and the body has a status, so it is neither 403 nor 400."
+    }
+  ],
+  "concepts": [
+    "backend.security.authorization_checks",
+    "backend.api.status_codes_and_error_responses",
+    "backend.data.optimistic_vs_pessimistic_locking",
+    "backend.security.multi_tenant_isolation"
+  ]
+}

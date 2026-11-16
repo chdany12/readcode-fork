@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/postTopicService.ts",
+        "startLine": 24,
+        "endLine": 24
+      }
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "addTopics loads the post with a where filter on the relation (topics.archived = false), so post.topics contains only active topics. save() on a ManyToMany treats the in-memory array as the full set and deletes join rows not present, so every archived-topic link on the post is silently removed from post_topics. Also, a post with only archived topics (or none) fails the inner join and yields NotFoundError. Load the full relation and filter in memory, or use the relation query builder's add().",
+    "findOne takes a SELECT ... FOR UPDATE on posts inside the transaction, so the second request blocks until the first commits, then reads the updated state. VersionColumn is incremented on save but no version is compared at load, so there is no immediate optimistic failure, and a single row lock does not deadlock.",
+    "Each slug is trimmed and lowercased, a Set removes the duplicate \"rust\", and filter(Boolean) drops the empty string, leaving [\"rust\"].",
+    "Pushing onto post.topics only changes the in-memory entity; nothing is written until save. Throwing inside ds.transaction rolls back and releases the lock, so nothing changes, including the version column."
+  ]
+}

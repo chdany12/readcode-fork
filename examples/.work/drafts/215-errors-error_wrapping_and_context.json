@@ -1,0 +1,68 @@
+{
+  "title": "Product reindex job with wrapped indexing errors",
+  "name": "Product reindex job",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "errors.ts",
+      "content": "export class IndexingError extends Error {\n  constructor(\n    message: string,\n    readonly context: Record<string, string | number>,\n    options?: { cause?: unknown },\n  ) {\n    super(message, options);\n    this.name = \"IndexingError\";\n  }\n}\n\nexport class SearchClusterError extends Error {\n  constructor(message: string, readonly statusCode: number) {\n    super(message);\n    this.name = \"SearchClusterError\";\n  }\n}\n\nexport function rootCause(err: unknown): unknown {\n  let current = err;\n  const seen = new Set<unknown>();\n  while (current instanceof Error && current.cause !== undefined && !seen.has(current)) {\n    seen.add(current);\n    current = current.cause;\n  }\n  return current;\n}\n\nexport function isRetryable(err: unknown): boolean {\n  const root = rootCause(err);\n  if (root instanceof SearchClusterError) {\n    return root.statusCode === 429 || root.statusCode >= 500;\n  }\n  if (root instanceof Error && \"code\" in root) {\n    const code = (root as NodeJS.ErrnoException).code;\n    return code === \"ECONNRESET\" || code === \"ETIMEDOUT\";\n  }\n  return false;\n}\n"
+    },
+    {
+      "path": "productIndexer.ts",
+      "content": "import { IndexingError, SearchClusterError } from \"./errors\";\n\nexport interface ProductDoc { id: string; title: string; body: string; categoryId: string; }\n\nexport interface SearchClient {\n  bulk(index: string, ops: object[]): Promise<{ status: number; body: any }>;\n}\n\nexport interface CatalogStore {\n  loadBatch(ids: string[]): Promise<ProductDoc[]>;\n}\n\nexport class ProductIndexer {\n  constructor(\n    private readonly search: SearchClient,\n    private readonly catalog: CatalogStore,\n    private readonly indexName: string,\n  ) {}\n\n  async indexBatch(batchId: string, ids: string[]): Promise<number> {\n    let docs: ProductDoc[];\n    try {\n      docs = await this.catalog.loadBatch(ids);\n    } catch (err) {\n      throw new IndexingError(\n        `loading batch ${batchId} from catalog`,\n        { batchId, size: ids.length },\n        { cause: err },\n      );\n    }\n\n    const ops = docs.flatMap((d) => [\n      { index: { _index: this.indexName, _id: d.id } },\n      { title: d.title, body: d.body, category_id: d.categoryId },\n    ]);\n\n    try {\n      const res = await this.search.bulk(this.indexName, ops);\n      if (res.status >= 300 || res.body?.errors) {\n        throw new SearchClusterError(`bulk request rejected for index ${this.indexName}`, res.status);\n      }\n    } catch (err) {\n      const reason = err instanceof Error ? err.message : String(err);\n      throw new IndexingError(\n        `writing batch ${batchId} to ${this.indexName}: ${reason}`,\n        { batchId, size: docs.length, index: this.indexName },\n      );\n    }\n    return docs.length;\n  }\n}\n"
+    },
+    {
+      "path": "reindexJob.ts",
+      "content": "import { ProductIndexer } from \"./productIndexer\";\nimport { IndexingError, isRetryable } from \"./errors\";\n\nexport interface Logger {\n  info(msg: string, fields?: object): void;\n  error(msg: string, fields?: object): void;\n}\n\nconst MAX_ATTEMPTS = 4;\nconst sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));\n\nexport async function runReindexJob(\n  indexer: ProductIndexer,\n  batches: Array<{ id: string; productIds: string[] }>,\n  log: Logger,\n): Promise<{ indexed: number; failed: string[] }> {\n  let indexed = 0;\n  const failed: string[] = [];\n\n  for (const batch of batches) {\n    for (let attempt = 1; ; attempt++) {\n      try {\n        indexed += await indexer.indexBatch(batch.id, batch.productIds);\n        break;\n      } catch (err) {\n        const retry = isRetryable(err) && attempt < MAX_ATTEMPTS;\n        log.error(\"batch indexing failed\", {\n          batchId: batch.id,\n          attempt,\n          willRetry: retry,\n          error: err instanceof Error ? err.message : String(err),\n          context: err instanceof IndexingError ? err.context : undefined,\n        });\n        if (!retry) {\n          failed.push(batch.id);\n          break;\n        }\n        await sleep(200 * 2 ** attempt);\n      }\n    }\n  }\n\n  log.info(\"reindex finished\", { indexed, failed: failed.length });\n  return { indexed, failed };\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "productIndexer.ts",
+    "snippet": "        `writing batch ${batchId} to ${this.indexName}: ${reason}`,\n        { batchId, size: docs.length, index: this.indexName },\n      );"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how errors are wrapped and given context as they move from the indexer to the job runner? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The bulk-write catch in productIndexer.ts wraps the error in an IndexingError but does not pass { cause: err }; it only copies the message into the text. isRetryable walks the cause chain with rootCause, so for these errors it sees the IndexingError itself, which is neither a SearchClusterError nor carries an errno code, and returns false. Transient 429/5xx responses and connection resets from the search cluster are therefore never retried, and batches are marked failed on the first hiccup. The catalog-load wrapper above it passes the cause correctly."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "catalog.loadBatch rejects with an error whose code is ETIMEDOUT. How does runReindexJob treat it on the first attempt?",
+      "choices": [
+        "It retries, because rootCause reaches the original error and isRetryable sees ETIMEDOUT",
+        "It records the batch as failed immediately, because IndexingError has no code",
+        "It rethrows and aborts the whole job",
+        "It retries forever, since attempt is reset per catch"
+      ],
+      "answer": 0,
+      "explanation": "The catalog wrapper passes { cause: err }, so rootCause follows .cause back to the errno error and isRetryable returns true for ETIMEDOUT; with attempt 1 < 4 the job sleeps and retries. The wrapper's own lack of a code does not matter because the root is checked, errors are caught per batch rather than aborting, and attempt increments in the for loop up to MAX_ATTEMPTS."
+    },
+    {
+      "prompt": "What is the purpose of the seen set in rootCause?",
+      "choices": [
+        "It deduplicates log lines for repeated errors",
+        "It prevents an infinite loop if an error's cause chain contains a cycle",
+        "It caches root causes across calls for performance",
+        "It stops at the first non-Error cause"
+      ],
+      "answer": 1,
+      "explanation": "seen is local to each call and records every error visited; if a cause chain loops back on itself the while condition fails and the walk stops. It does not touch logging or persist between calls, and stopping at non-Error causes is done by the instanceof Error check, not by the set."
+    },
+    {
+      "prompt": "A bulk response comes back with HTTP 200 but body.errors set to true. Which statement about the indexer's handling is accurate?",
+      "choices": [
+        "The batch counts as indexed because status is below 300",
+        "The SearchClient throws before indexBatch sees the response",
+        "A SearchClusterError is thrown with status 200 inside the try block and is then caught and wrapped by the surrounding catch",
+        "The documents are re-sent individually"
+      ],
+      "answer": 2,
+      "explanation": "The condition res.status >= 300 || res.body?.errors is true, so SearchClusterError(\u2026, 200) is thrown inside the same try, and the catch below wraps it in an IndexingError. It is not counted as indexed, the client returned normally, and there is no per-document fallback."
+    }
+  ],
+  "concepts": [
+    "backend.errors.error_wrapping_and_context",
+    "backend.resilience.retries_and_backoff",
+    "backend.observability.structured_logging"
+  ]
+}

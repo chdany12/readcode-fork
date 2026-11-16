@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "orderRoutes.ts",
+        "startLine": 32,
+        "endLine": 33
+      }
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "The cancel route in orderRoutes.ts bypasses OrderService.cancelOrder and talks to OrderRepository directly. It re-implements the status check but skips the business rule that releases reserved inventory, and it runs without a transaction or row lock. Every cancelled order permanently leaks its reserved stock, so products drift toward showing out of stock, and two concurrent cancel/ship requests can race. The route should call service.cancelOrder and let the error handler map OrderNotFoundError/InvalidOrderStateError.",
+    "placeOrder reserves each line inside db.transaction and throws OutOfStockError when reserve returns false, which aborts the transaction and undoes earlier reservations; the insert is never reached. Nothing partial is committed, there is no back-order logic, and the error handler only maps OrderNotFoundError and InvalidOrderStateError, so OutOfStockError falls through to next(err) rather than a 409.",
+    "SELECT ... FOR UPDATE on the transaction's connection holds a row lock until commit, so the cancellable-status check and the inventory release/status update see a stable row. Both methods use the same toOrder mapper, nothing is cached, and FOR UPDATE is not syntactically required before an UPDATE.",
+    "The router.use error middleware checks instanceof OrderNotFoundError and InvalidOrderStateError and maps them to 404 and 409. The service throws plain domain error classes with no status codes, the repository does no error mapping, and Express's default handler would just return 500."
+  ]
+}

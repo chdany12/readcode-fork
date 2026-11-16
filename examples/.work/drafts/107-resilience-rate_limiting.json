@@ -1,0 +1,62 @@
+{
+  "title": "Paced outbound calls to a courier quote API",
+  "name": "Courier quote pacer",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/pacedExecutor.ts",
+      "content": "export class QueueFullError extends Error {\n  constructor(readonly queued: number) {\n    super(`courier api queue full (${queued} waiting)`);\n    this.name = \"QueueFullError\";\n  }\n}\n\ninterface Waiter {\n  run: () => void;\n}\n\nexport class PacedExecutor {\n  private readonly waiting: Waiter[] = [];\n  private nextSlotAt = 0;\n  private timer: NodeJS.Timeout | null = null;\n\n  constructor(\n    private readonly minIntervalMs: number,\n    private readonly maxQueue: number,\n  ) {}\n\n  submit<T>(task: () => Promise<T>): Promise<T> {\n    if (this.waiting.length >= this.maxQueue) {\n      return Promise.reject(new QueueFullError(this.waiting.length));\n    }\n    return new Promise<T>((resolve, reject) => {\n      this.waiting.push({\n        run: () => {\n          task().then(resolve, reject);\n        },\n      });\n      this.pump();\n    });\n  }\n\n  private pump() {\n    if (this.timer || this.waiting.length === 0) return;\n    const delay = Math.max(0, this.nextSlotAt - Date.now());\n    this.timer = setTimeout(() => {\n      this.timer = null;\n      const next = this.waiting.shift();\n      if (next) {\n        this.nextSlotAt = Date.now() + this.minIntervalMs;\n        try {\n          next.run();\n        } finally {\n          this.pump();\n        }\n      }\n    }, delay);\n  }\n}\n"
+    },
+    {
+      "path": "src/courierQuoter.ts",
+      "content": "import { PacedExecutor, QueueFullError } from \"./pacedExecutor\";\n\nexport interface CourierQuoteRequest {\n  orderId: string;\n  restaurantId: string;\n  dropoff: { lat: number; lng: number };\n}\n\nexport interface CourierQuote {\n  fee: number;\n  etaMinutes: number;\n}\n\nexport interface CourierApi {\n  quote(req: CourierQuoteRequest, signal: AbortSignal): Promise<CourierQuote>;\n}\n\nconst FALLBACK_QUOTE: CourierQuote = { fee: 499, etaMinutes: 45 };\n\nexport class CourierQuoter {\n  private readonly pacer = new PacedExecutor(200, 50);\n\n  constructor(private readonly api: CourierApi) {}\n\n  async quote(req: CourierQuoteRequest): Promise<CourierQuote & { estimated: boolean }> {\n    try {\n      const q = await this.pacer.submit(() => this.callWithTimeout(req, 2_000));\n      return { ...q, estimated: false };\n    } catch (err) {\n      if (err instanceof QueueFullError || (err as Error).name === \"AbortError\") {\n        return { ...FALLBACK_QUOTE, estimated: true };\n      }\n      throw err;\n    }\n  }\n\n  private async callWithTimeout(req: CourierQuoteRequest, ms: number) {\n    const ctrl = new AbortController();\n    const t = setTimeout(() => ctrl.abort(), ms);\n    try {\n      return await this.api.quote(req, ctrl.signal);\n    } finally {\n      clearTimeout(t);\n    }\n  }\n}\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code limits the rate of calls to the courier API? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is none. Only one timer is pending at a time (pump returns early while this.timer is set), each start sets nextSlotAt = now + minIntervalMs before running the task, and the next timer waits until that slot, so call starts are spaced at least 200 ms apart (at most 5/s). The queue is capped at 50, so memory and wait time are bounded and overflow fails fast. task() is invoked inside run(), so a synchronous throw from task would escape, but here the task is an async function, which turns throws into rejections forwarded via then(resolve, reject); the finally guarantees pumping continues."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Ten quote requests arrive at once on an idle service. Roughly when does the tenth courier API call start?",
+      "choices": [
+        "Immediately; all ten start together",
+        "After about 1.8 seconds",
+        "After about 2 seconds, once the first call's timeout expires",
+        "After about 10 seconds"
+      ],
+      "answer": 1,
+      "explanation": "The first call starts on a 0 ms timer, and each start schedules the next no earlier than 200 ms later, so call n starts about (n-1) x 200 ms: the tenth at about 1.8 s. Pacing is on start times, not completion, so it does not wait for the 2 s timeout; nothing allows simultaneous starts."
+    },
+    {
+      "prompt": "The courier API slows down so each call takes 1.5 seconds. What happens to concurrency?",
+      "choices": [
+        "Calls still start every 200 ms, so up to about 8 can be in flight at once",
+        "Only one call is in flight at a time because the executor waits for each task",
+        "The executor stops starting calls until the slow ones finish",
+        "Calls are cancelled after 200 ms"
+      ],
+      "answer": 0,
+      "explanation": "run() fires task() and returns without awaiting it, and pump() is called in finally right away, so the executor limits the start rate, not concurrency. With 1.5 s per call and a start every 200 ms, about 7-8 overlap. It does not serialize or pause, and the abort timeout is 2 s, not 200 ms."
+    },
+    {
+      "prompt": "During a spike, 80 quote requests arrive within a few milliseconds. What do callers see?",
+      "choices": [
+        "All 80 get real quotes, just later",
+        "The first 50 are queued; the rest throw QueueFullError to the caller of quote()",
+        "Everything gets the fallback quote",
+        "Roughly the first 50 queue for real quotes; the remaining ~30 immediately get the fallback quote marked estimated"
+      ],
+      "answer": 3,
+      "explanation": "submit rejects with QueueFullError once 50 are waiting (one may already have been dequeued by the first timer, so the split is approximate). quote() catches QueueFullError and returns FALLBACK_QUOTE with estimated: true, so it is not rethrown. Queued requests are still served by the real API."
+    }
+  ],
+  "concepts": [
+    "backend.resilience.rate_limiting",
+    "backend.resilience.graceful_degradation",
+    "backend.messaging.backpressure",
+    "backend.resilience.timeouts"
+  ]
+}

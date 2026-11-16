@@ -1,0 +1,64 @@
+{
+  "title": "Push notification batcher and its tests",
+  "name": "Push notification batcher",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/pushBatcher.ts",
+      "content": "import { EventEmitter } from \"node:events\";\n\nexport interface PushMessage {\n  userId: string;\n  title: string;\n  body: string;\n}\n\nexport interface PushGateway {\n  sendBatch(messages: PushMessage[]): Promise<void>;\n}\n\nexport interface BatcherOptions {\n  flushIntervalMs: number;\n  maxBatchSize: number;\n}\n\nexport class PushBatcher extends EventEmitter {\n  private pending: PushMessage[] = [];\n  private timer: NodeJS.Timeout | null = null;\n  private inFlight: Promise<void> = Promise.resolve();\n\n  constructor(\n    private readonly gateway: PushGateway,\n    private readonly opts: BatcherOptions,\n  ) {\n    super();\n  }\n\n  enqueue(message: PushMessage): void {\n    this.pending.push(message);\n    if (this.pending.length >= this.opts.maxBatchSize) {\n      this.flushNow();\n      return;\n    }\n    if (!this.timer) {\n      this.timer = setTimeout(() => this.flushNow(), this.opts.flushIntervalMs);\n    }\n  }\n\n  private flushNow(): void {\n    if (this.timer) {\n      clearTimeout(this.timer);\n      this.timer = null;\n    }\n    if (this.pending.length === 0) return;\n    const batch = this.pending.splice(0, this.pending.length);\n    this.inFlight = this.inFlight\n      .then(() => this.gateway.sendBatch(batch))\n      .then(\n        () => { this.emit(\"flushed\", batch.length); },\n        (err) => { this.emit(\"flushError\", err, batch.length); },\n      );\n  }\n\n  async drain(): Promise<void> {\n    this.flushNow();\n    await this.inFlight;\n  }\n}\n"
+    },
+    {
+      "path": "src/pushBatcher.test.ts",
+      "content": "import { test } from \"node:test\";\nimport assert from \"node:assert/strict\";\nimport { PushBatcher, PushGateway, PushMessage } from \"./pushBatcher\";\n\nclass RecordingGateway implements PushGateway {\n  batches: PushMessage[][] = [];\n  async sendBatch(messages: PushMessage[]): Promise<void> {\n    this.batches.push(messages);\n  }\n}\n\nconst msg = (n: number): PushMessage => ({\n  userId: `u-${n}`,\n  title: \"New reply\",\n  body: `Reply #${n}`,\n});\n\ntest(\"flushes immediately when the batch is full\", async () => {\n  const gateway = new RecordingGateway();\n  const batcher = new PushBatcher(gateway, { flushIntervalMs: 10_000, maxBatchSize: 3 });\n\n  batcher.enqueue(msg(1));\n  batcher.enqueue(msg(2));\n  batcher.enqueue(msg(3));\n  await batcher.drain();\n\n  assert.equal(gateway.batches.length, 1);\n  assert.equal(gateway.batches[0].length, 3);\n});\n\ntest(\"flushes a partial batch after the interval\", async () => {\n  const gateway = new RecordingGateway();\n  const batcher = new PushBatcher(gateway, { flushIntervalMs: 50, maxBatchSize: 100 });\n\n  batcher.enqueue(msg(1));\n  batcher.enqueue(msg(2));\n  await new Promise((resolve) => setTimeout(resolve, 50));\n\n  assert.equal(gateway.batches.length, 1);\n  assert.deepEqual(gateway.batches[0].map((m) => m.userId), [\"u-1\", \"u-2\"]);\n});\n\ntest(\"drain sends whatever is pending\", async () => {\n  const gateway = new RecordingGateway();\n  const batcher = new PushBatcher(gateway, { flushIntervalMs: 10_000, maxBatchSize: 100 });\n\n  batcher.enqueue(msg(7));\n  await batcher.drain();\n\n  assert.equal(gateway.batches.length, 1);\n  assert.equal(gateway.batches[0][0].userId, \"u-7\");\n});\n\ntest(\"reports gateway failures without throwing\", async () => {\n  const failing: PushGateway = {\n    sendBatch: async () => { throw new Error(\"APNs unavailable\"); },\n  };\n  const batcher = new PushBatcher(failing, { flushIntervalMs: 10_000, maxBatchSize: 100 });\n  const errors: unknown[] = [];\n  batcher.on(\"flushError\", (err) => errors.push(err));\n\n  batcher.enqueue(msg(1));\n  await batcher.drain();\n\n  assert.equal(errors.length, 1);\n});\n"
+    }
+  ],
+  "defect": {
+    "path": "src/pushBatcher.test.ts",
+    "snippet": "  await new Promise((resolve) => setTimeout(resolve, 50));"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how these tests wait for asynchronous work, one that could make them pass or fail nondeterministically? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "In \"flushes a partial batch after the interval\", the test sleeps for exactly 50 ms, the same as flushIntervalMs. The batcher's timer and the test's timer are due at about the same time, and even when the flush timer fires first, sendBatch runs in a chained .then and may not have recorded the batch by the time the test resumes. Under CI load the assertion sometimes sees zero batches. The test should use fake timers or await batcher.drain() / the \"flushed\" event instead of a wall-clock sleep."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "With maxBatchSize 3, a caller enqueues 3 messages and then immediately 1 more. With no further calls, when is the 4th message sent?",
+      "choices": [
+        "Together with the first three, in the same sendBatch call",
+        "Only when drain() is called; the timer was cleared by the full-batch flush",
+        "After flushIntervalMs, in its own batch, because enqueue starts a new timer once the previous one was cleared",
+        "Never, because pending was spliced to an empty array"
+      ],
+      "answer": 2,
+      "explanation": "The third enqueue calls flushNow, which clears the timer, sets it to null and empties pending. The 4th enqueue pushes to pending and, because timer is null, schedules a new setTimeout, so the message goes out alone after the interval. It can't join the first batch, which was already spliced off. drain isn't required, and the message sits in the new pending array, so it isn't lost."
+    },
+    {
+      "prompt": "What happens to later flushes if gateway.sendBatch rejects for one batch?",
+      "choices": [
+        "The inFlight chain stays usable, because the rejection is handled and turned into a \"flushError\" event",
+        "Every later flush is skipped, because inFlight is now a rejected promise",
+        "drain() rejects with the gateway error",
+        "The batch is put back into pending and retried on the next flush"
+      ],
+      "answer": 0,
+      "explanation": "The second argument to .then handles the rejection and emits \"flushError\", so the promise stored in inFlight resolves and the next .then still runs. inFlight never rejects, so drain resolves normally. Nothing re-queues the failed batch."
+    },
+    {
+      "prompt": "Why does the \"flushes immediately when the batch is full\" test await drain() before asserting, rather than asserting right after the three enqueue calls?",
+      "choices": [
+        "Because enqueue throws if it is called after drain",
+        "Because sendBatch is invoked inside a .then callback, so it has not run yet when enqueue returns",
+        "Because the 10-second timer must be cancelled or the test process hangs",
+        "Because drain is what triggers the full-batch flush"
+      ],
+      "answer": 1,
+      "explanation": "flushNow schedules sendBatch via inFlight.then(...), which runs in a later microtask, so gateway.batches is still empty right after enqueue returns. Awaiting drain waits for the chain to finish. enqueue never throws, the full-batch flush already happened inside enqueue, and flushNow already cleared the timer, so cancelling it isn't what drain is for here."
+    }
+  ],
+  "concepts": [
+    "backend.testing.flaky_tests",
+    "backend.concurrency.async_await_pitfalls",
+    "backend.testing.unit_test_design"
+  ]
+}

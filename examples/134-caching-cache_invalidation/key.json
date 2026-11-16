@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "There is no defect. Every write path (reserve and updatePrice) commits to the repository first and then bumps the hotel's version counter. Readers build the data key from the version they read, so after the INCR every reader uses a new key and the old entries become unreachable; they expire via the 300s TTL. A reader that read the old version before the bump and then fills the cache writes under the old version key, which no later reader looks at, so a slow fill cannot resurrect stale data under the current key. Failed reservations never reach invalidateHotel, which is fine because nothing changed. quote() is only an estimate: the authoritative check happens in decrementRooms.",
+    "Data keys embed the version, so one INCR on avail-ver:<hotel> makes all of that hotel's date keys unreachable at once, with no need to enumerate or SCAN dates. INCR does not touch TTLs of other keys, ioredis supports DEL fine, and reads still populate the cache lazily (cache-aside).",
+    "The slow fill writes to avail:<hotel>:<date>:v4. The next get() reads version 5 and looks up the v5 key, which does not exist, so it loads from the repo. The v4 entry is orphaned and expires. Nothing in get() detects version changes or throws.",
+    "invalidateHotel bumps a hotel-wide version, so one booking for one night invalidates every cached date for that hotel. With frequent bookings, most reads miss. Orphaned entries do expire because each set uses EX 300. Reads use direct GETs, not SCAN, and nothing makes writes wait for readers."
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/firmwareRolloutHandler.ts",
+        "startLine": 33,
+        "endLine": 33
+      }
+    },
+    1,
+    0,
+    3
+  ],
+  "explanations": [
+    "Every audit entry uses `requestedBy` from the request body as the actor. The client supplies that value, so any authenticated operator can schedule firmware while the trail names someone else, and denied attempts can be blamed on another user. The actor should come from the authenticated principal (req.principal.userId, possibly with tenantId); requestedBy could at most go into details.",
+    "The tenant mismatch falls into the first branch, which records a denied event with cause not_found_or_foreign_tenant and returns 404 so device existence is not leaked. The role check is never reached, and the attempt is logged.",
+    "Each hash covers the previous hash, so changing or deleting an earlier line breaks verification for everything after it. A plain hash is not a signature and proves nothing about authorship, and it says nothing about appends that never happened.",
+    "The success record() call is inside the try, so its rejection goes to the catch, which tries to write a 'failed' entry and then rethrows. The client sees an error even though the rollout was scheduled, a real tradeoff of tying the response to audit durability. Nothing maps it to 404, and a second audit write is attempted."
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "riskGate.ts",
+        "startLine": 42,
+        "endLine": 45
+      }
+    },
+    2,
+    1,
+    0
+  ],
+  "explanations": [
+    "Only ScoringTimeoutError triggers the fallback. When the scoring service is down outright (connection refused, DNS failure) or returns a 5xx, the client throws a plain Error, which evaluate rethrows. Every checkout then fails instead of using the fallback policy, so a scoring outage becomes a payments outage. Unavailability errors (network errors and 5xx) should route to fallback too; only genuine client errors should propagate.",
+    "The timeout is converted to ScoringTimeoutError and handled by fallback(). For amounts above the auto-approve cap, fallback enqueues a review and returns \"review\". Small amounts are approved; nothing in fallback declines; the error is not rethrown.",
+    "The timer calls controller.abort(), and fetch honours the signal by cancelling the request, so slow calls do not pile up sockets. The client has no retry logic, and the signal has nothing to do with dedupe or idempotency.",
+    "The cap is only consulted in fallback(), i.e. when no score is available: small charges are approved unscored, larger ones go to review. Scoring is always attempted first, there is no cache, and large charges are reviewed, not rejected."
+  ]
+}

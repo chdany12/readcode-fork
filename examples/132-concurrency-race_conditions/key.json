@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "There is no defect for this single-process booker. Every read-check-write of a slot runs inside KeyedMutex.runExclusive keyed by slotId. Each caller chains onto the previous tail and awaits it before running, so operations on one slot are serialized and the capacity and duplicate checks always see the latest saved state. release() runs in finally, so a thrown BookingError or save failure never blocks later callers, and the tail entry is only deleted when no newer waiter has replaced it.",
+    "release() is in the finally block of runExclusive, so it runs even when fn rejects; the next waiter's awaited previous then resolves. The map is not cleared for other waiters because the tail no longer matches, and errors are not shared between callers.",
+    "KeyedMutex stores a separate tail per key, so different slot ids never wait on each other. There is no global lock and no rejection on contention.",
+    "If another caller queued after this one, the map holds that caller's tail; deleting it would let a subsequent caller start from Promise.resolve() and run concurrently. Map.delete does not throw, and ordering of the first caller comes from chaining, not this check."
+  ]
+}

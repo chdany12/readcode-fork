@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/ticketViewService.ts",
+        "startLine": 66,
+        "endLine": 66
+      }
+    },
+    3,
+    1,
+    2
+  ],
+  "explanations": [
+    "slaDeadline falls back to a 4-hour SLA whenever customer is null, which is exactly what happens when the CRM call times out or fails. The degraded view is then treated as fact: every ticket during a CRM outage gets a tight 4-hour deadline (and customers whose profile has slaHours null, meaning no SLA, get one too because ?? also catches null). The result is a flood of false SLA breaches and escalations, and free-tier tickets jump the queue. When the CRM is degraded the deadline should be reported as unknown (return null) or come from data stored on the ticket, not invented.",
+    "The ticket fetch uses withTimeout directly, not optional, so after 2000 ms the abort fires and the race rejects with TimeoutError, which propagates out of load. The ticket is the core of the page, so there is no fallback; null is only returned when the store answers with no ticket, and degraded only lists the enrichment calls.",
+    "Both optional calls run concurrently inside Promise.all. The kb call is cut off at 600 ms and falls back to [], while the CRM succeeds at 700 ms, so total wait is about 700 ms with the profile present and only kb marked degraded. The calls are not sequential, and the kb timeout prevents hanging.",
+    "withTimeout aborts its AbortController and passes ctrl.signal into fn, so a client that forwards the signal to fetch cancels the request. Nothing retries, and each optional call has its own controller, so the CRM call is not affected."
+  ]
+}

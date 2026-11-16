@@ -1,0 +1,68 @@
+{
+  "title": "Byte-range segment serving behind a storage interface",
+  "name": "Video segment store",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/segmentStore.ts",
+      "content": "import { Readable } from \"node:stream\";\n\nexport interface ByteRange {\n  start: number;\n  endExclusive: number;\n}\n\nexport interface SegmentMeta {\n  key: string;\n  sizeBytes: number;\n  contentType: string;\n}\n\nexport interface SegmentStore {\n  stat(key: string): Promise<SegmentMeta | null>;\n  open(key: string, range?: ByteRange): Promise<Readable>;\n}\n\nexport class InMemorySegmentStore implements SegmentStore {\n  private readonly blobs = new Map<string, { data: Buffer; contentType: string }>();\n\n  put(key: string, data: Buffer, contentType: string): void {\n    this.blobs.set(key, { data, contentType });\n  }\n\n  async stat(key: string): Promise<SegmentMeta | null> {\n    const blob = this.blobs.get(key);\n    if (!blob) return null;\n    return { key, sizeBytes: blob.data.length, contentType: blob.contentType };\n  }\n\n  async open(key: string, range?: ByteRange): Promise<Readable> {\n    const blob = this.blobs.get(key);\n    if (!blob) throw new Error(`segment not found: ${key}`);\n    const slice = range ? blob.data.subarray(range.start, range.endExclusive) : blob.data;\n    return Readable.from([slice]);\n  }\n}\n"
+    },
+    {
+      "path": "src/fileSegmentStore.ts",
+      "content": "import { createReadStream } from \"node:fs\";\nimport { stat as fsStat } from \"node:fs/promises\";\nimport path from \"node:path\";\nimport { Readable } from \"node:stream\";\nimport { ByteRange, SegmentMeta, SegmentStore } from \"./segmentStore\";\n\nconst CONTENT_TYPES: Record<string, string> = {\n  \".ts\": \"video/mp2t\",\n  \".m4s\": \"video/iso.segment\",\n  \".mp4\": \"video/mp4\",\n};\n\nexport class FileSegmentStore implements SegmentStore {\n  constructor(private readonly root: string) {}\n\n  private resolve(key: string): string {\n    const full = path.resolve(this.root, key);\n    if (!full.startsWith(path.resolve(this.root) + path.sep)) {\n      throw new Error(`invalid segment key: ${key}`);\n    }\n    return full;\n  }\n\n  async stat(key: string): Promise<SegmentMeta | null> {\n    try {\n      const s = await fsStat(this.resolve(key));\n      const ext = path.extname(key);\n      return {\n        key,\n        sizeBytes: s.size,\n        contentType: CONTENT_TYPES[ext] ?? \"application/octet-stream\",\n      };\n    } catch (err) {\n      if ((err as NodeJS.ErrnoException).code === \"ENOENT\") return null;\n      throw err;\n    }\n  }\n\n  async open(key: string, range?: ByteRange): Promise<Readable> {\n    const file = this.resolve(key);\n    if (!range) return createReadStream(file);\n    return createReadStream(file, { start: range.start, end: range.endExclusive });\n  }\n}\n"
+    },
+    {
+      "path": "src/segmentHandler.ts",
+      "content": "import type { IncomingMessage, ServerResponse } from \"node:http\";\nimport { pipeline } from \"node:stream/promises\";\nimport { ByteRange, SegmentStore } from \"./segmentStore\";\n\nexport function parseRange(header: string | undefined, size: number): ByteRange | null | \"invalid\" {\n  if (!header) return null;\n  const m = /^bytes=(\\d*)-(\\d*)$/.exec(header.trim());\n  if (!m || (m[1] === \"\" && m[2] === \"\")) return \"invalid\";\n\n  if (m[1] === \"\") {\n    const suffix = Number(m[2]);\n    if (suffix === 0) return \"invalid\";\n    return { start: Math.max(0, size - suffix), endExclusive: size };\n  }\n\n  const start = Number(m[1]);\n  const lastInclusive = m[2] === \"\" ? size - 1 : Math.min(Number(m[2]), size - 1);\n  if (start >= size || start > lastInclusive) return \"invalid\";\n  return { start, endExclusive: lastInclusive + 1 };\n}\n\nexport function makeSegmentHandler(store: SegmentStore) {\n  return async (req: IncomingMessage, res: ServerResponse, key: string): Promise<void> => {\n    const meta = await store.stat(key);\n    if (!meta) {\n      res.writeHead(404).end();\n      return;\n    }\n\n    const range = parseRange(req.headers.range, meta.sizeBytes);\n    if (range === \"invalid\") {\n      res.writeHead(416, { \"Content-Range\": `bytes */${meta.sizeBytes}` }).end();\n      return;\n    }\n\n    const headers: Record<string, string | number> = {\n      \"Content-Type\": meta.contentType,\n      \"Accept-Ranges\": \"bytes\",\n      \"Cache-Control\": \"public, max-age=31536000, immutable\",\n    };\n\n    if (range) {\n      headers[\"Content-Range\"] = `bytes ${range.start}-${range.endExclusive - 1}/${meta.sizeBytes}`;\n      headers[\"Content-Length\"] = range.endExclusive - range.start;\n      res.writeHead(206, headers);\n    } else {\n      headers[\"Content-Length\"] = meta.sizeBytes;\n      res.writeHead(200, headers);\n    }\n\n    const body = await store.open(key, range ?? undefined);\n    await pipeline(body, res);\n  };\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/fileSegmentStore.ts",
+    "snippet": "return createReadStream(file, { start: range.start, end: range.endExclusive });"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how the SegmentStore implementations honor the interface's contract? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "FileSegmentStore.open passes range.endExclusive as fs.createReadStream's `end` option, but `end` is inclusive. The interface (and InMemorySegmentStore's subarray) treat endExclusive as one past the last byte, so the file-backed store returns one extra byte for every ranged read. The handler has already sent Content-Length = endExclusive - start, so the body overruns the declared length, which corrupts responses or causes players/proxies to reject or misalign segments. It only shows up in production (file store), not in tests using the in-memory store. The fix is `end: range.endExclusive - 1`."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A client sends `Range: bytes=-500` for a segment of 300 bytes. What does parseRange return?",
+      "choices": [
+        "\"invalid\", so the handler responds 416",
+        "{ start: 0, endExclusive: 300 }",
+        "{ start: -200, endExclusive: 300 }",
+        "null, so the whole file is served with 200"
+      ],
+      "answer": 1,
+      "explanation": "For a suffix range (empty first group) the code computes start = Math.max(0, size - suffix) = max(0, -200) = 0 and endExclusive = size = 300. It is not rejected (only suffix 0 is invalid), start is clamped so it is never negative, and null is only returned when there is no header."
+    },
+    {
+      "prompt": "Why does the handler call store.stat() before store.open() rather than just opening the stream?",
+      "choices": [
+        "open() would load the whole file into memory without it",
+        "stat() acquires a lock that open() requires",
+        "It needs the total size to resolve the Range header and set Content-Length/Content-Range before writing headers, and to return 404 cleanly",
+        "stat() validates the key against path traversal, which open() skips"
+      ],
+      "answer": 2,
+      "explanation": "parseRange needs meta.sizeBytes to interpret open-ended and suffix ranges and to build Content-Range; headers must be written before the body is piped, and a null stat gives a clean 404. open() streams rather than buffers in the file store, there is no locking, and both stat() and open() go through resolve(), so traversal is checked in both."
+    },
+    {
+      "prompt": "The ByteRange type uses `endExclusive` while HTTP Range headers use inclusive end offsets. Where does this codebase convert between the two conventions for the HTTP path?",
+      "choices": [
+        "Only inside each SegmentStore implementation",
+        "In parseRange (lastInclusive + 1) and when formatting Content-Range (endExclusive - 1)",
+        "Nowhere; both use the same convention",
+        "In InMemorySegmentStore.put"
+      ],
+      "answer": 1,
+      "explanation": "parseRange turns the inclusive header end into endExclusive = lastInclusive + 1, and the handler converts back with `range.endExclusive - 1` for the Content-Range header. Stores receive the interface's half-open range; put() only stores data and does no range conversion."
+    }
+  ],
+  "concepts": [
+    "backend.design.interface_design",
+    "backend.resources.streaming_large_payloads",
+    "backend.testing.mocking_and_fakes"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/signatureAuth.ts",
+        "startLine": 48,
+        "endLine": 48
+      }
+    },
+    1,
+    2,
+    3
+  ],
+  "explanations": [
+    "The freshness check `nowSeconds - ts > TOLERANCE_SECONDS` only rejects timestamps that are too old. A timestamp far in the future gives a negative difference and always passes. Anyone who captures one signed request with a future timestamp (for example from a client with a skewed clock, or one an insider pre-signs) can replay it, such as POST /v1/charges, for as long as that timestamp stays ahead of the clock. The check should use the absolute difference: `Math.abs(nowSeconds - ts) > TOLERANCE_SECONDS`.",
+    "PgMerchantKeyStore.findActive queries with `revoked_at IS NULL`, so a revoked key returns null and the middleware responds 401 invalid_credentials. The tolerance window only applies to the timestamp, not to key validity. Nothing throws, so it is not a 503. A valid HMAC is irrelevant once the key is no longer found.",
+    "The merchant signs the exact bytes it sent. Parsing and re-serialising can produce different bytes (spacing, escaping, number representation), so the server would compute a different HMAC. The verify hook keeps the original bytes. Speed is not the reason, req.body is still available after parsing, and the Buffer comparison happens on the hex digests anyway.",
+    "The findActive call is wrapped in try/catch and returns 503 with auth_unavailable. This fails closed (no next()) while telling the client the failure is temporary, unlike a 401 which would look like a credential problem. The error is caught, so it does not fall through to Express's default handler."
+  ]
+}

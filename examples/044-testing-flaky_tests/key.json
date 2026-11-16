@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/feedService.test.ts",
+        "startLine": 38,
+        "endLine": 38
+      }
+    },
+    3,
+    1,
+    0
+  ],
+  "explanations": [
+    "\"orders posts newest first\" builds the service with systemClock. The two publish calls usually happen within the same millisecond, so both posts get the same createdAt. The comparator then returns 0, the stable sort keeps insertion order (bob's post before carol's), and the test expecting [second, first] fails. It passes only when the clock happens to tick to the next millisecond between the two calls. The other tests use SteppingClock, which guarantees distinct timestamps, and this one should too.",
+    "Each now() call adds 1000 ms, so post 4 has the largest createdAt, and the comparator b.createdAt - a.createdAt puts it first. No list is reversed, Map iteration is in insertion order, and the sort never looks at ids.",
+    "The comparator returns 0 for equal timestamps, and Array.prototype.sort has been stable since ES2019, so the posts keep their order in candidates: the user's own posts first, then followees in followeesOf order, each in publish order. There is no secondary key on id or authorId, and the order is deterministic, not random.",
+    "postsByAuthor and seq are instance fields. With one shared service, posts from one test would show up in another test's feed and change counts and limits depending on run order. Constructing it in beforeEach would also work; tests in a file share one process; and homeFeed has no cache."
+  ]
+}

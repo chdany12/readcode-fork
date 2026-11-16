@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/rating.test.ts",
+        "startLine": 16,
+        "endLine": 16
+      }
+    },
+    2,
+    1,
+    3
+  ],
+  "explanations": [
+    "The `shipment` fixture is built once in `beforeAll` and then mutated by several tests (destinationZone, parcels), while quoteShipment itself pushes into `shipment.surcharges`. State leaks between tests: the 'does not add an oversize surcharge' test fails because the earlier oversize test already pushed \"oversize\" into the shared array, and the tests only pass or fail depending on run order (running one with `.only` or reordering changes results). It should be `beforeEach` so every test gets a fresh shipment.",
+    "Volumetric weight is 60000 / 5000 = 12 kg, which exceeds the 0.5 kg actual weight, and Math.ceil leaves 12. The other choices ignore the max() or use the wrong divisor.",
+    "The function mutates `s.surcharges` with push when the longest side exceeds OVERSIZE_CM and the entry is missing. It never alters parcels or serviceLevel, so it is not side-effect free.",
+    "Object spread copies top-level properties only; array properties still reference the same arrays, so quoteShipment pushing into surcharges would touch the original. It does not deep-copy, does not change the original's serviceLevel, and does not run hooks."
+  ]
+}

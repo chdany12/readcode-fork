@@ -1,0 +1,63 @@
+{
+  "title": "Biweekly payroll run calculation",
+  "name": "Payroll run calculator",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/payroll.ts",
+      "content": "import { Employee, TimesheetEntry, Payslip, TaxBand } from \"./model\";\n\nconst OVERTIME_MULTIPLIER = 1.5;\nconst WEEKLY_REGULAR_HOURS = 40;\n\nexport function groupByEmployee(entries: TimesheetEntry[]): Map<string, TimesheetEntry[]> {\n  const out = new Map<string, TimesheetEntry[]>();\n  for (const e of entries) {\n    const list = out.get(e.employeeId);\n    if (list) list.push(e);\n    else out.set(e.employeeId, [e]);\n  }\n  return out;\n}\n\nexport function weeklyHours(entries: TimesheetEntry[]): Map<string, number> {\n  const weeks = new Map<string, number>();\n  for (const e of entries) {\n    weeks.set(e.isoWeek, (weeks.get(e.isoWeek) ?? 0) + e.hours);\n  }\n  return weeks;\n}\n\nexport function grossCents(emp: Employee, entries: TimesheetEntry[]): number {\n  if (emp.salaried) return Math.round(emp.annualSalaryCents / 26);\n  let total = 0;\n  for (const hours of weeklyHours(entries).values()) {\n    const regular = Math.min(hours, WEEKLY_REGULAR_HOURS);\n    const overtime = Math.max(0, hours - WEEKLY_REGULAR_HOURS);\n    total += regular * emp.hourlyRateCents + overtime * emp.hourlyRateCents * OVERTIME_MULTIPLIER;\n  }\n  return Math.round(total);\n}\n\nexport function withholdingCents(grossCentsValue: number, bands: TaxBand[]): number {\n  let tax = 0;\n  for (const band of bands) {\n    if (grossCentsValue <= band.fromCents) break;\n    const top = band.toCents ?? Infinity;\n    const taxable = Math.min(grossCentsValue, top) - band.fromCents;\n    tax += taxable * band.rate;\n  }\n  return Math.round(tax);\n}\n\nexport function runPayroll(\n  employees: Employee[],\n  entries: TimesheetEntry[],\n  bandsByRegion: Map<string, TaxBand[]>,\n): Payslip[] {\n  const sortedBands = new Map<string, TaxBand[]>();\n  for (const [region, bands] of bandsByRegion) {\n    sortedBands.set(region, [...bands].sort((a, b) => a.fromCents - b.fromCents));\n  }\n\n  const slips: Payslip[] = [];\n  for (const emp of employees) {\n    const mine = entries.filter((e) => e.employeeId === emp.id);\n    const gross = grossCents(emp, mine);\n    const bands = sortedBands.get(emp.region);\n    if (!bands) throw new Error(`no tax bands for region ${emp.region} (employee ${emp.id})`);\n    const tax = withholdingCents(gross, bands);\n    slips.push({ employeeId: emp.id, grossCents: gross, taxCents: tax, netCents: gross - tax });\n  }\n  return slips;\n}\n"
+    },
+    {
+      "path": "src/model.ts",
+      "content": "export interface Employee {\n  id: string;\n  region: string;\n  salaried: boolean;\n  annualSalaryCents: number;\n  hourlyRateCents: number;\n}\n\nexport interface TimesheetEntry {\n  employeeId: string;\n  isoWeek: string;\n  hours: number;\n}\n\nexport interface TaxBand {\n  fromCents: number;\n  toCents: number | null;\n  rate: number;\n}\n\nexport interface Payslip {\n  employeeId: string;\n  grossCents: number;\n  taxCents: number;\n  netCents: number;\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/payroll.ts",
+    "snippet": "    const mine = entries.filter((e) => e.employeeId === emp.id);"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how runPayroll's per-employee loop scales with company size? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "Inside the loop over employees, entries.filter(...) scans every timesheet entry for each employee, making the run O(employees x entries). For a company with 20k employees and ~200k entries that is billions of comparisons per run. groupByEmployee already exists to bucket entries in one pass, but runPayroll never uses it. Tax bands, by contrast, are sorted once up front, so they are not the hot spot."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "An hourly employee at $20/hour works 45 hours in week A and 30 hours in week B of the same pay period. What gross pay does grossCents compute?",
+      "choices": [
+        "$1,500, since 75 hours across the period is under 80 so no overtime applies",
+        "$1,550, with overtime on the 5 hours over 40 in week A",
+        "$1,600, because overtime is paid at double time",
+        "$1,650, with overtime applied to all 45 hours of week A"
+      ],
+      "answer": 1,
+      "explanation": "weeklyHours sums hours per isoWeek and overtime is computed per week. Week A: 40 x $20 + 5 x $30 = $950. Week B: 30 x $20 = $600. Total $1,550. Overtime is not averaged over the period, the multiplier is 1.5 not 2, and only hours above 40 get the premium."
+    },
+    {
+      "prompt": "Bands are [0-1,000,000 at 10%, 1,000,000-open at 20%] (in cents). What withholding is computed for a gross of 1,500,000 cents?",
+      "choices": [
+        "300,000 cents, 20% of the whole gross",
+        "150,000 cents, 10% of the whole gross",
+        "200,000 cents: 100,000 from the first band plus 100,000 from the second",
+        "250,000 cents: 100,000 plus 150,000"
+      ],
+      "answer": 2,
+      "explanation": "withholdingCents is marginal: band one taxes 1,000,000 x 0.10 = 100,000; band two taxes (1,500,000 - 1,000,000) x 0.20 = 100,000. Total 200,000. It never applies a single rate to the whole gross, and band two only covers the portion above 1,000,000."
+    },
+    {
+      "prompt": "An employee's region has no entry in bandsByRegion. What does runPayroll do?",
+      "choices": [
+        "Uses zero withholding for that employee and continues",
+        "Skips that employee's payslip silently",
+        "Uses the bands of the first region in the map",
+        "Throws, so no payslips are returned for the whole run"
+      ],
+      "answer": 3,
+      "explanation": "runPayroll throws an Error naming the region and employee when sortedBands.get returns undefined. Because slips are only returned at the end, the whole run fails rather than returning partial results. There is no zero-tax default, skip, or fallback region."
+    }
+  ],
+  "concepts": [
+    "backend.performance.profiling_and_hot_paths",
+    "backend.data.money_and_ledgers"
+  ]
+}

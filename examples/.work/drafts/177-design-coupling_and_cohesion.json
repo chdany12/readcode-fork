@@ -1,0 +1,66 @@
+{
+  "title": "Telemetry ingestion split into parsing, storage and alerting",
+  "name": "Telemetry ingest service",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/ports.ts",
+      "content": "export interface TelemetryReading {\n  deviceId: string;\n  metric: string;\n  value: number;\n  ts: number;\n}\n\nexport interface ReadingStore {\n  append(readings: TelemetryReading[]): Promise<void>;\n}\n\nexport interface AlertRule {\n  metric: string;\n  above?: number;\n  below?: number;\n}\n\nexport interface AlertPublisher {\n  publish(alert: { deviceId: string; metric: string; value: number; rule: AlertRule }): Promise<void>;\n}\n\nexport interface RuleSource {\n  rulesFor(deviceId: string): Promise<AlertRule[]>;\n}\n"
+    },
+    {
+      "path": "src/thresholdEvaluator.ts",
+      "content": "import { AlertPublisher, AlertRule, RuleSource, TelemetryReading } from \"./ports\";\n\nexport function breaches(rule: AlertRule, value: number): boolean {\n  if (rule.above !== undefined && value > rule.above) return true;\n  if (rule.below !== undefined && value < rule.below) return true;\n  return false;\n}\n\nexport class ThresholdEvaluator {\n  constructor(\n    private readonly rules: RuleSource,\n    private readonly publisher: AlertPublisher,\n  ) {}\n\n  async evaluate(readings: TelemetryReading[]): Promise<number> {\n    const byDevice = new Map<string, TelemetryReading[]>();\n    for (const r of readings) {\n      const list = byDevice.get(r.deviceId) ?? [];\n      list.push(r);\n      byDevice.set(r.deviceId, list);\n    }\n\n    let fired = 0;\n    for (const [deviceId, deviceReadings] of byDevice) {\n      const rules = await this.rules.rulesFor(deviceId);\n      for (const reading of deviceReadings) {\n        for (const rule of rules) {\n          if (rule.metric === reading.metric && breaches(rule, reading.value)) {\n            await this.publisher.publish({ deviceId, metric: reading.metric, value: reading.value, rule });\n            fired++;\n          }\n        }\n      }\n    }\n    return fired;\n  }\n}\n"
+    },
+    {
+      "path": "src/telemetryIngestService.ts",
+      "content": "import { ReadingStore, TelemetryReading } from \"./ports\";\nimport { ThresholdEvaluator } from \"./thresholdEvaluator\";\n\nexport class InvalidReadingError extends Error {}\n\nexport function parseReading(raw: unknown): TelemetryReading {\n  const r = raw as Partial<TelemetryReading>;\n  if (typeof r?.deviceId !== \"string\" || r.deviceId.length === 0) {\n    throw new InvalidReadingError(\"deviceId is required\");\n  }\n  if (typeof r.metric !== \"string\" || typeof r.value !== \"number\" || !Number.isFinite(r.value)) {\n    throw new InvalidReadingError(`bad metric or value for ${r.deviceId}`);\n  }\n  if (typeof r.ts !== \"number\") {\n    throw new InvalidReadingError(`missing ts for ${r.deviceId}`);\n  }\n  return { deviceId: r.deviceId, metric: r.metric, value: r.value, ts: r.ts };\n}\n\nexport class TelemetryIngestService {\n  constructor(\n    private readonly store: ReadingStore,\n    private readonly evaluator: ThresholdEvaluator,\n  ) {}\n\n  async ingest(rawBatch: unknown[]): Promise<{ accepted: number; rejected: number; alerts: number }> {\n    const accepted: TelemetryReading[] = [];\n    let rejected = 0;\n    for (const raw of rawBatch) {\n      try {\n        accepted.push(parseReading(raw));\n      } catch (err) {\n        if (!(err instanceof InvalidReadingError)) throw err;\n        rejected++;\n      }\n    }\n    if (accepted.length === 0) return { accepted: 0, rejected, alerts: 0 };\n\n    await this.store.append(accepted);\n    const alerts = await this.evaluator.evaluate(accepted);\n    return { accepted: accepted.length, rejected, alerts };\n  }\n}\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how responsibilities and dependencies are divided between these modules? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is no defect. Each module has one cohesive job: parseReading validates input, ThresholdEvaluator only decides and publishes alerts, and TelemetryIngestService orchestrates. Dependencies point at the narrow interfaces in ports.ts (ReadingStore, RuleSource, AlertPublisher) rather than concrete databases or brokers, and breaches() is a pure function that can be tested alone. Depending on the concrete ThresholdEvaluator class looks like tight coupling, but it is an in-process domain component with its own injected ports, so it can be constructed with fakes in tests."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "The team moves alert rules from a config file to a database. Which code must change?",
+      "choices": [
+        "ThresholdEvaluator and TelemetryIngestService",
+        "Only a new RuleSource implementation and the wiring that constructs it",
+        "parseReading, because readings now need a rule id",
+        "ports.ts and every class that imports it"
+      ],
+      "answer": 1,
+      "explanation": "ThresholdEvaluator depends only on the RuleSource interface (rulesFor), so a new implementation plugged in at construction is enough. The ingest service never touches rules, parseReading is unrelated to rules, and the interface itself does not need to change."
+    },
+    {
+      "prompt": "A batch has 5 raw items: 2 fail validation with InvalidReadingError and 3 are valid. What does ingest() do?",
+      "choices": [
+        "Rejects the whole batch and stores nothing",
+        "Throws on the first invalid item",
+        "Stores and evaluates all 5, flagging the invalid ones",
+        "Stores and evaluates the 3 valid readings and reports rejected: 2"
+      ],
+      "answer": 3,
+      "explanation": "Each item is parsed in its own try/catch; InvalidReadingError increments rejected and the loop continues. The 3 accepted readings are appended and evaluated. Only non-validation errors are rethrown, and invalid items are never stored."
+    },
+    {
+      "prompt": "A rule has above: 80 and below: 10, and a reading has value 80. Does it fire?",
+      "choices": [
+        "No, because 80 is not strictly greater than 80 and not below 10",
+        "Yes, because the above bound is inclusive",
+        "Yes, because both bounds are checked and one matches",
+        "Only if the reading's metric is undefined"
+      ],
+      "answer": 0,
+      "explanation": "breaches() uses strict comparisons: value > rule.above and value < rule.below. 80 > 80 is false and 80 < 10 is false, so it returns false. Neither bound is inclusive, and a matching metric is still required by evaluate()."
+    }
+  ],
+  "concepts": [
+    "backend.design.coupling_and_cohesion",
+    "backend.design.dependency_injection",
+    "backend.design.interface_design",
+    "backend.api.request_validation"
+  ]
+}

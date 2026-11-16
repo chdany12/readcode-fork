@@ -1,0 +1,65 @@
+{
+  "title": "Booking confirmation consumer with dead-letter routing",
+  "name": "Booking confirmation consumer",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/confirmationConsumer.ts",
+      "content": "import { Logger } from \"./logger\";\n\nexport interface BrokerMessage {\n  id: string;\n  body: string;\n  attributes: Record<string, string>;\n  ack(): Promise<void>;\n  nack(delayMs: number): Promise<void>;\n}\n\nexport interface Publisher {\n  publish(topic: string, body: string, attributes: Record<string, string>): Promise<void>;\n}\n\nexport class NonRetryableError extends Error {}\n\nexport interface ConfirmationHandler {\n  handle(payload: BookingConfirmation): Promise<void>;\n}\n\nexport interface BookingConfirmation {\n  bookingId: string;\n  supplierRef: string;\n  travellerEmail: string;\n  totalCents: number;\n}\n\nconst MAX_ATTEMPTS = 5;\nconst BASE_DELAY_MS = 2_000;\n\nexport class ConfirmationConsumer {\n  constructor(\n    private readonly handler: ConfirmationHandler,\n    private readonly publisher: Publisher,\n    private readonly dlqTopic: string,\n    private readonly log: Logger,\n  ) {}\n\n  async onMessage(msg: BrokerMessage): Promise<void> {\n    const attempt = Number(msg.attributes[\"x-attempt\"] ?? \"1\");\n    let payload: BookingConfirmation;\n    try {\n      payload = JSON.parse(msg.body) as BookingConfirmation;\n      if (!payload.bookingId || !payload.supplierRef) {\n        throw new NonRetryableError(\"missing bookingId or supplierRef\");\n      }\n    } catch (err) {\n      await this.deadLetter(msg, attempt, err as Error, \"malformed\");\n      return;\n    }\n\n    try {\n      await this.handler.handle(payload);\n      await msg.ack();\n    } catch (err) {\n      if (err instanceof NonRetryableError) {\n        await this.deadLetter(msg, attempt, err, \"non_retryable\");\n        return;\n      }\n      if (attempt >= MAX_ATTEMPTS) {\n        await this.deadLetter(msg, attempt, err as Error, \"exhausted\");\n        return;\n      }\n      const delay = BASE_DELAY_MS * 2 ** (attempt - 1);\n      this.log.warn(\"confirmation.retry\", { bookingId: payload.bookingId, attempt, delay });\n      await this.publisher.publish(\"booking.confirmations\", msg.body, {\n        ...msg.attributes,\n        \"x-attempt\": String(attempt + 1),\n      });\n      await msg.ack();\n    }\n  }\n\n  private async deadLetter(\n    msg: BrokerMessage,\n    attempt: number,\n    err: Error,\n    reason: string,\n  ): Promise<void> {\n    const attributes = {\n      ...msg.attributes,\n      \"x-dlq-reason\": reason,\n      \"x-dlq-error\": err.message.slice(0, 500),\n      \"x-dlq-attempts\": String(attempt),\n      \"x-original-id\": msg.id,\n      \"x-dead-lettered-at\": new Date().toISOString(),\n    };\n    this.publisher\n      .publish(this.dlqTopic, msg.body, attributes)\n      .catch((e) => this.log.error(\"dlq.publish_failed\", { id: msg.id, error: String(e) }));\n    await msg.ack();\n    this.log.error(\"confirmation.dead_lettered\", { id: msg.id, reason, attempt });\n  }\n}\n"
+    },
+    {
+      "path": "src/logger.ts",
+      "content": "export interface Logger {\n  warn(event: string, fields: Record<string, unknown>): void;\n  error(event: string, fields: Record<string, unknown>): void;\n}\n\nexport const consoleLogger: Logger = {\n  warn: (event, fields) => console.warn(JSON.stringify({ level: \"warn\", event, ...fields })),\n  error: (event, fields) => console.error(JSON.stringify({ level: \"error\", event, ...fields })),\n};\n"
+    }
+  ],
+  "defect": {
+    "path": "src/confirmationConsumer.ts",
+    "snippet": "    this.publisher\n      .publish(this.dlqTopic, msg.body, attributes)\n      .catch((e) => this.log.error(\"dlq.publish_failed\", { id: msg.id, error: String(e) }));\n    await msg.ack();"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this consumer moves failed booking confirmations to the dead-letter queue? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "In deadLetter, the DLQ publish is not awaited: the promise is started, its failure is only logged, and msg.ack() runs immediately. If the DLQ publish fails (broker hiccup, oversized attributes) or the process dies before it completes, the original message has already been acked and removed, so the confirmation is lost with only a log line. The publish should be awaited and the message acked only after it succeeds (or nacked on failure so the broker redelivers)."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A message's handler throws a generic Error on its 5th delivery (x-attempt = 5). What happens?",
+      "choices": [
+        "It is republished with x-attempt = 6 after a 32 s delay",
+        "It is sent to the DLQ with reason \"exhausted\"",
+        "It is nacked so the broker redelivers it",
+        "It is acked and dropped without being republished anywhere"
+      ],
+      "answer": 1,
+      "explanation": "attempt >= MAX_ATTEMPTS (5 >= 5) is true, so deadLetter is called with reason \"exhausted\". Retry republishing only happens for attempts below 5; nack is never used in this code; and the message is routed to the DLQ topic rather than silently dropped."
+    },
+    {
+      "prompt": "How is the retry delay computed in this consumer actually applied?",
+      "choices": [
+        "The message is nacked with the computed delay",
+        "The consumer sleeps for the delay before republishing",
+        "The delay is only logged; the message is republished immediately with an incremented attempt",
+        "The delay is written into an attribute the broker uses for scheduling"
+      ],
+      "answer": 2,
+      "explanation": "The delay is computed and passed to log.warn, but publish() is called right away and the attributes only carry x-attempt. There is no sleep, no nack(delay), and no scheduling attribute, so retries happen back to back."
+    },
+    {
+      "prompt": "A message arrives whose body is valid JSON but lacks supplierRef. Which path does it take?",
+      "choices": [
+        "The handler is called and fails with a validation error",
+        "It is retried up to MAX_ATTEMPTS times",
+        "It is acked without any record",
+        "It is dead-lettered immediately with reason \"malformed\""
+      ],
+      "answer": 3,
+      "explanation": "The parse block throws NonRetryableError when supplierRef is missing; the surrounding catch calls deadLetter with reason \"malformed\" and returns, so the handler is never invoked and no retries occur."
+    }
+  ],
+  "concepts": [
+    "backend.messaging.dead_letter_queues",
+    "backend.messaging.queues_and_consumers",
+    "backend.resilience.retries_and_backoff",
+    "backend.errors.swallowed_errors"
+  ]
+}

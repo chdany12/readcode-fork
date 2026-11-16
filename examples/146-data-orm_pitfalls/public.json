@@ -1,0 +1,49 @@
+{
+  "id": "c1c3c2b0-69d4-4a09-a5f3-d026c92b3145",
+  "title": "Push notification delivery service",
+  "name": "Push delivery service",
+  "createdAt": "2026-11-15T09:41:31.692Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code queries devices through the ORM? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The gateway returns \"unregistered\" for a device during notifyUser. What happens to that device afterwards?",
+      "choices": [
+        "It is deleted from the devices table",
+        "Nothing; it will be tried again on the next push",
+        "Its push_token is cleared",
+        "Its disabled_at is set, so later notifyUser calls skip it"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A user has 14 active devices. How many does notifyUser attempt?",
+      "choices": [
+        "All 14",
+        "The 10 most recently created",
+        "The 10 oldest",
+        "Only the first, since find returns one row per user"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Does loading devices in notifyUser also load each device's User row?",
+      "choices": [
+        "Yes, ManyToOne relations are always joined",
+        "Yes, but lazily on first access to device.user",
+        "No; the relation is not eager and no relations option is passed, so device.user is undefined while userId is populated",
+        "No, and userId is undefined as well"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.orm_pitfalls",
+    "backend.api.request_validation"
+  ]
+}

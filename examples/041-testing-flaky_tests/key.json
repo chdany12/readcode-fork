@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "test/dispatcher.test.ts",
+        "startLine": 47,
+        "endLine": 47
+      }
+    },
+    1,
+    2,
+    3
+  ],
+  "explanations": [
+    "The second test waits a fixed 15 ms of wall-clock time and then asserts on both assignments. Each locator call sleeps 5 ms via setTimeout and the two rides are processed sequentially after a setImmediate hop, so the work needs a little over 10 ms with almost no margin for timer granularity, GC pauses, or a loaded CI machine. When the event loop is slow the assertion runs with zero or one assignment and the test fails intermittently. It should await completion explicitly, e.g. resolve once two 'assigned' events have fired, or use fake timers.",
+    "The first submit sets draining = true and schedules drain via setImmediate. The second submit pushes its request but skips scheduling because draining is already true. The single drain loop processes both items. Nothing chains a second drain.",
+    "submit() only schedules drain with setImmediate, and drain awaits the locator, so 'assigned' is emitted on a later tick; a listener added synchronously after submit() still catches it, even with zero latency. EventEmitter does not drop late listeners.",
+    "Dispatcher mutates the returned objects (`best.d.available = false`), and FakeLocator returns the same array. With a shared array, drivers taken in one test would stay unavailable in later tests, so outcomes would depend on order. The dispatcher does not copy drivers, and the assign tests mutate availability too."
+  ]
+}

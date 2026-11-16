@@ -1,0 +1,65 @@
+{
+  "title": "Percentage rollout of a secondary payment gateway",
+  "name": "Gateway routing rollout",
+  "language": "TypeScript",
+  "durationMinutes": 11,
+  "files": [
+    {
+      "path": "src/billingFlags.ts",
+      "content": "import { createHash } from \"crypto\";\n\nexport interface PercentFlag {\n  key: string;\n  rolloutPercent: number;\n  killSwitch: boolean;\n}\n\nexport interface FlagConfigLoader {\n  load(): Promise<PercentFlag[]>;\n}\n\nexport class BillingFlags {\n  private flags = new Map<string, PercentFlag>();\n\n  constructor(private readonly loader: FlagConfigLoader) {}\n\n  async reload(): Promise<void> {\n    const list = await this.loader.load();\n    const next = new Map<string, PercentFlag>();\n    for (const f of list) {\n      if (f.rolloutPercent < 0 || f.rolloutPercent > 100) {\n        throw new Error(`invalid rolloutPercent ${f.rolloutPercent} for ${f.key}`);\n      }\n      next.set(f.key, f);\n    }\n    this.flags = next;\n  }\n\n  isEnabledForAccount(key: string, accountId: string): boolean {\n    const f = this.flags.get(key);\n    if (!f || f.killSwitch) {\n      return false;\n    }\n    return bucketOf(key, accountId) <= f.rolloutPercent;\n  }\n}\n\nexport function bucketOf(key: string, accountId: string): number {\n  const digest = createHash(\"sha256\").update(`${key}/${accountId}`).digest();\n  return digest.readUInt32BE(0) % 100;\n}\n"
+    },
+    {
+      "path": "src/invoiceCharger.ts",
+      "content": "import { BillingFlags } from \"./billingFlags\";\n\nexport interface Invoice {\n  id: string;\n  accountId: string;\n  amountCents: number;\n  currency: string;\n}\n\nexport interface PaymentGateway {\n  charge(req: {\n    amountCents: number;\n    currency: string;\n    accountId: string;\n    idempotencyKey: string;\n  }): Promise<{ chargeId: string }>;\n}\n\nexport interface ChargeResult {\n  invoiceId: string;\n  chargeId: string;\n  gateway: \"primary\" | \"secondary\";\n}\n\nexport class InvoiceCharger {\n  constructor(\n    private readonly flags: BillingFlags,\n    private readonly primary: PaymentGateway,\n    private readonly secondary: PaymentGateway,\n  ) {}\n\n  async charge(invoice: Invoice): Promise<ChargeResult> {\n    if (invoice.amountCents <= 0) {\n      throw new Error(`invoice ${invoice.id} has non-positive amount`);\n    }\n    const useSecondary = this.flags.isEnabledForAccount(\n      \"route_to_secondary_gateway\",\n      invoice.accountId,\n    );\n    const gateway = useSecondary ? this.secondary : this.primary;\n    const { chargeId } = await gateway.charge({\n      amountCents: invoice.amountCents,\n      currency: invoice.currency,\n      accountId: invoice.accountId,\n      idempotencyKey: `invoice-${invoice.id}`,\n    });\n    return {\n      invoiceId: invoice.id,\n      chargeId,\n      gateway: useSecondary ? \"secondary\" : \"primary\",\n    };\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/billingFlags.ts",
+    "snippet": "    return bucketOf(key, accountId) <= f.rolloutPercent;"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code decides whether an account is in the rollout? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "Buckets range 0-99 and the comparison uses <=. At rolloutPercent 0, accounts in bucket 0 (about 1%) are still routed to the secondary gateway, so \"0%\" never fully turns the rollout off without the kill switch, and every percentage is off by one. It should be bucket < rolloutPercent."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "reload() receives a config list where one flag has rolloutPercent 150. What state are the flags in afterwards?",
+      "choices": [
+        "All flags from the new list except the invalid one are applied",
+        "The invalid flag is clamped to 100 and applied",
+        "The previous flag map is kept unchanged and reload() rejects",
+        "The flag map is emptied"
+      ],
+      "answer": 2,
+      "explanation": "Validation throws while building the local next map, before this.flags is reassigned, so the previous map stays in place and the promise rejects. There is no partial apply, clamping, or clearing."
+    },
+    {
+      "prompt": "An account is routed to the secondary gateway, the request times out after the charge succeeded, and the same invoice is charged again after the flag has been rolled back. What is the risk?",
+      "choices": [
+        "None, because the idempotency key prevents duplicates on any gateway",
+        "The retry goes to the primary gateway, which does not know the secondary's idempotency key, so the customer can be charged twice",
+        "The retry is rejected because the invoice amount changed",
+        "The retry goes to the secondary gateway again because routing is cached per invoice"
+      ],
+      "answer": 1,
+      "explanation": "Routing is recomputed on each charge() call, so after rollback the retry hits the primary gateway. Idempotency keys are scoped per gateway, so the primary sees a new request. Nothing caches routing per invoice, and the amount is unchanged."
+    },
+    {
+      "prompt": "Ops sets killSwitch to true on route_to_secondary_gateway with rolloutPercent 100 and reloads. Which gateway handles new charges?",
+      "choices": [
+        "Primary for all accounts",
+        "Secondary for all accounts",
+        "Secondary for accounts already in the rollout, primary for others",
+        "reload() rejects the config"
+      ],
+      "answer": 0,
+      "explanation": "isEnabledForAccount returns false whenever killSwitch is true, before looking at the percentage, so every account uses the primary gateway. The config is valid (100 is within range), and there is no per-account stickiness."
+    }
+  ],
+  "concepts": [
+    "backend.config.feature_flags",
+    "backend.config.defaults_and_validation",
+    "backend.api.idempotency",
+    "backend.integrations.third_party_adapters"
+  ]
+}

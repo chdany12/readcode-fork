@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    3,
+    0
+  ],
+  "explanations": [
+    "There is none. Each encryption uses a fresh random 12-byte IV with AES-256-GCM, stores IV, full 16-byte tag and key id alongside the ciphertext, and binds the booking id as AAD so ciphertexts cannot be swapped between bookings. Decryption checks length and sets the tag before final(). In transit, the agent uses a pinned CA bundle, a client certificate for mutual TLS, TLS 1.2 minimum, and leaves certificate and hostname verification enabled. The error message includes only the booking id, never the passport number.",
+    "encrypt() and decrypt() both set AAD to booking:<id>; a mismatch makes decipher.final() throw, and submitPassengerData() calls decrypt() while building the body, before any request is made. GCM does not return empty output on failure, and needsRotation() only compares key ids.",
+    "randomBytes(IV_BYTES) is called on every encrypt(), so IV, ciphertext and tag all differ. That is why the column cannot support equality lookups; the key id is the same while the current key is unchanged.",
+    "The request sets timeout: cfg.timeoutMs and the timeout handler destroys the request with an error, which fires the error listener and rejects. keepAlive only affects reuse of idle sockets, there is no resolve path without an end event, and there is no retry logic."
+  ]
+}

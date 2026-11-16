@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    3,
+    0
+  ],
+  "explanations": [
+    "There is none. Secrets come from Secrets Manager rather than code or env, are cached with a TTL so rotations are picked up, and a 401 invalidates the cached API key and retries once with a fresh value. The key is only placed in the Authorization header; log lines contain the order ID and status, never the key or response body. Webhook signatures are compared with timingSafeEqual after a length and format check, so there is no timing leak or exception on malformed input.",
+    "capture() checks for 401, calls invalidate(API_KEY_ID), and posts again; post() calls secrets.get, which misses the cache and fetches the new value. Waiting for the TTL is avoided, the stale key doesn't work after revocation, and SecretStore has no rotation detection of its own.",
+    "get() stores the pending fetch promise in inflight and returns it to later callers until it settles, so only one call is made. Nothing preloads at startup, and the retry path only runs after a 401.",
+    "The regex requires exactly 64 hex characters, so 'abc' returns false immediately. The length check would also prevent timingSafeEqual from throwing, and the function never returns true without a matching HMAC."
+  ]
+}

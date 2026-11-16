@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/transferRoutes.ts",
+        "startLine": 85,
+        "endLine": 85
+      }
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "The fallback branch of ledgerErrorHandler returns 400 for every unrecognised error, such as a database outage or a timeout inside LedgerService. A 400 tells the client that its request was malformed and must not be retried unchanged, so a transfer that failed because of a server problem looks like a client mistake. Clients and SDKs will not retry, and dashboards and alerts that watch 5xx rates miss the outage. The fallback should return 500 (or 503 for known transient dependency failures).",
+    "parseTransfer requires amountMinor to match /^[1-9][0-9]*$/, which \"0\" fails, so it throws ValidationError(\"amountMinor\", ...) before the ledger is called. The handler maps ValidationError to 422 with the field. The ledger is never reached, so neither 201 nor 409 is possible, and BigInt is never called on the value.",
+    "Insufficient funds depends on account state, not on the request's shape: the same body could succeed after a deposit. 409 Conflict expresses a clash with current resource state, while 422 is used here for bodies that fail validation regardless of state. 422 is not about parse errors, express accepts any status, and 409 does not instruct an immediate retry.",
+    "The route calls res.status(201).location(`/transfers/${result.transferId}`), so the client gets 201 Created plus a Location header for the new resource. Nothing sets Retry-After or ETag, and the status is explicitly 201, not 200 or 202."
+  ]
+}

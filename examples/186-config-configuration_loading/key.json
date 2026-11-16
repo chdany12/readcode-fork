@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/config.ts",
+        "startLine": 57,
+        "endLine": 57
+      }
+    },
+    1,
+    0,
+    2
+  ],
+  "explanations": [
+    "loadNotifierConfig merges with a shallow spread, { ...DEFAULTS, ...fromFile }. If the file sets only part of a nested section, for example \"email\": {\"host\": \"smtp.prod\"}, it replaces the whole default email object. port, timeoutMs, maxConnections and fromAddress are then lost. check() catches a missing port only when SMTP_PORT is not set, and it never checks timeoutMs, maxConnections or fromAddress, so those reach the providers as undefined (no timeout, unlimited connections, no sender). email, sms and quietHours each need to be merged with their defaults individually.",
+    "The catch block rethrows only when the error code is not ENOENT. A missing file leaves fromFile as {}, so the defaults are used, environment overrides are applied, and the result is checked. It does not throw, return an empty config, or retry.",
+    "loadNotifierConfig throws ConfigLoadError for a parse failure that is not ENOENT. reload catches it before assigning this.current, so get() keeps returning the last good config and reload reports { ok: false }. Defaults, undefined, and an env-only config are never assigned.",
+    "applyEnv uses Number(\"25a\"), which is NaN, and check() rejects it because Number.isInteger(NaN) is false. Loading fails early. There is no fallback, the code uses Number rather than parseInt, and the bad value never reaches the client."
+  ]
+}

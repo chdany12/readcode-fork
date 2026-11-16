@@ -1,0 +1,63 @@
+{
+  "title": "CI build-minute billing with charge reversals",
+  "name": "Build minute billing",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/ledger.ts",
+      "content": "export type AccountCode = \"customer_receivable\" | \"compute_revenue\" | \"promo_credits\" | \"refunds_payable\";\n\nexport interface LedgerLine {\n  account: AccountCode;\n  orgId: string;\n  amountMicros: bigint; // positive = debit, negative = credit\n}\n\nexport interface LedgerTxn {\n  txnId: string;\n  orgId: string;\n  kind: \"usage_charge\" | \"credit_grant\" | \"reversal\";\n  reversesTxnId?: string;\n  lines: LedgerLine[];\n  postedAt: Date;\n}\n\nexport interface LedgerRepo {\n  getTxn(txnId: string): Promise<LedgerTxn | null>;\n  findReversalOf(txnId: string): Promise<LedgerTxn | null>;\n  insert(txn: LedgerTxn): Promise<void>;\n}\n\nexport function sumLines(lines: LedgerLine[]): bigint {\n  return lines.reduce((acc, l) => acc + l.amountMicros, 0n);\n}\n"
+    },
+    {
+      "path": "src/buildBilling.ts",
+      "content": "import { randomUUID } from \"crypto\";\nimport { LedgerLine, LedgerRepo, LedgerTxn, sumLines } from \"./ledger\";\n\nconst MICROS_PER_CENT = 10_000n;\n\nexport interface BuildUsage {\n  orgId: string;\n  buildId: string;\n  runnerClass: \"small\" | \"large\" | \"gpu\";\n  durationSeconds: number;\n}\n\nconst RATE_MICROS_PER_MINUTE: Record<BuildUsage[\"runnerClass\"], bigint> = {\n  small: 8_000n,\n  large: 32_000n,\n  gpu: 700_000n,\n};\n\nexport class BuildBilling {\n  constructor(private readonly repo: LedgerRepo) {}\n\n  priceMicros(usage: BuildUsage): bigint {\n    const minutes = BigInt(Math.ceil(usage.durationSeconds / 60));\n    return minutes * RATE_MICROS_PER_MINUTE[usage.runnerClass];\n  }\n\n  async chargeBuild(usage: BuildUsage): Promise<LedgerTxn> {\n    const txnId = `build:${usage.buildId}`;\n    const existing = await this.repo.getTxn(txnId);\n    if (existing) return existing;\n\n    const amount = this.priceMicros(usage);\n    const txn: LedgerTxn = {\n      txnId,\n      orgId: usage.orgId,\n      kind: \"usage_charge\",\n      postedAt: new Date(),\n      lines: [\n        { account: \"customer_receivable\", orgId: usage.orgId, amountMicros: amount },\n        { account: \"compute_revenue\", orgId: usage.orgId, amountMicros: -amount },\n      ],\n    };\n    await this.post(txn);\n    return txn;\n  }\n\n  async reverseCharge(originalTxnId: string, reason: string): Promise<LedgerTxn> {\n    const original = await this.repo.getTxn(originalTxnId);\n    if (!original) throw new Error(`txn ${originalTxnId} not found`);\n    if (original.kind !== \"usage_charge\") {\n      throw new Error(`only usage charges can be reversed, got ${original.kind}`);\n    }\n    const prior = await this.repo.findReversalOf(originalTxnId);\n    if (prior) return prior;\n\n    const lines: LedgerLine[] = original.lines.map((l) => ({\n      account: l.account === \"customer_receivable\" ? \"refunds_payable\" : l.account,\n      orgId: l.orgId,\n      amountMicros: l.amountMicros,\n    }));\n\n    const reversal: LedgerTxn = {\n      txnId: `rev:${originalTxnId}:${randomUUID()}`,\n      orgId: original.orgId,\n      kind: \"reversal\",\n      reversesTxnId: originalTxnId,\n      postedAt: new Date(),\n      lines,\n    };\n    console.info(\"reversing build charge\", { originalTxnId, reason });\n    await this.post(reversal);\n    return reversal;\n  }\n\n  invoiceCents(totalMicros: bigint): bigint {\n    return (totalMicros + MICROS_PER_CENT - 1n) / MICROS_PER_CENT;\n  }\n\n  private async post(txn: LedgerTxn): Promise<void> {\n    if (sumLines(txn.lines) !== 0n) {\n      throw new Error(`txn ${txn.txnId} does not balance`);\n    }\n    await this.repo.insert(txn);\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/buildBilling.ts",
+    "snippet": "      amountMicros: l.amountMicros,"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code records reversals of build charges in the ledger? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "reverseCharge copies each original line's amountMicros unchanged instead of negating it. The reversal therefore debits refunds_payable and credits compute_revenue a second time, so revenue is doubled rather than cancelled. The txn still sums to zero, so post() accepts it. The amount should be -l.amountMicros."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A 'large' runner build lasts 61 seconds. What does priceMicros return?",
+      "choices": [
+        "32_533n",
+        "32_000n",
+        "64_000n",
+        "0n"
+      ],
+      "answer": 2,
+      "explanation": "Math.ceil(61/60) = 2 minutes, times 32_000 micros per minute = 64_000n. There is no per-second proration, so 32_533 is wrong; 32_000 would be for <=60 s; 0 is never produced for positive durations."
+    },
+    {
+      "prompt": "chargeBuild is called twice concurrently for the same buildId. Assuming repo.insert enforces a unique txnId, what happens?",
+      "choices": [
+        "Both inserts succeed, double-charging the org",
+        "One insert succeeds and the other call fails with a unique-constraint error from insert",
+        "The second call returns the existing txn because getTxn always sees it",
+        "post() rejects the second txn as unbalanced"
+      ],
+      "answer": 1,
+      "explanation": "Both calls can pass the getTxn check before either inserts; the deterministic txnId build:<id> means the database rejects the second insert, which surfaces as an error. Without a unique constraint both would succeed, but the question assumes one. Balance checks don't relate to duplicates."
+    },
+    {
+      "prompt": "invoiceCents is given 25_001n micros. What does it return and why?",
+      "choices": [
+        "2n, because integer division truncates",
+        "3n, because adding MICROS_PER_CENT - 1 before dividing rounds up",
+        "2.5001n, because bigint keeps fractions",
+        "3n, because bigint division rounds to nearest"
+      ],
+      "answer": 1,
+      "explanation": "(25_001 + 9_999) / 10_000 = 35_000 / 10_000 = 3 with truncating bigint division, i.e. a ceiling. Plain division would give 2; bigint cannot hold fractions; bigint division truncates rather than rounding to nearest."
+    }
+  ],
+  "concepts": [
+    "backend.data.money_and_ledgers",
+    "backend.api.idempotency"
+  ]
+}

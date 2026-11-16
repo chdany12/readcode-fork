@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "uploadService.test.ts",
+        "startLine": 55,
+        "endLine": 55
+      }
+    },
+    2,
+    1,
+    3
+  ],
+  "explanations": [
+    "The over-quota test calls `expect(service.upload(...)).rejects.toThrow(QuotaExceededError)` without `await` (and the test function is not async and returns nothing). The `.rejects` assertion produces a promise the test runner never waits for, so the test finishes before the assertion settles. If upload stopped throwing, the test would still pass (at most an unhandled rejection is logged later). The following `blobs.objects.size` check also runs synchronously before upload has done anything, so it would pass even if the blob were stored. The test must be async and `await` (or return) the expectation.",
+    "In upload(), blobs.put runs before quotas.addUsage. The failing InMemoryQuotas makes addUsage throw, and the catch calls blobs.delete(key). The same blobs instance from beforeEach is reused (only quotas and service are replaced), so size 0 shows the compensating delete happened. The quota check passes (usage 0, limit 1000), and put does run first.",
+    "With usage 600 and limit 1000, remaining is 400 and the upload is 400 bytes. Under `>` this succeeds; an off-by-one change to `>=` would reject it. It asserts nothing about concurrency, etags, or path normalization (\"b.bin\" has no leading slash).",
+    "Several tests mutate quotas.usage and blobs.objects. Recreating them in beforeEach isolates tests so outcomes do not depend on order. It does not make tests faster, does not share state across workers, and has nothing to do with awaiting."
+  ]
+}

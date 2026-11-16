@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/scoreRoute.ts",
+        "startLine": 27,
+        "endLine": 27
+      }
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "Yes, in scoreRoute.ts the final fallback catch branch turns any unexpected error (for example the wrapped 'failed to persist match' error from a database outage) into a per-item 'internal' entry and keeps looping. The batch then returns 207 as if it were an ordinary partial validation failure: infrastructure failures never reach the framework's 5xx handling, alerting and error-rate metrics don't fire, the original cause is discarded without being logged at the boundary, and later events keep hammering the failing store. Unknown errors should be rethrown (or mapped to a 5xx) instead of being folded into business-level results.",
+    "persist rethrows StaleRevisionError unchanged; applyScore continues while attempt < 3, so attempts 1 and 2 log and retry, and attempt 3 rethrows. The loop is bounded by MAX_ATTEMPTS, the error is not wrapped, and nothing returns a state on failure.",
+    "Only an awaited rejection inside try is handled by the surrounding catch; returning the bare promise would let async rejections skip the logging and wrapping. The revision is computed before persist is called, mutation is unrelated, and returning promises from async functions is legal.",
+    "The InvalidMoveError for the finished match is recorded and the loop continues; the StaleRevisionError returns 409 immediately with the results collected so far (two entries). The third event never gets an entry, so it is not 207 with three, not 200, and not empty."
+  ]
+}

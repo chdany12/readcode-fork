@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/matchLoop.ts",
+        "startLine": 79,
+        "endLine": 79
+      }
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "buildSnapshot() is called inside the per-connection loop in broadcast(). Each call clones every player with structuredClone and sorts the whole list, so a tick does O(n^2 log n) work and allocates n^2 cloned objects for n players. With small matches this is invisible, but larger lobbies push tick_broadcast_ms past the 50 ms budget and GC pressure spikes. The snapshot should be built once per tick, before the loop, and only filtered per recipient.",
+    "tick_simulate_ms covers only t0 to t1 (the position update loop); tick_broadcast_ms covers t1 to t2. An overrun with negligible simulate time means the cost is in broadcast(). Vectorizing movement would not help, timer drift does not change the measured t2 - t0, and applyInput runs between ticks and is not inside the measured window.",
+    "applyInput drops any input whose seq is not greater than lastInputSeq. After 7, the late 5 is ignored, and 8 is accepted, so the velocity from seq 8 wins. Nothing averages inputs, and 8 > 7 so it is not rejected.",
+    "dist2 returns dx*dx + dy*dy; comparing it to the squared radius gives the same circular test without Math.sqrt, a common hot-path saving for pairwise checks. sqrt is accurate, the region is still a circle, and filtering is done by .filter, not by JSON.stringify."
+  ]
+}

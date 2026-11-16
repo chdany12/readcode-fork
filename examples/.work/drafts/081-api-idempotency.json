@@ -1,0 +1,69 @@
+{
+  "title": "Payroll disbursement to the bank transfer API",
+  "name": "Payroll disbursement job",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/types.ts",
+      "content": "export interface PayrollLine {\n  employeeId: string;\n  netAmountCents: number;\n  currency: string;\n  bankAccountToken: string;\n}\n\nexport interface PayrollRun {\n  id: string;\n  companyId: string;\n  payDate: string;\n  lines: PayrollLine[];\n}\n\nexport type DisbursementStatus = \"pending\" | \"submitted\" | \"failed\";\n\nexport interface DisbursementRepo {\n  status(runId: string, employeeId: string): Promise<DisbursementStatus | null>;\n  markPending(runId: string, employeeId: string): Promise<void>;\n  markSubmitted(runId: string, employeeId: string, transferId: string): Promise<void>;\n  markFailed(runId: string, employeeId: string, reason: string): Promise<void>;\n}\n\nexport class TransientBankError extends Error {}\n"
+    },
+    {
+      "path": "src/bankClient.ts",
+      "content": "import { TransientBankError } from \"./types\";\n\nexport interface TransferRequest {\n  amountCents: number;\n  currency: string;\n  destinationToken: string;\n  reference: string;\n  idempotencyKey: string;\n}\n\nexport class BankClient {\n  constructor(private readonly baseUrl: string, private readonly apiKey: string) {}\n\n  async createTransfer(req: TransferRequest): Promise<{ transferId: string }> {\n    const controller = new AbortController();\n    const timer = setTimeout(() => controller.abort(), 10_000);\n    try {\n      const res = await fetch(`${this.baseUrl}/v2/transfers`, {\n        method: \"POST\",\n        signal: controller.signal,\n        headers: {\n          Authorization: `Bearer ${this.apiKey}`,\n          \"Content-Type\": \"application/json\",\n          \"Idempotency-Key\": req.idempotencyKey,\n        },\n        body: JSON.stringify({\n          amount: req.amountCents,\n          currency: req.currency,\n          destination: req.destinationToken,\n          reference: req.reference,\n        }),\n      });\n      if (res.status >= 500 || res.status === 429) {\n        throw new TransientBankError(`bank returned ${res.status}`);\n      }\n      if (!res.ok) {\n        throw new Error(`transfer rejected: ${res.status} ${await res.text()}`);\n      }\n      const data = (await res.json()) as { id: string };\n      return { transferId: data.id };\n    } catch (err) {\n      if ((err as Error).name === \"AbortError\") {\n        throw new TransientBankError(\"bank request timed out\");\n      }\n      throw err;\n    } finally {\n      clearTimeout(timer);\n    }\n  }\n}\n"
+    },
+    {
+      "path": "src/payrollDisburser.ts",
+      "content": "import { BankClient } from \"./bankClient\";\nimport { DisbursementRepo, PayrollLine, PayrollRun, TransientBankError } from \"./types\";\n\nconst MAX_ATTEMPTS = 4;\n\nfunction delay(ms: number): Promise<void> {\n  return new Promise((resolve) => setTimeout(resolve, ms));\n}\n\nexport class PayrollDisburser {\n  constructor(private readonly bank: BankClient, private readonly repo: DisbursementRepo) {}\n\n  async disburse(run: PayrollRun): Promise<{ submitted: number; failed: number }> {\n    let submitted = 0;\n    let failed = 0;\n    for (const line of run.lines) {\n      const current = await this.repo.status(run.id, line.employeeId);\n      if (current === \"submitted\") {\n        submitted++;\n        continue;\n      }\n      await this.repo.markPending(run.id, line.employeeId);\n      try {\n        const transferId = await this.payWithRetry(run, line);\n        await this.repo.markSubmitted(run.id, line.employeeId, transferId);\n        submitted++;\n      } catch (err) {\n        await this.repo.markFailed(run.id, line.employeeId, (err as Error).message);\n        failed++;\n      }\n    }\n    return { submitted, failed };\n  }\n\n  private async payWithRetry(run: PayrollRun, line: PayrollLine): Promise<string> {\n    for (let attempt = 1; ; attempt++) {\n      const idempotencyKey = `payroll:${run.id}:${line.employeeId}:${attempt}`;\n      try {\n        const { transferId } = await this.bank.createTransfer({\n          amountCents: line.netAmountCents,\n          currency: line.currency,\n          destinationToken: line.bankAccountToken,\n          reference: `Salary ${run.payDate}`,\n          idempotencyKey,\n        });\n        return transferId;\n      } catch (err) {\n        if (!(err instanceof TransientBankError) || attempt >= MAX_ATTEMPTS) {\n          throw err;\n        }\n        await delay(250 * 2 ** attempt);\n      }\n    }\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/payrollDisburser.ts",
+    "snippet": "      const idempotencyKey = `payroll:${run.id}:${line.employeeId}:${attempt}`;"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code uses idempotency keys when paying employees? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The idempotency key includes the attempt number, so every retry sends a different key. When a request times out (AbortError) or returns 5xx after the bank already created the transfer, the retry is treated by the bank as a brand-new transfer and the employee is paid twice. The key must be stable per run and employee (payroll:${run.id}:${line.employeeId}) across all attempts and reruns."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "The bank responds 400 to a transfer for one employee. What does disburse do?",
+      "choices": [
+        "Retries up to MAX_ATTEMPTS with backoff",
+        "Marks that line failed immediately and continues with the next employee",
+        "Aborts the whole run and rethrows",
+        "Marks the line submitted with an empty transferId"
+      ],
+      "answer": 1,
+      "explanation": "A non-ok non-5xx, non-429 response throws a plain Error, not TransientBankError, so payWithRetry rethrows at once. disburse catches it, calls markFailed, increments failed and moves on. Only transient errors are retried, and the loop never aborts the run."
+    },
+    {
+      "prompt": "How long does payWithRetry wait in total before giving up on an employee whose transfer keeps returning 503?",
+      "choices": [
+        "About 3.5 seconds (500 + 1000 + 2000 ms) plus request time",
+        "About 7.5 seconds",
+        "No waiting; it fails on the first 503",
+        "About 1.75 seconds (250 + 500 + 1000 ms)"
+      ],
+      "answer": 0,
+      "explanation": "After attempts 1, 2 and 3 it waits 250*2^attempt = 500, 1000 and 2000 ms; on attempt 4 attempt >= MAX_ATTEMPTS so it throws without waiting. That totals 3.5 s. 1.75 s would require 2^(attempt-1); 7.5 s would add a fourth wait that never happens."
+    },
+    {
+      "prompt": "The process crashes after markPending but before markSubmitted for one employee, and the run is restarted. What does disburse do for that employee?",
+      "choices": [
+        "Skips them because a pending row exists",
+        "Throws because markPending is called twice",
+        "Calls the bank again, since only 'submitted' lines are skipped",
+        "Waits for the earlier transfer to be confirmed before continuing"
+      ],
+      "answer": 2,
+      "explanation": "disburse only skips when status is 'submitted'. A 'pending' (or 'failed') status falls through, markPending is called again, and payWithRetry sends a new transfer request. There is no confirmation lookup and nothing throws on repeated markPending."
+    }
+  ],
+  "concepts": [
+    "backend.api.idempotency",
+    "backend.resilience.retries_and_backoff",
+    "backend.resilience.timeouts",
+    "backend.data.money_and_ledgers"
+  ]
+}

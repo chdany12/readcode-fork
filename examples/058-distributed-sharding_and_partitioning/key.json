@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/inboxService.ts",
+        "startLine": 51,
+        "endLine": 51
+      }
+    },
+    1,
+    0,
+    2
+  ],
+  "explanations": [
+    "markRead routes by notificationId (poolFor(notificationId)) while rows are written to the shard chosen by userId. The UPDATE usually lands on a shard that does not hold the row, matches nothing, and returns false, so notifications stay unread and the unread badge never clears (it only works by chance when both keys hash to the same shard).",
+    "shardIndex uses digest % pools.length; changing the modulus from 4 to 5 remaps roughly 80% of keys. No code migrates rows, so list() queries the new shard and finds nothing. MD5 being stable does not help because the modulus changed; nothing rebalances on write; the effect is not limited to a hash range.",
+    "The DELETE filters only on created_at, which is not the shard key, so matching rows are spread across all shards and a scatter is required. poolFor accepts any string; there is no cross-shard transaction (each pool is queried independently and a failure midway leaves earlier shards purged); replication is unrelated.",
+    "unreadCount calls router.poolFor(userId) and runs one count query against that pool, which is the shard where deliver() wrote that user's rows. There is no scatter, no randomness in routing (the UUID is the row id, not a routing key), and no cache."
+  ]
+}

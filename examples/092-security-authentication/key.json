@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/sessionTokens.ts",
+        "startLine": 42,
+        "endLine": 42
+      }
+    },
+    1,
+    2,
+    3
+  ],
+  "explanations": [
+    "In SessionTokens.verify, the signature check is guarded by `given.length > 0`. A token of the form `<body>.` (empty signature) splits into two parts, skips the check entirely, and is accepted. An attacker can base64url-encode any claims, e.g. role \"payroll_admin\" for any tenant with a future exp, and append a trailing dot to get full payroll access. An empty signature must be rejected like any other mismatch.",
+    "Node's timingSafeEqual throws a RangeError on buffers of different length, so the length check turns that case into a normal mismatch. It is not a speed optimization, padding is stripped by b64url, and the token carries no algorithm field.",
+    "verify throws TokenError(\"expired\"); requireSession catches TokenError and responds 401 invalid_session. 403 comes only from requireRole, next(err) is only for non-TokenError exceptions, and missing_credentials is for a missing or malformed Authorization header.",
+    "The role is baked into the signed claims and requireRole reads req.session.role, so existing tokens keep the old role until exp, which is at most SESSION_TTL_SECONDS (15 minutes) after issue. Nothing reads the database or re-signs tokens, and expiry ends access without logout."
+  ]
+}

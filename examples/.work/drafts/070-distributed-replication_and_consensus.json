@@ -1,0 +1,67 @@
+{
+  "title": "Leader lease for settlement runs",
+  "name": "Settlement leader lease",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/leaderLease.ts",
+      "content": "import { LeaseStore } from \"./leaseStore\";\n\nexport interface LeaderLeaseOptions {\n  leaseName: string;\n  holderId: string;\n  leaseMs: number;\n  renewEveryMs: number;\n  safetyMarginMs: number;\n}\n\nexport class LeaderLease {\n  private leaseExpiresAt = 0;\n  private fencingToken = 0;\n  private timer: NodeJS.Timeout | null = null;\n  private stopped = false;\n\n  constructor(private readonly store: LeaseStore, private readonly opts: LeaderLeaseOptions) {\n    if (opts.renewEveryMs >= opts.leaseMs - opts.safetyMarginMs) {\n      throw new Error(\"renewEveryMs must be well below the lease duration\");\n    }\n  }\n\n  start(): void {\n    void this.tick();\n  }\n\n  async stop(): Promise<void> {\n    this.stopped = true;\n    if (this.timer) clearTimeout(this.timer);\n    if (this.isLeader()) {\n      await this.store.release(this.opts.leaseName, this.opts.holderId, this.fencingToken);\n    }\n    this.leaseExpiresAt = 0;\n  }\n\n  isLeader(): boolean {\n    return Date.now() < this.leaseExpiresAt - this.opts.safetyMarginMs;\n  }\n\n  token(): number {\n    return this.fencingToken;\n  }\n\n  private async tick(): Promise<void> {\n    if (this.stopped) return;\n    try {\n      const result = await this.store.tryAcquire(this.opts.leaseName, this.opts.holderId, this.opts.leaseMs);\n      if (result.acquired) {\n        this.fencingToken = result.fencingToken;\n        this.leaseExpiresAt = Date.now() + this.opts.leaseMs;\n      } else {\n        this.leaseExpiresAt = 0;\n      }\n    } catch (err) {\n      console.error(\"lease renewal failed\", { lease: this.opts.leaseName, err });\n    }\n    if (!this.stopped) {\n      this.timer = setTimeout(() => void this.tick(), this.opts.renewEveryMs);\n    }\n  }\n}\n"
+    },
+    {
+      "path": "src/leaseStore.ts",
+      "content": "export interface AcquireResult {\n  acquired: boolean;\n  fencingToken: number;\n}\n\nexport interface LeaseStore {\n  tryAcquire(name: string, holderId: string, ttlMs: number): Promise<AcquireResult>;\n  release(name: string, holderId: string, fencingToken: number): Promise<void>;\n}\n"
+    },
+    {
+      "path": "src/settlementScheduler.ts",
+      "content": "import { LeaderLease } from \"./leaderLease\";\n\nexport interface SettlementBatch {\n  id: string;\n  merchantId: string;\n  totalCents: number;\n}\n\nexport interface LedgerClient {\n  pendingBatches(limit: number): Promise<SettlementBatch[]>;\n  settle(batchId: string, fencingToken: number): Promise<\"settled\" | \"stale_token\" | \"already_settled\">;\n}\n\nexport class SettlementScheduler {\n  constructor(private readonly lease: LeaderLease, private readonly ledger: LedgerClient) {}\n\n  async runOnce(): Promise<number> {\n    if (!this.lease.isLeader()) return 0;\n    const token = this.lease.token();\n    const batches = await this.ledger.pendingBatches(50);\n    let settled = 0;\n    for (const batch of batches) {\n      if (!this.lease.isLeader()) break;\n      const outcome = await this.ledger.settle(batch.id, token);\n      if (outcome === \"stale_token\") {\n        console.warn(\"lost leadership mid-run\", { batchId: batch.id, token });\n        break;\n      }\n      if (outcome === \"settled\") settled += 1;\n    }\n    return settled;\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/leaderLease.ts",
+    "snippet": "        this.leaseExpiresAt = Date.now() + this.opts.leaseMs;"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this node decides how long it may act as leader? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "leaseExpiresAt is computed from Date.now() after tryAcquire resolves. The store started the TTL when it processed the request, so time spent on the response path (a slow network, GC pause, or event-loop stall) is silently added to the local view of the lease. If that delay exceeds safetyMarginMs, this node believes it is leader after the store has already expired the lease and another node may hold it. The start time should be captured before sending the request and the expiry computed from that. The fencing token in settle() limits the damage, but the local leadership check is still wrong."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "If tryAcquire throws on one tick (for example a network error), what is the node's leadership status right after that tick?",
+      "choices": [
+        "It immediately stops being leader because leaseExpiresAt is reset",
+        "The scheduler stops renewing because the error escapes tick()",
+        "It remains leader until the previously computed expiry minus the safety margin passes, and the next attempt is scheduled normally",
+        "The process crashes from an unhandled rejection"
+      ],
+      "answer": 2,
+      "explanation": "The catch block only logs; leaseExpiresAt is untouched, so isLeader() keeps returning true until the old expiry minus safetyMarginMs. The setTimeout after the try/catch still schedules the next tick. Only a successful but non-acquired response resets leaseExpiresAt, and the error is caught so there is no unhandled rejection."
+    },
+    {
+      "prompt": "Two nodes both believe they are leader and both call ledger.settle for the same batch. What prevents a double settlement in this design?",
+      "choices": [
+        "isLeader() is checked before each batch, so only one node can reach settle()",
+        "pendingBatches never returns the same batch to two nodes",
+        "SettlementScheduler caches settled batch ids",
+        "The ledger receives the fencing token and can reject the older one with \"stale_token\", and it reports \"already_settled\" for repeats"
+      ],
+      "answer": 3,
+      "explanation": "settle() takes the fencing token, and its result type includes stale_token and already_settled, so the ledger is the final arbiter. isLeader() is a local check that both nodes can pass; nothing shown makes pendingBatches exclusive; the scheduler keeps no cache of settled ids."
+    },
+    {
+      "prompt": "What does the constructor check ensure?",
+      "choices": [
+        "That the lease cannot be acquired by two holders",
+        "That the node renews before its own considered-valid window ends, so a healthy leader does not flap",
+        "That the safety margin is larger than the lease",
+        "That stop() always releases the lease"
+      ],
+      "answer": 1,
+      "explanation": "It requires renewEveryMs to be below leaseMs - safetyMarginMs, the window in which isLeader() returns true, so renewal happens before the node would consider itself expired. Exclusivity is the store's job, the check does not compare the margin to the lease directly, and stop() releases only if isLeader() is true."
+    }
+  ],
+  "concepts": [
+    "backend.distributed.replication_and_consensus",
+    "backend.resilience.graceful_shutdown"
+  ]
+}

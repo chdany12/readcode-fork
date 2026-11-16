@@ -1,0 +1,64 @@
+{
+  "title": "Date-versioned support ticket API",
+  "name": "Versioned ticket API",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/ticketViews.ts",
+      "content": "export type TicketStatusV2 = \"new\" | \"open\" | \"pending_customer\" | \"on_hold\" | \"solved\" | \"closed\";\n\nexport interface Ticket {\n  id: string;\n  subject: string;\n  status: TicketStatusV2;\n  priority: \"low\" | \"normal\" | \"high\" | \"urgent\";\n  requesterEmail: string;\n  assigneeId: string | null;\n  tags: string[];\n  createdAt: Date;\n  updatedAt: Date;\n}\n\nexport interface TicketV1 {\n  id: string;\n  subject: string;\n  status: \"open\" | \"pending\" | \"closed\";\n  priority: \"low\" | \"normal\" | \"high\";\n  requester: string;\n  assignee: string | null;\n  created_at: string;\n}\n\nconst V1_STATUS: Record<TicketStatusV2, TicketV1[\"status\"]> = {\n  new: \"open\",\n  open: \"open\",\n  pending_customer: \"pending\",\n  on_hold: \"pending\",\n  solved: \"closed\",\n  closed: \"closed\",\n};\n\nexport function toV1(t: Ticket): TicketV1 {\n  return {\n    id: t.id,\n    subject: t.subject,\n    status: V1_STATUS[t.status],\n    priority: t.priority === \"urgent\" ? \"high\" : t.priority,\n    requester: t.requesterEmail,\n    assignee: t.assigneeId,\n    created_at: t.createdAt.toISOString(),\n  };\n}\n\nexport function toV2(t: Ticket) {\n  return {\n    id: t.id,\n    subject: t.subject,\n    status: t.status,\n    priority: t.priority,\n    requester: { email: t.requesterEmail },\n    assigneeId: t.assigneeId,\n    tags: t.tags,\n    createdAt: t.createdAt.toISOString(),\n    updatedAt: t.updatedAt.toISOString(),\n  };\n}\n"
+    },
+    {
+      "path": "src/versioning.ts",
+      "content": "import { Request, Response, NextFunction } from \"express\";\n\nexport const SUPPORTED_VERSIONS = [\"2023-06-01\", \"2024-09-15\"] as const;\nexport type ApiVersion = (typeof SUPPORTED_VERSIONS)[number];\n\nconst DEFAULT_VERSION: ApiVersion = \"2023-06-01\";\nconst SUNSET: Partial<Record<ApiVersion, string>> = {\n  \"2023-06-01\": \"Wed, 01 Oct 2025 00:00:00 GMT\",\n};\n\ndeclare global {\n  namespace Express {\n    interface Request {\n      apiVersion: ApiVersion;\n    }\n  }\n}\n\nexport function resolveVersion(req: Request, res: Response, next: NextFunction) {\n  const requested = req.header(\"Support-Api-Version\");\n  const version = requested ?? DEFAULT_VERSION;\n\n  if (!(SUPPORTED_VERSIONS as readonly string[]).includes(version)) {\n    res.status(400).json({\n      error: \"unsupported_api_version\",\n      requested: version,\n      supported: SUPPORTED_VERSIONS,\n    });\n    return;\n  }\n\n  req.apiVersion = version as ApiVersion;\n  res.setHeader(\"Support-Api-Version\", version);\n  res.vary(\"Support-Api-Version\");\n\n  const sunset = SUNSET[req.apiVersion];\n  if (sunset) {\n    res.setHeader(\"Deprecation\", \"true\");\n    res.setHeader(\"Sunset\", sunset);\n    res.setHeader(\"Link\", '</docs/migrations/2024-09-15>; rel=\"successor-version\"');\n  }\n  next();\n}\n"
+    },
+    {
+      "path": "src/ticketRoutes.ts",
+      "content": "import express from \"express\";\nimport { resolveVersion } from \"./versioning\";\nimport { Ticket, toV1, toV2 } from \"./ticketViews\";\nimport { TicketRepository } from \"./ticketRepository\";\n\nfunction render(version: string, ticket: Ticket) {\n  return version === \"2023-06-01\" ? toV1(ticket) : toV2(ticket);\n}\n\nexport function ticketRouter(repo: TicketRepository) {\n  const router = express.Router();\n  router.use(resolveVersion);\n\n  router.get(\"/tickets/:id\", async (req, res, next) => {\n    try {\n      const ticket = await repo.findById(req.params.id);\n      if (!ticket) return res.status(404).json({ error: \"ticket_not_found\" });\n      res.setHeader(\"Cache-Control\", \"private, max-age=30\");\n      res.json(render(req.apiVersion, ticket));\n    } catch (err) {\n      next(err);\n    }\n  });\n\n  router.get(\"/tickets\", async (req, res, next) => {\n    try {\n      const tickets = await repo.listRecent(50);\n      res.json({ data: tickets.map((t) => render(req.apiVersion, t)) });\n    } catch (err) {\n      next(err);\n    }\n  });\n\n  return router;\n}\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this API keeps older clients working as the ticket model evolves? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is none. Clients that send no version header get the oldest version, so existing integrations are not silently moved to the new shape. Every new status and the new \"urgent\" priority are mapped into values that v1 clients already understand (V1_STATUS is a total Record over TicketStatusV2, so the compiler forces a mapping for any new status). Unknown versions get an explicit 400 rather than a guess, the response echoes the resolved version, and Vary: Support-Api-Version prevents a shared cache from serving one version's body to another version's client. Deprecation, Sunset, and Link headers tell old clients where to migrate."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A ticket has status \"on_hold\" and priority \"urgent\". What does a client that sends no Support-Api-Version header see?",
+      "choices": [
+        "status \"on_hold\", priority \"urgent\"",
+        "A 400 unsupported_api_version error",
+        "status \"open\", priority \"normal\"",
+        "status \"pending\", priority \"high\""
+      ],
+      "answer": 3,
+      "explanation": "With no header the version defaults to 2023-06-01, so render uses toV1. V1_STATUS maps on_hold to \"pending\", and toV1 maps \"urgent\" to \"high\". The raw values only appear in v2, the 400 is only for unknown versions, and neither \"open\" nor \"normal\" comes from these inputs."
+    },
+    {
+      "prompt": "Why does resolveVersion call res.vary(\"Support-Api-Version\")?",
+      "choices": [
+        "So caches key responses by the version header and do not serve a v2 body to a v1 client for the same URL",
+        "So express validates the header format",
+        "So the browser resends the header on redirects",
+        "So the Sunset header is only sent once"
+      ],
+      "answer": 0,
+      "explanation": "Both versions share the same URL, and GET /tickets/:id sets Cache-Control max-age=30. Vary tells caches that the response depends on the Support-Api-Version header, so cached entries are separated by version. Vary performs no validation, does not affect redirects, and has nothing to do with Sunset."
+    },
+    {
+      "prompt": "A product manager adds a new status \"escalated\" to TicketStatusV2. What happens at build time?",
+      "choices": [
+        "Nothing; v1 clients will receive \"escalated\"",
+        "TypeScript reports an error because V1_STATUS no longer covers every TicketStatusV2 key",
+        "toV1 throws at runtime for escalated tickets",
+        "The default version switches to 2024-09-15"
+      ],
+      "answer": 1,
+      "explanation": "V1_STATUS is typed Record<TicketStatusV2, TicketV1[\"status\"]>, which requires a key for every member of the union. Adding \"escalated\" without a mapping fails to compile, forcing a deliberate v1 translation. It does not compile and silently leak, there is no runtime throw path, and DEFAULT_VERSION is a constant unaffected by the model."
+    }
+  ],
+  "concepts": [
+    "backend.api.versioning",
+    "backend.api.serialization_and_deserialization"
+  ]
+}

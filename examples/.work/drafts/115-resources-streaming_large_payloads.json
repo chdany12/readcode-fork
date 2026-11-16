@@ -1,0 +1,65 @@
+{
+  "title": "Match replay download endpoint",
+  "name": "Match replay download",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/replayRoutes.ts",
+      "content": "import { Router, Request, Response, NextFunction } from \"express\";\nimport { promises as fsp } from \"node:fs\";\nimport path from \"node:path\";\nimport { ReplayIndex } from \"./replayIndex\";\n\nconst REPLAY_ROOT = process.env.REPLAY_ROOT ?? \"/var/lib/arena/replays\";\n\nexport function replayRouter(index: ReplayIndex): Router {\n  const router = Router();\n\n  router.get(\"/matches/:matchId/replay\", async (req: Request, res: Response, next: NextFunction) => {\n    try {\n      const playerId = res.locals.playerId as string | undefined;\n      if (!playerId) {\n        res.status(401).end();\n        return;\n      }\n\n      const meta = await index.find(req.params.matchId);\n      if (!meta) {\n        res.status(404).json({ error: \"replay_not_found\" });\n        return;\n      }\n      if (!meta.participants.includes(playerId) && meta.visibility !== \"public\") {\n        res.status(403).json({ error: \"replay_private\" });\n        return;\n      }\n\n      const filePath = path.join(REPLAY_ROOT, meta.shard, `${meta.matchId}.rpl`);\n      const stat = await fsp.stat(filePath).catch(() => null);\n      if (!stat) {\n        res.status(410).json({ error: \"replay_expired\" });\n        return;\n      }\n\n      if (req.headers[\"if-none-match\"] === meta.etag) {\n        res.status(304).end();\n        return;\n      }\n\n      res.setHeader(\"Content-Type\", \"application/octet-stream\");\n      res.setHeader(\"Content-Length\", String(stat.size));\n      res.setHeader(\"ETag\", meta.etag);\n      res.setHeader(\"Cache-Control\", \"private, max-age=86400\");\n\n      const data = await fsp.readFile(filePath);\n      res.end(data);\n      index.recordDownload(meta.matchId, playerId).catch(() => undefined);\n    } catch (err) {\n      next(err);\n    }\n  });\n\n  return router;\n}\n"
+    },
+    {
+      "path": "src/replayIndex.ts",
+      "content": "import { Pool } from \"pg\";\n\nexport interface ReplayMeta {\n  matchId: string;\n  shard: string;\n  etag: string;\n  visibility: \"public\" | \"participants\";\n  participants: string[];\n}\n\nexport class ReplayIndex {\n  constructor(private readonly pool: Pool) {}\n\n  async find(matchId: string): Promise<ReplayMeta | null> {\n    if (!/^[a-f0-9]{24}$/.test(matchId)) return null;\n    const { rows } = await this.pool.query(\n      `SELECT match_id, shard, etag, visibility, participant_ids\n         FROM match_replays WHERE match_id = $1`,\n      [matchId],\n    );\n    if (rows.length === 0) return null;\n    const r = rows[0];\n    return {\n      matchId: r.match_id,\n      shard: r.shard,\n      etag: r.etag,\n      visibility: r.visibility,\n      participants: r.participant_ids,\n    };\n  }\n\n  async recordDownload(matchId: string, playerId: string): Promise<void> {\n    await this.pool.query(\n      `INSERT INTO replay_downloads (match_id, player_id, downloaded_at) VALUES ($1, $2, now())`,\n      [matchId, playerId],\n    );\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/replayRoutes.ts",
+    "snippet": "      const data = await fsp.readFile(filePath);\n      res.end(data);"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this endpoint delivers replay files, which can be hundreds of megabytes for long matches? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "fsp.readFile loads the entire replay into a Buffer before sending. Every concurrent download holds a whole file in memory for as long as the client takes to receive it, so a burst of downloads after a tournament final can exhaust the heap. The file should be streamed, e.g. pipeline(createReadStream(filePath), res), so memory per request stays at a small chunk size."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A player who did not take part requests a replay whose visibility is 'participants'. What response do they get?",
+      "choices": [
+        "404 replay_not_found",
+        "401 with an empty body",
+        "403 replay_private",
+        "410 replay_expired"
+      ],
+      "answer": 2,
+      "explanation": "The player is authenticated (playerId present) and the metadata exists, so the request reaches the participants/visibility check, which returns 403 replay_private. 401 is only for a missing playerId, 404 for missing metadata, 410 for a missing file."
+    },
+    {
+      "prompt": "The metadata row exists but the replay file was deleted by the retention job. What does the client receive?",
+      "choices": [
+        "410 replay_expired",
+        "500 from the error handler",
+        "404 replay_not_found",
+        "200 with an empty body"
+      ],
+      "answer": 0,
+      "explanation": "fsp.stat is caught and turned into null, which yields 410 replay_expired. The error never reaches next(), and the not_found path is only for missing metadata."
+    },
+    {
+      "prompt": "If the replay_downloads INSERT fails, what is the effect on the player?",
+      "choices": [
+        "The download is aborted midway",
+        "The player gets a 500 after the file was sent",
+        "Express logs an unhandled rejection and restarts the request",
+        "None: the response has already been sent and the failure is ignored"
+      ],
+      "answer": 3,
+      "explanation": "recordDownload runs after res.end and is fire-and-forget with .catch(() => undefined), so its failure neither touches the response nor produces an unhandled rejection. It only loses the download record."
+    }
+  ],
+  "concepts": [
+    "backend.resources.streaming_large_payloads",
+    "backend.resources.unbounded_buffers",
+    "backend.security.authorization_checks",
+    "backend.api.status_codes_and_error_responses"
+  ]
+}

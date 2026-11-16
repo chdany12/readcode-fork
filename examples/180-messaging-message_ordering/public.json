@@ -1,0 +1,50 @@
+{
+  "id": "838fb1cb-30b2-4f68-b885-b840d8774477",
+  "title": "Order status projection from a partitioned topic",
+  "name": "Order status projector",
+  "createdAt": "2026-11-15T09:41:31.741Z",
+  "durationMinutes": 13,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this consumer preserves the order of status updates for an order? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The order view is at version 5 with status 'picked_up' and an event with version 4 arrives on its own in a batch. What happens?",
+      "choices": [
+        "The view is overwritten with version 4",
+        "apply returns false without writing or notifying, and the offset is still committed",
+        "The consumer throws and the batch is retried",
+        "The event is buffered until version 6 arrives"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A message's value is not valid JSON. How does the consumer treat it?",
+      "choices": [
+        "It crashes the batch so the message is redelivered forever",
+        "It sends it to a dead-letter topic",
+        "It counts it as unparseable, skips it, and its offset is covered by the batch commit",
+        "It retries parsing with a different encoding"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Once an order view is 'cancelled', what happens to a later event with a higher version and status 'ready'?",
+      "choices": [
+        "It is ignored because terminal statuses are never overwritten",
+        "It overwrites the view because its version is higher",
+        "It is applied but no notification is sent",
+        "It reopens the order and notifies the restaurant"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.messaging.message_ordering",
+    "backend.concurrency.race_conditions",
+    "backend.messaging.queues_and_consumers"
+  ]
+}

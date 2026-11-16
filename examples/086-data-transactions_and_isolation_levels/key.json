@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/fileVersionService.ts",
+        "startLine": 20,
+        "endLine": 20
+      }
+    },
+    1,
+    1,
+    2
+  ],
+  "explanations": [
+    "In commitNewVersion, adjustUsage is called with this.pool instead of the transaction's client, so the usage update runs on a different connection and autocommits immediately. If anything after it fails (the version insert, the files update, the journal insert, or COMMIT itself), the transaction rolls back but the usage change stays, so used_bytes drifts from the real file sizes and users can be wrongly blocked (or given extra space). trash() correctly passes client.",
+    "lockFile takes SELECT ... FOR UPDATE on the file row, so the second transaction waits until the first commits; under READ COMMITTED its later max(version) query sees the committed version and returns the next one. Without the lock they could collide, FOR UPDATE waits rather than erroring (no NOWAIT), and versions are sequential.",
+    "The guard is used_bytes + $2 <= quota_bytes; a negative delta makes the sum smaller, so the update matches and usage decreases. It is not rejected, there is no special case for negative deltas, and it adds a delta rather than overwriting.",
+    "All three statements in trash() run on the same client inside BEGIN; the catch runs ROLLBACK, undoing both the deleted_at update and the usage adjustment. None of the partial outcomes survive."
+  ]
+}

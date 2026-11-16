@@ -1,0 +1,50 @@
+{
+  "id": "064050f2-d376-4046-836b-d133144b36c1",
+  "title": "Ride dispatch match metrics",
+  "name": "Dispatch match metrics",
+  "createdAt": "2026-11-15T09:41:31.671Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how DispatchService records its match latency and outcome metrics? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A new market launches with regionCode \" PDX \". What series does a dispatch there contribute to?",
+      "choices": [
+        "A new series labeled region=\"pdx\"",
+        "A new series labeled region=\" PDX \"",
+        "The existing series labeled region=\"other\"",
+        "No series; the observation is dropped"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The matcher throws a network error while the rider is still waiting. What is recorded and returned?",
+      "choices": [
+        "Nothing is recorded because the exception skips the metrics code",
+        "outcome=\"error\" is recorded with its latency, and the error is rethrown",
+        "outcome=\"no_drivers\" is recorded and null is returned",
+        "outcome=\"error\" is recorded and null is returned"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why is process.hrtime.bigint() used instead of Date.now() for the latency measurement?",
+      "choices": [
+        "It is monotonic, so wall-clock adjustments (NTP) cannot produce negative or skewed durations",
+        "It is required for Histogram.observe to accept the value",
+        "It makes the measurement exclude time spent awaiting the matcher",
+        "It automatically converts the duration to seconds"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.observability.metrics",
+    "backend.resilience.timeouts",
+    "backend.resources.context_cancellation"
+  ]
+}

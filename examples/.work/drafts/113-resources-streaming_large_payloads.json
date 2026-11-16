@@ -1,0 +1,64 @@
+{
+  "title": "Gateway telemetry batch ingest",
+  "name": "Telemetry batch ingester",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/ingest.ts",
+      "content": "import { createReadStream, createWriteStream } from \"node:fs\";\nimport { createGunzip } from \"node:zlib\";\nimport { createInterface } from \"node:readline\";\nimport { once } from \"node:events\";\nimport { normalizeReading, Reading } from \"./reading\";\n\nexport interface IngestStats {\n  accepted: number;\n  rejected: number;\n  bytesIn: number;\n}\n\nexport interface IngestOptions {\n  maxLineBytes: number;\n  deviceAllowlist?: Set<string>;\n}\n\nexport async function ingestBatchFile(\n  sourcePath: string,\n  destPath: string,\n  opts: IngestOptions,\n): Promise<IngestStats> {\n  const stats: IngestStats = { accepted: 0, rejected: 0, bytesIn: 0 };\n\n  const raw = createReadStream(sourcePath);\n  raw.on(\"data\", (chunk) => {\n    stats.bytesIn += (chunk as Buffer).length;\n  });\n  const gunzip = raw.pipe(createGunzip());\n  const lines = createInterface({ input: gunzip, crlfDelay: Infinity });\n  const out = createWriteStream(destPath, { flags: \"w\" });\n\n  const outError = new Promise<never>((_, reject) => out.once(\"error\", reject));\n  outError.catch(() => undefined);\n\n  try {\n    for await (const line of lines) {\n      if (line.length === 0) continue;\n      if (Buffer.byteLength(line) > opts.maxLineBytes) {\n        stats.rejected++;\n        continue;\n      }\n\n      let parsed: unknown;\n      try {\n        parsed = JSON.parse(line);\n      } catch {\n        stats.rejected++;\n        continue;\n      }\n\n      const normalized: Reading | null = normalizeReading(parsed);\n      if (!normalized) {\n        stats.rejected++;\n        continue;\n      }\n      if (opts.deviceAllowlist && !opts.deviceAllowlist.has(normalized.deviceId)) {\n        stats.rejected++;\n        continue;\n      }\n\n      out.write(JSON.stringify(normalized) + \"\\n\");\n      stats.accepted++;\n    }\n  } finally {\n    lines.close();\n    raw.destroy();\n  }\n\n  out.end();\n  await Promise.race([once(out, \"finish\"), outError]);\n  return stats;\n}\n"
+    },
+    {
+      "path": "src/reading.ts",
+      "content": "export interface Reading {\n  deviceId: string;\n  metric: string;\n  value: number;\n  recordedAt: string;\n}\n\nconst METRICS = new Set([\"temp_c\", \"humidity_pct\", \"battery_v\", \"rssi_dbm\"]);\n\nexport function normalizeReading(input: unknown): Reading | null {\n  if (typeof input !== \"object\" || input === null) return null;\n  const r = input as Record<string, unknown>;\n\n  const deviceId = typeof r.device_id === \"string\" ? r.device_id.trim() : \"\";\n  const metric = typeof r.metric === \"string\" ? r.metric.toLowerCase() : \"\";\n  const value = typeof r.value === \"number\" ? r.value : Number(r.value);\n  const ts = typeof r.ts === \"number\" ? new Date(r.ts * 1000) : new Date(String(r.ts));\n\n  if (!deviceId || !METRICS.has(metric)) return null;\n  if (!Number.isFinite(value)) return null;\n  if (Number.isNaN(ts.getTime())) return null;\n\n  return { deviceId, metric, value, recordedAt: ts.toISOString() };\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/ingest.ts",
+    "snippet": "      out.write(JSON.stringify(normalized) + \"\\n\");"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code streams a large gzipped telemetry batch from source to destination? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The return value of out.write() is ignored. When the destination disk or file stream is slower than gunzip + parsing, write() returns false but the loop keeps reading and writing, so the writable's internal buffer grows without bound. A multi-gigabyte batch can be held almost entirely in memory and crash the worker. The loop should await once(out, 'drain') whenever write() returns false so backpressure propagates back to the read side."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A batch contains one line that is 5 MB long while maxLineBytes is 64 KB. What happens to that line?",
+      "choices": [
+        "The whole batch is aborted with an error",
+        "The line is counted as rejected and processing continues with the next line",
+        "The line is truncated to 64 KB and parsed",
+        "It is written to the destination unvalidated"
+      ],
+      "answer": 1,
+      "explanation": "The loop checks Buffer.byteLength(line) > opts.maxLineBytes, increments stats.rejected and continues. Nothing throws, nothing truncates, and the oversize line never reaches out.write. Note that readline still had to assemble the full line in memory before the check runs."
+    },
+    {
+      "prompt": "What does stats.bytesIn measure?",
+      "choices": [
+        "The number of decompressed bytes parsed",
+        "The bytes written to the destination file",
+        "The compressed bytes read from the source file",
+        "The byte length of accepted lines only"
+      ],
+      "answer": 2,
+      "explanation": "The 'data' listener is attached to raw, the file read stream, before gunzip, so it counts compressed bytes. Decompressed and output sizes are never measured, and rejected lines are not excluded."
+    },
+    {
+      "prompt": "If the source file is a corrupt gzip, how does ingestBatchFile behave?",
+      "choices": [
+        "The error is silently ignored and stats are returned",
+        "The process crashes with an unhandled 'error' event on the read stream",
+        "It retries decompression from the start",
+        "The gunzip error surfaces through the readline iteration, the finally block closes the source, and the promise rejects"
+      ],
+      "answer": 3,
+      "explanation": "readline's async iterator rejects when its input stream errors, so the for-await throws; finally closes lines and destroys raw, then the error propagates. There is no retry and no swallowing."
+    }
+  ],
+  "concepts": [
+    "backend.resources.streaming_large_payloads",
+    "backend.messaging.backpressure",
+    "backend.resources.unbounded_buffers"
+  ]
+}

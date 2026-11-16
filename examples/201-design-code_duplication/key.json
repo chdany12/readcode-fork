@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "There is none. The three variants look like copies that could drift, but the parts that matter are shared: proration lives in prorate() and all variants that prorate use it for both salary and pretax deductions; taxable income, bracket withholding and net are computed once in buildPayslip; rounding is centralized in roundCents. The only per-variant differences are deliberate (proration for partial periods, adding the leave payout to gross for final pay), so a change to tax or rounding rules applies everywhere at once.",
+    "Every variant returns buildPayslip(...), which is the only place applyBrackets is called with BRACKETS. Proration happens before buildPayslip and does not bypass it, and there is no per-variant withholding code to update.",
+    "The first 100_000 is taxed at 0.1 (10_000); the remaining 50_000 falls in the 100_000-400_000 bracket at 0.22 (11_000). Total 21_000. 15_000 applies 0.1 to everything, 33_000 applies 0.22 to everything, and 48_000 applies 0.32 to everything.",
+    "finalPayslip passes base + unusedLeavePayout as gross into buildPayslip, so it flows into taxable and withholding. pretax is prorate(e.pretaxDeductions, ...), independent of the payout, and the payout itself is not prorated."
+  ]
+}

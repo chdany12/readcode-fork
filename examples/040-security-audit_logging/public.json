@@ -1,0 +1,50 @@
+{
+  "id": "8adbb686-863a-4e14-ae93-59f0cb082d1b",
+  "title": "Tamper-evident billing audit chain",
+  "name": "Billing audit hash chain",
+  "createdAt": "2026-11-15T09:41:31.556Z",
+  "durationMinutes": 15,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code makes the billing audit log tamper-evident? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two refunds call audit.record() at almost the same moment in one process. How does BillingAuditWriter avoid giving both records the same index?",
+      "choices": [
+        "The repository enforces a unique index and the second insert is retried",
+        "Each call chains onto this.tail, so the second appendNext only reads lastRecord after the first append completes",
+        "computeHash includes the timestamp, which makes the indexes differ",
+        "It does not; both records can get the same index"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "One call to record() fails because amountCents is negative. What happens to the next record() call?",
+      "choices": [
+        "It also rejects, because this.tail is now a rejected promise",
+        "It is silently skipped",
+        "It proceeds normally, because tail is set to run.catch(() => undefined)",
+        "It waits forever because the chain is broken"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The gateway refund succeeds but the audit append throws. What does issueRefund's caller see, and what state results?",
+      "choices": [
+        "Success; the audit entry is retried later",
+        "An error; the gateway refund is reversed",
+        "Success with refundId, and the audit row is written with a null hash",
+        "An error, although the customer has already been refunded and no audit record exists"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.security.audit_logging",
+    "backend.concurrency.async_await_pitfalls",
+    "backend.data.money_and_ledgers"
+  ]
+}

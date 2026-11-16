@@ -1,0 +1,66 @@
+{
+  "title": "Liveness and readiness for an ad event ingester",
+  "name": "Ingest service health checks",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/checks.ts",
+      "content": "export type CheckStatus = \"pass\" | \"fail\";\n\nexport interface CheckResult {\n  name: string;\n  status: CheckStatus;\n  critical: boolean;\n  latencyMs: number;\n  error?: string;\n}\n\nexport interface DependencyCheck {\n  name: string;\n  critical: boolean;\n  run(signal: AbortSignal): Promise<void>;\n}\n\nexport async function runCheck(check: DependencyCheck, timeoutMs: number): Promise<CheckResult> {\n  const controller = new AbortController();\n  const started = Date.now();\n  let timer: NodeJS.Timeout | undefined;\n  const timeout = new Promise<never>((_, reject) => {\n    timer = setTimeout(() => {\n      controller.abort();\n      reject(new Error(`timed out after ${timeoutMs}ms`));\n    }, timeoutMs);\n  });\n\n  try {\n    await Promise.race([check.run(controller.signal), timeout]);\n    return { name: check.name, status: \"pass\", critical: check.critical, latencyMs: Date.now() - started };\n  } catch (err) {\n    return {\n      name: check.name,\n      status: \"fail\",\n      critical: check.critical,\n      latencyMs: Date.now() - started,\n      error: (err as Error).message,\n    };\n  } finally {\n    clearTimeout(timer);\n  }\n}\n"
+    },
+    {
+      "path": "src/healthService.ts",
+      "content": "import { CheckResult, DependencyCheck, runCheck } from \"./checks\";\n\nexport interface HealthResponse {\n  status: number;\n  body: { status: string; checks?: CheckResult[]; checkedAt?: string };\n}\n\nexport interface HealthOptions {\n  checkTimeoutMs: number;\n  cacheMs: number;\n}\n\nexport class HealthService {\n  private cached: { results: CheckResult[]; at: number } | null = null;\n  private inflight: Promise<CheckResult[]> | null = null;\n  private shuttingDown = false;\n\n  constructor(\n    private readonly checks: DependencyCheck[],\n    private readonly opts: HealthOptions,\n    private readonly now: () => number = Date.now,\n  ) {}\n\n  markShuttingDown(): void {\n    this.shuttingDown = true;\n  }\n\n  liveness(): HealthResponse {\n    return { status: 200, body: { status: \"alive\" } };\n  }\n\n  async readiness(): Promise<HealthResponse> {\n    if (this.shuttingDown) {\n      return { status: 503, body: { status: \"shutting_down\" } };\n    }\n\n    const results = await this.currentResults();\n    const criticalDown = results.some((r) => r.critical && r.status === \"fail\");\n    const degraded = results.some((r) => !r.critical && r.status === \"fail\");\n\n    return {\n      status: criticalDown ? 503 : 200,\n      body: {\n        status: criticalDown ? \"unavailable\" : degraded ? \"degraded\" : \"ok\",\n        checks: results,\n        checkedAt: new Date(this.cached?.at ?? this.now()).toISOString(),\n      },\n    };\n  }\n\n  private async currentResults(): Promise<CheckResult[]> {\n    if (this.cached && this.now() - this.cached.at < this.opts.cacheMs) {\n      return this.cached.results;\n    }\n    if (!this.inflight) {\n      this.inflight = Promise.all(this.checks.map((c) => runCheck(c, this.opts.checkTimeoutMs)))\n        .then((results) => {\n          this.cached = { results, at: this.now() };\n          return results;\n        })\n        .finally(() => {\n          this.inflight = null;\n        });\n    }\n    return this.inflight;\n  }\n}\n"
+    },
+    {
+      "path": "src/server.ts",
+      "content": "import http from \"node:http\";\nimport { HealthService } from \"./healthService\";\nimport { DependencyCheck } from \"./checks\";\n\nexport interface Pinger {\n  ping(signal: AbortSignal): Promise<void>;\n}\n\nexport function buildChecks(clickhouse: Pinger, kafka: Pinger, geoIpCache: Pinger): DependencyCheck[] {\n  return [\n    { name: \"clickhouse\", critical: true, run: (s) => clickhouse.ping(s) },\n    { name: \"kafka_producer\", critical: true, run: (s) => kafka.ping(s) },\n    { name: \"geoip_cache\", critical: false, run: (s) => geoIpCache.ping(s) },\n  ];\n}\n\nexport function startHealthServer(health: HealthService, port: number): http.Server {\n  const server = http.createServer(async (req, res) => {\n    let result;\n    if (req.url === \"/healthz/live\") {\n      result = health.liveness();\n    } else if (req.url === \"/healthz/ready\") {\n      result = await health.readiness();\n    } else {\n      res.writeHead(404).end();\n      return;\n    }\n    res.writeHead(result.status, { \"content-type\": \"application/json\", \"cache-control\": \"no-store\" });\n    res.end(JSON.stringify(result.body));\n  });\n\n  process.once(\"SIGTERM\", () => {\n    health.markShuttingDown();\n  });\n\n  return server.listen(port);\n}\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this service reports its health to the orchestrator? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is none. Liveness only reports that the process can serve HTTP, so a ClickHouse or Kafka outage does not cause restarts. Readiness runs dependency checks with a per-check timeout that aborts the underlying call and always clears its timer; results are cached for cacheMs and concurrent probes share one in-flight run, so probes cannot pile load onto dependencies. Only critical failures return 503, a failed geoip cache reports 'degraded' with 200, and SIGTERM flips readiness to 503 so traffic drains before shutdown."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "The geoip cache is unreachable but ClickHouse and Kafka are fine. What does /healthz/ready return?",
+      "choices": [
+        "503 with status 'unavailable'",
+        "200 with status 'ok'",
+        "500 because a check threw",
+        "200 with status 'degraded'"
+      ],
+      "answer": 3,
+      "explanation": "geoip_cache has critical: false, so criticalDown is false (200) and degraded is true, giving status 'degraded'. runCheck catches errors into a 'fail' result, so nothing throws to produce a 500, and 'ok' requires no failures."
+    },
+    {
+      "prompt": "Ten readiness probes arrive at the same moment with an empty cache. How many times is each dependency pinged?",
+      "choices": [
+        "Ten times, once per probe",
+        "Once, because later probes await the same in-flight promise",
+        "Zero, because the cache is used",
+        "Once per probe that arrives after the timeout"
+      ],
+      "answer": 1,
+      "explanation": "The first call sets this.inflight; the others see it non-null and return the same promise. After it settles the results are cached for cacheMs. The cache is empty initially, so pinging does happen, just once."
+    },
+    {
+      "prompt": "ClickHouse's ping hangs indefinitely. What does a readiness probe observe?",
+      "choices": [
+        "The probe hangs until the orchestrator's own timeout",
+        "A fail result for clickhouse after checkTimeoutMs, with the ping's signal aborted, and a 503",
+        "The process is restarted by the liveness probe",
+        "A pass result because the ping never rejected"
+      ],
+      "answer": 1,
+      "explanation": "runCheck races the ping against a timer that aborts the controller and rejects after timeoutMs, producing a 'fail' result; clickhouse is critical so readiness returns 503. Liveness does not look at dependencies, so it keeps returning 200."
+    }
+  ],
+  "concepts": [
+    "backend.observability.health_checks",
+    "backend.resilience.timeouts",
+    "backend.resilience.graceful_shutdown",
+    "backend.resilience.graceful_degradation"
+  ]
+}

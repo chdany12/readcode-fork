@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    2,
+    3
+  ],
+  "explanations": [
+    "There is none. The actor and IP come from the server-side AdminSession, not from request input. Applied bans and unbans write their audit entry inside the same transaction as the change, so a change cannot commit without its record. The previous state is read before the write, so previousUntil reflects what was actually overwritten. Unauthorized attempts are recorded outside any transaction, so they persist even though the call throws. Unbanning a player who is not banned changes nothing and returns false, so skipping the audit entry there is reasonable.",
+    "Both writes go through the same tx, so the failure aborts the transaction and the upsert is rolled back. There is no fallback 'rejected' write and no retry logic.",
+    "The rejection path throws a ModerationError. A standalone insert means the record persists regardless; inside a transaction callback that throws, it would be rolled back with everything else. The entry does include the IP, and nothing drops it under load.",
+    "existing is non-null with bannedUntil null, so previousUntil becomes \"permanent\"; null is used only when there was no ban row. newUntil is the computed date. An entry is always written on the applied path."
+  ]
+}

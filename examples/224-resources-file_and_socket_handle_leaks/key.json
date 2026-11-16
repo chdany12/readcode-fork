@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "There is none. Every path out of probeRelay goes through finish(): reply, unexpected reply, oversized reply, error, close, and timeout. finish is guarded by settled, clears the timer and calls socket.destroy(), so the descriptor is released exactly once even when connect hangs or the peer never replies. The 'close' and 'error' handlers stay attached, so a late error after destroy cannot become an unhandled 'error' event.",
+    "setTimeout fires finish({ healthy: false, error: 'timeout ...' }), which destroys the socket. No keepalive is involved, the peer did not close anything, and the promise only ever resolves, never rejects.",
+    "finish returns early when settled is true. A promise can only settle once anyway, markHealth runs on the single resolved value in sweep, and nothing throws on close of a destroyed socket.",
+    "sweep spawns min(10, 200) workers, each awaiting probeRelay before pulling the next index, so at most 10 probes are in flight. Promise.all is over the workers, not the endpoints; the shared counter distributes work rather than serializing it; and the sweeping flag makes overlapping sweeps return early."
+  ]
+}

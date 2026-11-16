@@ -1,0 +1,64 @@
+{
+  "title": "CI build runner with contextual JSON child loggers",
+  "name": "CI build runner",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/logger.ts",
+      "content": "export type Level = \"debug\" | \"info\" | \"warn\" | \"error\";\n\nexport interface LogSink {\n  write(line: string): void;\n}\n\nconst LEVEL_ORDER: Record<Level, number> = { debug: 10, info: 20, warn: 30, error: 40 };\n\nexport class Logger {\n  constructor(\n    private readonly sink: LogSink,\n    private readonly context: Record<string, unknown> = {},\n    private readonly minLevel: Level = \"info\",\n  ) {}\n\n  child(fields: Record<string, unknown>): Logger {\n    return new Logger(this.sink, Object.assign(this.context, fields), this.minLevel);\n  }\n\n  debug(msg: string, fields?: Record<string, unknown>): void {\n    this.emit(\"debug\", msg, fields);\n  }\n\n  info(msg: string, fields?: Record<string, unknown>): void {\n    this.emit(\"info\", msg, fields);\n  }\n\n  warn(msg: string, fields?: Record<string, unknown>): void {\n    this.emit(\"warn\", msg, fields);\n  }\n\n  error(msg: string, fields?: Record<string, unknown>): void {\n    this.emit(\"error\", msg, fields);\n  }\n\n  private emit(level: Level, msg: string, fields?: Record<string, unknown>): void {\n    if (LEVEL_ORDER[level] < LEVEL_ORDER[this.minLevel]) return;\n    const record = {\n      ...this.context,\n      ...fields,\n      ts: new Date().toISOString(),\n      level,\n      msg,\n    };\n    this.sink.write(JSON.stringify(record));\n  }\n}\n"
+    },
+    {
+      "path": "src/buildRunner.ts",
+      "content": "import { Logger } from \"./logger\";\n\nexport interface BuildJob {\n  jobId: string;\n  pipelineId: string;\n  repo: string;\n  commitSha: string;\n  steps: { name: string; command: string }[];\n}\n\nexport interface StepExecutor {\n  run(command: string, opts: { timeoutMs: number }): Promise<{ exitCode: number; durationMs: number }>;\n}\n\nexport type JobResult = { jobId: string; status: \"passed\" | \"failed\"; failedStep?: string };\n\nexport class BuildRunner {\n  constructor(\n    private readonly executor: StepExecutor,\n    private readonly rootLogger: Logger,\n    private readonly stepTimeoutMs = 15 * 60_000,\n  ) {}\n\n  async runAll(jobs: BuildJob[], concurrency: number): Promise<JobResult[]> {\n    const results: JobResult[] = [];\n    const queue = [...jobs];\n    const workers = Array.from({ length: concurrency }, async () => {\n      while (queue.length > 0) {\n        const job = queue.shift()!;\n        results.push(await this.runJob(job));\n      }\n    });\n    await Promise.all(workers);\n    return results;\n  }\n\n  async runJob(job: BuildJob): Promise<JobResult> {\n    const log = this.rootLogger.child({\n      jobId: job.jobId,\n      pipelineId: job.pipelineId,\n      repo: job.repo,\n      commit: job.commitSha.slice(0, 12),\n    });\n    log.info(\"job started\", { steps: job.steps.length });\n\n    for (const step of job.steps) {\n      const stepLog = log.child({ step: step.name });\n      stepLog.debug(\"step starting\", { command: step.command });\n      try {\n        const { exitCode, durationMs } = await this.executor.run(step.command, {\n          timeoutMs: this.stepTimeoutMs,\n        });\n        if (exitCode !== 0) {\n          stepLog.warn(\"step failed\", { exitCode, durationMs });\n          return { jobId: job.jobId, status: \"failed\", failedStep: step.name };\n        }\n        stepLog.info(\"step passed\", { durationMs });\n      } catch (err) {\n        stepLog.error(\"step errored\", {\n          error: err instanceof Error ? err.message : String(err),\n        });\n        return { jobId: job.jobId, status: \"failed\", failedStep: step.name };\n      }\n    }\n\n    log.info(\"job passed\");\n    return { jobId: job.jobId, status: \"passed\" };\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/logger.ts",
+    "snippet": "    return new Logger(this.sink, Object.assign(this.context, fields), this.minLevel);"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code attaches context fields to its structured log lines? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "child() calls Object.assign(this.context, fields), which mutates the parent's context object instead of copying it. Every child shares, and writes into, the root logger's context. With several jobs running concurrently in runAll, job B's child overwrites jobId, repo and commit on the shared object, so job A's later lines are tagged with job B's identifiers; step children also leave a stale 'step' field on the job and root loggers. It should build a new object, e.g. { ...this.context, ...fields }."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A caller passes fields { level: \"trace\", msg: \"x\" } to info(\"job started\", ...). What appears in the emitted JSON?",
+      "choices": [
+        "level \"trace\" and msg \"x\", because fields are spread last",
+        "Both pairs of values, as duplicate JSON keys",
+        "The call throws because level is not a valid Level",
+        "level \"info\" and msg \"job started\", because those keys are set after the spread"
+      ],
+      "answer": 3,
+      "explanation": "In emit(), the record spreads context and fields first and then assigns ts, level and msg, so the logger's own values win. Object literals cannot hold duplicate keys, and there is no runtime validation of field values."
+    },
+    {
+      "prompt": "The root logger was created with the default minLevel. Which of the runner's log calls never reach the sink?",
+      "choices": [
+        "The 'step failed' warnings",
+        "The 'step starting' debug lines",
+        "The 'job passed' info lines",
+        "None; child loggers always log at debug"
+      ],
+      "answer": 1,
+      "explanation": "The default minLevel is 'info' and child() passes this.minLevel through, so debug (10) is below info (20) and 'step starting' is dropped. warn and info calls pass the check."
+    },
+    {
+      "prompt": "With concurrency 3 and 10 jobs, what is true about the order of the array runAll returns?",
+      "choices": [
+        "It is in completion order, not necessarily the input order",
+        "It always matches the input order because queue.shift() is FIFO",
+        "It is sorted by jobId",
+        "It contains only the first 3 jobs' results"
+      ],
+      "answer": 0,
+      "explanation": "Each worker pushes a result when its job finishes, so faster jobs land earlier regardless of position. shift() controls start order, not finish order; nothing sorts the array, and workers keep looping until the queue is empty."
+    }
+  ],
+  "concepts": [
+    "backend.observability.structured_logging",
+    "backend.concurrency.shared_state_in_request_handlers",
+    "backend.concurrency.thread_and_worker_pools"
+  ]
+}

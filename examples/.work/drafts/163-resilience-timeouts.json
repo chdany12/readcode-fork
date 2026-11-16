@@ -1,0 +1,68 @@
+{
+  "title": "Playback manifest fetch with origin timeout",
+  "name": "Playback manifest service",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/originClient.ts",
+      "content": "import { logger } from \"./logger\";\n\nexport interface Rendition {\n  bandwidth: number;\n  resolution: string;\n  uri: string;\n}\n\nexport interface PlaybackManifest {\n  assetId: string;\n  durationSec: number;\n  renditions: Rendition[];\n}\n\nexport class OriginTimeoutError extends Error {\n  constructor(public readonly assetId: string, public readonly afterMs: number) {\n    super(`origin did not respond for ${assetId} within ${afterMs}ms`);\n  }\n}\n\nexport class OriginClient {\n  constructor(\n    private readonly baseUrl: string,\n    private readonly timeoutMs: number = 2500,\n  ) {}\n\n  async fetchManifest(assetId: string): Promise<PlaybackManifest> {\n    const controller = new AbortController();\n    const timer = setTimeout(() => controller.abort(), this.timeoutMs);\n    const started = Date.now();\n    try {\n      const res = await fetch(`${this.baseUrl}/assets/${encodeURIComponent(assetId)}/manifest`, {\n        signal: controller.signal,\n        headers: { accept: \"application/json\" },\n      });\n      clearTimeout(timer);\n      if (!res.ok) {\n        throw new Error(`origin returned ${res.status} for ${assetId}`);\n      }\n      const body = (await res.json()) as PlaybackManifest;\n      logger.info(\"manifest fetched\", { assetId, ms: Date.now() - started });\n      return body;\n    } catch (err) {\n      if ((err as Error).name === \"AbortError\") {\n        throw new OriginTimeoutError(assetId, this.timeoutMs);\n      }\n      throw err;\n    }\n  }\n}\n"
+    },
+    {
+      "path": "src/manifestService.ts",
+      "content": "import { OriginClient, OriginTimeoutError, PlaybackManifest } from \"./originClient\";\nimport { logger } from \"./logger\";\n\ninterface CachedManifest {\n  manifest: PlaybackManifest;\n  storedAt: number;\n}\n\nconst FRESH_MS = 30_000;\n\nexport class ManifestService {\n  private readonly cache = new Map<string, CachedManifest>();\n\n  constructor(private readonly origin: OriginClient) {}\n\n  async getManifest(assetId: string, maxBandwidth?: number): Promise<PlaybackManifest> {\n    const cached = this.cache.get(assetId);\n    if (cached && Date.now() - cached.storedAt < FRESH_MS) {\n      return this.filter(cached.manifest, maxBandwidth);\n    }\n\n    try {\n      const manifest = await this.origin.fetchManifest(assetId);\n      this.cache.set(assetId, { manifest, storedAt: Date.now() });\n      return this.filter(manifest, maxBandwidth);\n    } catch (err) {\n      if (err instanceof OriginTimeoutError && cached) {\n        logger.warn(\"serving stale manifest after origin timeout\", {\n          assetId,\n          ageMs: Date.now() - cached.storedAt,\n        });\n        return this.filter(cached.manifest, maxBandwidth);\n      }\n      throw err;\n    }\n  }\n\n  private filter(manifest: PlaybackManifest, maxBandwidth?: number): PlaybackManifest {\n    if (maxBandwidth === undefined) return manifest;\n    const renditions = manifest.renditions.filter((r) => r.bandwidth <= maxBandwidth);\n    return {\n      ...manifest,\n      renditions: renditions.length > 0 ? renditions : manifest.renditions.slice(0, 1),\n    };\n  }\n}\n"
+    },
+    {
+      "path": "src/routes.ts",
+      "content": "import express from \"express\";\nimport { ManifestService } from \"./manifestService\";\nimport { OriginClient, OriginTimeoutError } from \"./originClient\";\n\nconst service = new ManifestService(new OriginClient(process.env.ORIGIN_URL ?? \"http://origin.internal\"));\nexport const router = express.Router();\n\nrouter.get(\"/playback/:assetId/manifest\", async (req, res) => {\n  const maxBw = req.query.maxBandwidth ? Number(req.query.maxBandwidth) : undefined;\n  try {\n    const manifest = await service.getManifest(req.params.assetId, maxBw);\n    res.set(\"cache-control\", \"private, max-age=10\").json(manifest);\n  } catch (err) {\n    if (err instanceof OriginTimeoutError) {\n      res.status(504).json({ error: \"origin_timeout\" });\n      return;\n    }\n    res.status(502).json({ error: \"origin_unavailable\" });\n  }\n});\n"
+    }
+  ],
+  "defect": {
+    "path": "src/originClient.ts",
+    "snippet": "      clearTimeout(timer);"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code bounds the time spent waiting on the origin? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "In OriginClient.fetchManifest, clearTimeout(timer) runs as soon as fetch resolves, which happens once response headers arrive. The body is then read with res.json() with no timer armed, so an origin that sends headers and then stalls (or trickles) the body leaves the request hanging indefinitely. The AbortError path never fires, so no OriginTimeoutError is raised, the stale-cache fallback is skipped, and the route never returns 504. The timer should be cleared in a finally block after the body has been read."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "The origin is completely unreachable and every fetch is aborted by the timer. A manifest for the asset was cached 2 minutes ago. What does a client receive?",
+      "choices": [
+        "A 504 with origin_timeout, because the cached entry is older than FRESH_MS",
+        "The cached manifest, filtered by maxBandwidth, after roughly the timeout elapses",
+        "The cached manifest immediately, without contacting the origin",
+        "A 502 with origin_unavailable"
+      ],
+      "answer": 1,
+      "explanation": "The cache entry is older than FRESH_MS, so getManifest calls the origin. The abort produces an OriginTimeoutError, and since `cached` exists the catch block logs a warning and returns the stale manifest. So the client gets it after the timeout. 504 only happens when nothing is cached. It is not served immediately because freshness fails first. 502 is for non-timeout errors."
+    },
+    {
+      "prompt": "The origin responds quickly with HTTP 503. A stale cached manifest exists. What happens?",
+      "choices": [
+        "The stale manifest is served, because any origin failure falls back to the cache",
+        "The request is retried until the timeout expires",
+        "The client receives 502 origin_unavailable",
+        "The client receives 504 origin_timeout"
+      ],
+      "answer": 2,
+      "explanation": "A non-ok status throws a plain Error, not an OriginTimeoutError. ManifestService only falls back to the cache for OriginTimeoutError, so it rethrows, and the route maps non-timeout errors to 502. There is no retry logic, and 504 is only for OriginTimeoutError."
+    },
+    {
+      "prompt": "A player requests maxBandwidth=500000 and every rendition in the manifest has a higher bandwidth. What does the response contain?",
+      "choices": [
+        "An empty renditions array",
+        "All renditions, unfiltered",
+        "The first rendition from the manifest only",
+        "A 400 error for an unsatisfiable bandwidth"
+      ],
+      "answer": 2,
+      "explanation": "filter() returns manifest.renditions.slice(0, 1) when no rendition passes the bandwidth filter, so the player gets just the first rendition. It never returns an empty list, does not return everything, and there is no 400 path."
+    }
+  ],
+  "concepts": [
+    "backend.resilience.timeouts",
+    "backend.resilience.graceful_degradation",
+    "backend.api.status_codes_and_error_responses"
+  ]
+}

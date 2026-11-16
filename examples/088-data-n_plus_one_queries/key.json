@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/manifestService.ts",
+        "startLine": 32,
+        "endLine": 32
+      }
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "In ManifestService.buildDailyManifest, `await this.repo.stopsForShipment(shipment.id)` runs inside the per-shipment loop, issuing one shipment_stops query per shipment (N+1). A depot with 5,000 shipments makes 5,000 sequential round-trips. The repository already has stopsForShipments(ids), which loads all stops with one `= ANY($1)` query; it should be called once before the loop and looked up from the returned Map.",
+    "carrierCodes is built with `new Set(...)` and passed once to carriersByCode, which runs a single `code = ANY($1)` query. It is not per carrier or per shipment, and the repository has no cache.",
+    "The loop does `if (!carrier) throw new Error(...)`, so the exception propagates out of buildDailyManifest. Nothing skips, defaults, or regroups the shipment.",
+    "One query returns stops for many shipments; grouping them by shipmentId lets the caller fetch a given shipment's stops without scanning. ORDER BY works fine with ANY, facility codes are not deduplicated, and arrays also preserve order."
+  ]
+}

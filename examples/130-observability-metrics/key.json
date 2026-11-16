@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/notificationDispatcher.ts",
+        "startLine": 36,
+        "endLine": 37
+      }
+    },
+    1,
+    2,
+    3
+  ],
+  "explanations": [
+    "inFlight.dec is only called after a successful provider.send. When send throws (rejected or failed), the catch and finally blocks never decrement the gauge, so notifications_in_flight drifts upward by one per failure and never returns to zero. During a provider outage the gauge climbs steadily, triggering false saturation alerts and hiding the real concurrency. The decrement belongs in the finally block.",
+    "The catch block checks err instanceof ProviderRejectedError and uses \"rejected\". \"failed\" is for other errors, and \"sent\" only on success.",
+    "The worker count is Math.min(concurrency, batch.length) = min(8, 3) = 3.",
+    "The check and next++ run synchronously between awaits on a single thread, so no other worker can observe the same index. Promise.all does not create threads, and the cap does not matter to safety."
+  ]
+}

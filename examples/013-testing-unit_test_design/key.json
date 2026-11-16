@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/transferService.test.ts",
+        "startLine": 63,
+        "endLine": 65
+      }
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "In the insufficient-funds test, `expect(...).rejects.toBeInstanceOf(...)` is neither awaited nor returned. The assertion on the rejected promise runs after the test function has already resolved, so the test passes even if `transfer` succeeds or throws a different error (a failure would surface at best as an unhandled rejection unrelated to this test). The following balance checks also run before the transfer has settled, so they prove nothing about rollback. The test gives false confidence in the overdraft/insufficient-funds check; it should `await expect(...).rejects...` like the frozen-account test.",
+    "withTransaction works on a copied snapshot and a local `pending` array, and only assigns them back after `fn(tx)` resolves. A throw skips those lines, so stored state is untouched. No partial debit, entry, or frozen flag is written.",
+    "The clock is a constructor dependency, so tests can pass a fixed instant and assert `e.postedAt === FIXED_NOW`. It has nothing to do with performance, availability of Date, or lock ordering.",
+    "`beforeEach` reassigns `ledger` and `service` before each test, so per-test mutations are isolated. Jest does not fork per test, the Map is never frozen, and withTransaction commits rather than restoring state."
+  ]
+}

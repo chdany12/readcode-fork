@@ -1,0 +1,64 @@
+{
+  "title": "Monthly payslip calculation",
+  "name": "Payroll payslip calculator",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/money.ts",
+      "content": "export type Cents = number;\n\nexport interface PayPeriod {\n  start: string;\n  end: string;\n  workingDays: number;\n}\n\nexport function roundCents(value: number): Cents {\n  return Math.round(value);\n}\n\nexport function prorate(amount: Cents, daysWorked: number, period: PayPeriod): Cents {\n  if (daysWorked < 0 || daysWorked > period.workingDays) {\n    throw new RangeError(`daysWorked ${daysWorked} outside 0..${period.workingDays}`);\n  }\n  return roundCents((amount * daysWorked) / period.workingDays);\n}\n\nexport function applyBrackets(taxable: Cents, brackets: Array<{ upTo: Cents | null; rate: number }>): Cents {\n  let remaining = taxable;\n  let lower: Cents = 0;\n  let tax = 0;\n  for (const b of brackets) {\n    if (remaining <= 0) break;\n    const width = b.upTo === null ? remaining : Math.min(remaining, b.upTo - lower);\n    tax += width * b.rate;\n    remaining -= width;\n    if (b.upTo !== null) lower = b.upTo;\n  }\n  return roundCents(tax);\n}\n"
+    },
+    {
+      "path": "src/payslipCalculator.ts",
+      "content": "import { Cents, PayPeriod, applyBrackets, prorate } from \"./money\";\n\nexport interface Employee {\n  id: string;\n  monthlySalary: Cents;\n  pretaxDeductions: Cents;\n  hireDate: string | null;\n  terminationDate: string | null;\n}\n\nexport interface Payslip {\n  employeeId: string;\n  gross: Cents;\n  taxable: Cents;\n  withholding: Cents;\n  net: Cents;\n}\n\nconst BRACKETS = [\n  { upTo: 100_000, rate: 0.1 },\n  { upTo: 400_000, rate: 0.22 },\n  { upTo: null, rate: 0.32 },\n];\n\nfunction buildPayslip(employeeId: string, gross: Cents, pretax: Cents): Payslip {\n  const taxable = Math.max(0, gross - pretax);\n  const withholding = applyBrackets(taxable, BRACKETS);\n  return { employeeId, gross, taxable, withholding, net: gross - pretax - withholding };\n}\n\nexport function regularPayslip(e: Employee, period: PayPeriod): Payslip {\n  return buildPayslip(e.id, e.monthlySalary, e.pretaxDeductions);\n}\n\nexport function partialPeriodPayslip(e: Employee, period: PayPeriod, daysWorked: number): Payslip {\n  const gross = prorate(e.monthlySalary, daysWorked, period);\n  const pretax = prorate(e.pretaxDeductions, daysWorked, period);\n  return buildPayslip(e.id, gross, pretax);\n}\n\nexport function finalPayslip(\n  e: Employee,\n  period: PayPeriod,\n  daysWorked: number,\n  unusedLeavePayout: Cents,\n): Payslip {\n  const base = prorate(e.monthlySalary, daysWorked, period);\n  const pretax = prorate(e.pretaxDeductions, daysWorked, period);\n  return buildPayslip(e.id, base + unusedLeavePayout, pretax);\n}\n"
+    },
+    {
+      "path": "src/payrollRun.ts",
+      "content": "import { PayPeriod } from \"./money\";\nimport { Employee, Payslip, finalPayslip, partialPeriodPayslip, regularPayslip } from \"./payslipCalculator\";\n\nexport interface LeaveLedger {\n  unusedLeaveCents(employeeId: string, asOf: string): Promise<number>;\n}\n\nfunction daysBetween(fromIso: string, toIso: string, period: PayPeriod): number {\n  const ms = Date.parse(toIso) - Date.parse(fromIso);\n  const calendar = Math.floor(ms / 86_400_000) + 1;\n  return Math.max(0, Math.min(period.workingDays, Math.round((calendar * 5) / 7)));\n}\n\nexport async function runPayroll(\n  employees: Employee[],\n  period: PayPeriod,\n  leave: LeaveLedger,\n): Promise<Payslip[]> {\n  const slips: Payslip[] = [];\n  for (const e of employees) {\n    if (e.terminationDate && e.terminationDate >= period.start && e.terminationDate <= period.end) {\n      const from = e.hireDate && e.hireDate > period.start ? e.hireDate : period.start;\n      const days = daysBetween(from, e.terminationDate, period);\n      const payout = await leave.unusedLeaveCents(e.id, e.terminationDate);\n      slips.push(finalPayslip(e, period, days, payout));\n    } else if (e.hireDate && e.hireDate > period.start && e.hireDate <= period.end) {\n      slips.push(partialPeriodPayslip(e, period, daysBetween(e.hireDate, period.end, period)));\n    } else if (!e.terminationDate || e.terminationDate > period.end) {\n      slips.push(regularPayslip(e, period));\n    }\n  }\n  return slips;\n}\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how the different payslip variants compute their amounts? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is none. The three variants look like copies that could drift, but the parts that matter are shared: proration lives in prorate() and all variants that prorate use it for both salary and pretax deductions; taxable income, bracket withholding and net are computed once in buildPayslip; rounding is centralized in roundCents. The only per-variant differences are deliberate (proration for partial periods, adding the leave payout to gross for final pay), so a change to tax or rounding rules applies everywhere at once."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Finance changes the top bracket rate from 0.32 to 0.35. Which payslip variants pick up the change?",
+      "choices": [
+        "Only regularPayslip, since the others prorate first",
+        "Only finalPayslip and partialPeriodPayslip",
+        "All three, because they all compute withholding through buildPayslip with the same BRACKETS",
+        "None until each variant's withholding code is updated separately"
+      ],
+      "answer": 2,
+      "explanation": "Every variant returns buildPayslip(...), which is the only place applyBrackets is called with BRACKETS. Proration happens before buildPayslip and does not bypass it, and there is no per-variant withholding code to update."
+    },
+    {
+      "prompt": "For a taxable amount of 150_000 cents, what does applyBrackets return?",
+      "choices": [
+        "21_000",
+        "15_000",
+        "33_000",
+        "48_000"
+      ],
+      "answer": 0,
+      "explanation": "The first 100_000 is taxed at 0.1 (10_000); the remaining 50_000 falls in the 100_000-400_000 bracket at 0.22 (11_000). Total 21_000. 15_000 applies 0.1 to everything, 33_000 applies 0.22 to everything, and 48_000 applies 0.32 to everything."
+    },
+    {
+      "prompt": "An employee is terminated inside the period and also has a leave payout. How is the payout treated relative to pretax deductions and tax?",
+      "choices": [
+        "It is paid on top of net with no tax",
+        "It is added to gross, so it is taxed, while pretax deductions are prorated only on days worked",
+        "It reduces pretax deductions",
+        "It is prorated by days worked before being added"
+      ],
+      "answer": 1,
+      "explanation": "finalPayslip passes base + unusedLeavePayout as gross into buildPayslip, so it flows into taxable and withholding. pretax is prorate(e.pretaxDeductions, ...), independent of the payout, and the payout itself is not prorated."
+    }
+  ],
+  "concepts": [
+    "backend.design.code_duplication",
+    "backend.data.money_and_ledgers"
+  ]
+}

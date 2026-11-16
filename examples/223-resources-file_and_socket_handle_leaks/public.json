@@ -1,0 +1,50 @@
+{
+  "id": "96f91c4d-a67c-4862-bd1d-561fd89ece16",
+  "title": "Fare snapshot loader",
+  "name": "Fare snapshot loader",
+  "createdAt": "2026-11-15T09:44:42.048Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code manages file handles? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A snapshot file contains malformed JSON. What happens during loadAll()?",
+      "choices": [
+        "The whole load aborts and no later files are processed",
+        "JSON.parse throws inside the try, the handle is closed by finally, and the loader logs a warning, records the file as skipped and continues",
+        "The handle stays open because JSON.parse runs after the read loop",
+        "The supplier's existing fares are cleared from the index before the error is detected"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A poll fires while the previous loadAll() is still reading files. What does the second call do?",
+      "choices": [
+        "It waits for the first call to finish, then reloads",
+        "It runs concurrently and both write to the index",
+        "It logs that a load is in progress and returns an empty result immediately",
+        "It throws, and the unhandled rejection crashes the process"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does readSnapshot loop on handle.read instead of calling it once?",
+      "choices": [
+        "Because a single read may return fewer bytes than requested, and the loop keeps reading until the buffer is full or EOF",
+        "Because handle.read can only read 64 KB per call",
+        "To avoid holding the file handle open for the duration of a large read",
+        "Because the file must be read backwards from the end"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.resources.file_and_socket_handle_leaks",
+    "backend.errors.cleanup_on_error_paths",
+    "backend.errors.swallowed_errors"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/invoiceCharger.ts",
+        "startLine": 35,
+        "endLine": 35
+      }
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "The idempotency key is generated inside the retry loop, so each attempt sends a new key. If the gateway processes a charge but the response is lost (network error, timeout, or a 5xx after commit), the retry looks like a brand-new charge and the customer is billed twice. The key must be created once per invoice charge (e.g. derived from invoiceId) before the loop.",
+    "attempt starts at 1 and the loop returns 'unavailable' when attempt > maxRetries (4), i.e. after the 5th attempt fails: 1 initial + 4 retries. It is bounded by that check.",
+    "delayFor(0) gives exp = min(5000, 200 * 2^0) = 200, then exp/2 + random * exp/2 = 100 to 200 ms (equal jitter). Not full jitter from 0, not fixed, and not the second retry's 200-400 band.",
+    "The 4xx branch explicitly excludes 429, so 429 falls through to the backoff path, while 400 throws. 'declined' is only for 402."
+  ]
+}

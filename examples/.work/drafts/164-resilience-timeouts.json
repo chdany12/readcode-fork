@@ -1,0 +1,67 @@
+{
+  "title": "Chunked file sync with a deadline budget",
+  "name": "Chunked file uploader",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/blobStore.ts",
+      "content": "export interface ChunkRef {\n  index: number;\n  sha256: string;\n  size: number;\n}\n\nexport interface BlobStore {\n  putChunk(fileId: string, chunk: ChunkRef, data: Buffer, signal: AbortSignal): Promise<void>;\n  commitFile(fileId: string, chunks: ChunkRef[], signal: AbortSignal): Promise<{ version: number }>;\n}\n\nexport class DeadlineExceededError extends Error {\n  constructor(public readonly stage: string) {\n    super(`sync deadline exceeded during ${stage}`);\n  }\n}\n\nexport async function withTimeout<T>(\n  ms: number,\n  stage: string,\n  op: (signal: AbortSignal) => Promise<T>,\n): Promise<T> {\n  if (ms <= 0) throw new DeadlineExceededError(stage);\n  const controller = new AbortController();\n  const timer = setTimeout(() => controller.abort(), ms);\n  try {\n    return await op(controller.signal);\n  } catch (err) {\n    if (controller.signal.aborted) throw new DeadlineExceededError(stage);\n    throw err;\n  } finally {\n    clearTimeout(timer);\n  }\n}\n"
+    },
+    {
+      "path": "src/uploader.ts",
+      "content": "import { createHash } from \"crypto\";\nimport { BlobStore, ChunkRef, withTimeout } from \"./blobStore\";\n\nconst CHUNK_SIZE = 4 * 1024 * 1024;\nconst PER_CHUNK_CAP_MS = 15_000;\n\nexport interface SyncResult {\n  fileId: string;\n  version: number;\n  uploadedChunks: number;\n  skippedChunks: number;\n}\n\nexport class FileSyncUploader {\n  constructor(\n    private readonly store: BlobStore,\n    private readonly knownChunks: (fileId: string) => Promise<Set<string>>,\n  ) {}\n\n  async sync(fileId: string, contents: Buffer, budgetMs: number): Promise<SyncResult> {\n    const startedAt = Date.now();\n    const deadlineAt = startedAt + budgetMs;\n    const existing = await this.knownChunks(fileId);\n\n    const chunks: ChunkRef[] = [];\n    let uploaded = 0;\n    let skipped = 0;\n\n    for (let offset = 0, index = 0; offset < contents.length; offset += CHUNK_SIZE, index++) {\n      const data = contents.subarray(offset, offset + CHUNK_SIZE);\n      const ref: ChunkRef = {\n        index,\n        sha256: createHash(\"sha256\").update(data).digest(\"hex\"),\n        size: data.length,\n      };\n      chunks.push(ref);\n\n      if (existing.has(ref.sha256)) {\n        skipped++;\n        continue;\n      }\n\n      const remaining = deadlineAt - startedAt;\n      await withTimeout(Math.min(remaining, PER_CHUNK_CAP_MS), `chunk ${index}`, (signal) =>\n        this.store.putChunk(fileId, ref, data, signal),\n      );\n      uploaded++;\n    }\n\n    const { version } = await withTimeout(deadlineAt - Date.now(), \"commit\", (signal) =>\n      this.store.commitFile(fileId, chunks, signal),\n    );\n\n    return { fileId, version, uploadedChunks: uploaded, skippedChunks: skipped };\n  }\n}\n"
+    },
+    {
+      "path": "src/syncHandler.ts",
+      "content": "import { FileSyncUploader } from \"./uploader\";\nimport { DeadlineExceededError } from \"./blobStore\";\n\nexport interface SyncRequest {\n  fileId: string;\n  contents: Buffer;\n  clientDeadlineMs?: number;\n}\n\nconst DEFAULT_BUDGET_MS = 60_000;\nconst MAX_BUDGET_MS = 300_000;\n\nexport async function handleSync(uploader: FileSyncUploader, req: SyncRequest) {\n  const budget = Math.min(req.clientDeadlineMs ?? DEFAULT_BUDGET_MS, MAX_BUDGET_MS);\n  try {\n    const result = await uploader.sync(req.fileId, req.contents, budget);\n    return { status: 200, body: result };\n  } catch (err) {\n    if (err instanceof DeadlineExceededError) {\n      return { status: 504, body: { error: \"sync_deadline_exceeded\", stage: err.stage } };\n    }\n    throw err;\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/uploader.ts",
+    "snippet": "      const remaining = deadlineAt - startedAt;"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code enforces the overall time budget for a sync? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "remaining is computed as deadlineAt - startedAt, which always equals budgetMs and never shrinks as chunks upload. Each chunk therefore gets min(budget, 15s) regardless of elapsed time, so a sync of many slow chunks can run far beyond the client's deadline; the overrun is only noticed at commit (where Date.now() is used correctly), after all the work has been done. It should be deadlineAt - Date.now()."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A 20 MB file is re-synced and all of its chunk hashes are already in knownChunks. What does the store see?",
+      "choices": [
+        "Five putChunk calls followed by commitFile",
+        "No store calls at all",
+        "Only a commitFile call listing all five chunks",
+        "Only a commitFile call with an empty chunk list"
+      ],
+      "answer": 2,
+      "explanation": "Every chunk is still hashed and pushed onto `chunks` before the existing.has check, then skipped. commitFile is always called with the full chunk list. No putChunk calls happen; the commit is not skipped; the list is not empty."
+    },
+    {
+      "prompt": "A putChunk call rejects with a network error before its timer fires. What does handleSync do?",
+      "choices": [
+        "Returns 504 with stage set to that chunk",
+        "Rethrows the network error to its caller",
+        "Skips the chunk and continues with the next one",
+        "Retries the chunk until the budget is exhausted"
+      ],
+      "answer": 1,
+      "explanation": "withTimeout only converts errors into DeadlineExceededError when the signal was aborted. A network error with no abort is rethrown unchanged, and handleSync rethrows anything that is not a DeadlineExceededError. There is no skip or retry logic."
+    },
+    {
+      "prompt": "A client sends clientDeadlineMs = 900000. What budget does the sync run with?",
+      "choices": [
+        "900000 ms",
+        "60000 ms",
+        "300000 ms",
+        "15000 ms"
+      ],
+      "answer": 2,
+      "explanation": "handleSync clamps with Math.min(clientDeadlineMs, MAX_BUDGET_MS), giving 300000. 60000 is only the default when none is given, and 15000 is the per-chunk cap, not the budget."
+    }
+  ],
+  "concepts": [
+    "backend.resilience.timeouts",
+    "backend.resources.context_cancellation"
+  ]
+}

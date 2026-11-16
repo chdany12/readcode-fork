@@ -1,0 +1,68 @@
+{
+  "title": "Rider ride request and cancellation through a dispatch service",
+  "name": "Rider dispatch service",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "rideRepository.ts",
+      "content": "import { Pool } from \"pg\";\n\nexport type RideStatus = \"requested\" | \"assigned\" | \"in_progress\" | \"completed\" | \"cancelled\";\n\nexport interface Ride {\n  id: string;\n  riderId: string;\n  driverId: string | null;\n  status: RideStatus;\n  requestedAt: Date;\n}\n\ninterface RideRow {\n  id: string;\n  rider_id: string;\n  driver_id: string | null;\n  status: RideStatus;\n  requested_at: Date;\n}\n\nfunction toRide(row: RideRow): Ride {\n  return {\n    id: row.id,\n    riderId: row.rider_id,\n    driverId: row.driver_id,\n    status: row.status,\n    requestedAt: row.requested_at,\n  };\n}\n\nexport class RideRepository {\n  constructor(private readonly pool: Pool) {}\n\n  async findById(id: string): Promise<Ride | null> {\n    const { rows } = await this.pool.query<RideRow>(\n      \"SELECT id, rider_id, driver_id, status, requested_at FROM rides WHERE id = $1\",\n      [id],\n    );\n    return (rows[0] as unknown as Ride) ?? null;\n  }\n\n  async findActiveForRider(riderId: string): Promise<Ride | null> {\n    const { rows } = await this.pool.query<RideRow>(\n      `SELECT id, rider_id, driver_id, status, requested_at FROM rides\n       WHERE rider_id = $1 AND status IN ('requested', 'assigned', 'in_progress')\n       LIMIT 1`,\n      [riderId],\n    );\n    return rows[0] ? toRide(rows[0]) : null;\n  }\n\n  async create(riderId: string): Promise<Ride> {\n    const { rows } = await this.pool.query<RideRow>(\n      `INSERT INTO rides (rider_id, status, requested_at) VALUES ($1, 'requested', now())\n       RETURNING id, rider_id, driver_id, status, requested_at`,\n      [riderId],\n    );\n    return toRide(rows[0]);\n  }\n\n  async setStatus(id: string, status: RideStatus): Promise<void> {\n    await this.pool.query(\"UPDATE rides SET status = $1 WHERE id = $2\", [status, id]);\n  }\n}\n"
+    },
+    {
+      "path": "dispatchService.ts",
+      "content": "import { RideRepository, Ride } from \"./rideRepository\";\n\nexport interface DriverRegistry {\n  markAvailable(driverId: string): Promise<void>;\n}\n\nexport interface Notifier {\n  rideCancelled(ride: Ride, by: \"rider\" | \"driver\"): Promise<void>;\n}\n\nexport class RideNotFound extends Error {}\nexport class RideConflict extends Error {}\n\nexport class DispatchService {\n  constructor(\n    private readonly rides: RideRepository,\n    private readonly drivers: DriverRegistry,\n    private readonly notifier: Notifier,\n  ) {}\n\n  async requestRide(riderId: string): Promise<Ride> {\n    const active = await this.rides.findActiveForRider(riderId);\n    if (active) {\n      throw new RideConflict(`rider ${riderId} already has ride ${active.id}`);\n    }\n    return this.rides.create(riderId);\n  }\n\n  async cancelRide(rideId: string, riderId: string): Promise<Ride> {\n    const ride = await this.rides.findById(rideId);\n    if (!ride || ride.riderId !== riderId) {\n      throw new RideNotFound(`ride ${rideId} not found`);\n    }\n    if (ride.status === \"in_progress\" || ride.status === \"completed\") {\n      throw new RideConflict(`ride ${rideId} cannot be cancelled in status ${ride.status}`);\n    }\n    if (ride.status === \"cancelled\") {\n      return ride;\n    }\n\n    await this.rides.setStatus(ride.id, \"cancelled\");\n    if (ride.driverId) {\n      await this.drivers.markAvailable(ride.driverId);\n    }\n    const cancelled: Ride = { ...ride, status: \"cancelled\" };\n    await this.notifier.rideCancelled(cancelled, \"rider\");\n    return cancelled;\n  }\n}\n"
+    },
+    {
+      "path": "rideHandlers.ts",
+      "content": "import { Request, Response } from \"express\";\nimport { DispatchService, RideNotFound, RideConflict } from \"./dispatchService\";\n\nexport function makeRideHandlers(dispatch: DispatchService) {\n  return {\n    async request(req: Request, res: Response) {\n      const riderId = res.locals.riderId as string;\n      try {\n        const ride = await dispatch.requestRide(riderId);\n        res.status(201).json(ride);\n      } catch (err) {\n        if (err instanceof RideConflict) return res.status(409).json({ error: err.message });\n        throw err;\n      }\n    },\n\n    async cancel(req: Request, res: Response) {\n      const riderId = res.locals.riderId as string;\n      try {\n        const ride = await dispatch.cancelRide(req.params.rideId, riderId);\n        res.json(ride);\n      } catch (err) {\n        if (err instanceof RideNotFound) return res.status(404).json({ error: err.message });\n        if (err instanceof RideConflict) return res.status(409).json({ error: err.message });\n        throw err;\n      }\n    },\n  };\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "rideRepository.ts",
+    "snippet": "    return (rows[0] as unknown as Ride) ?? null;"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how data passes between the persistence layer and the dispatch service? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "RideRepository.findById returns the raw snake_case database row cast to Ride instead of mapping it with toRide. The service then reads ride.riderId and ride.driverId, which are undefined on the row (the data is in rider_id and driver_id). The ownership check ride.riderId !== riderId therefore always fails, so every cancel returns 404; and if that check were relaxed, driverId would still be undefined, so the assigned driver would never be marked available. The cast hides the mismatch from the type checker."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Two requestRide calls for the same rider arrive at nearly the same time and neither finds an active ride. What does this code do?",
+      "choices": [
+        "The second call throws RideConflict because create checks for an active ride",
+        "Postgres serializes the two calls because findActiveForRider uses LIMIT 1",
+        "Both calls can create a ride, since the check and the insert are separate statements with no lock or unique constraint shown",
+        "The handler returns 409 for the second call because it shares res.locals"
+      ],
+      "answer": 2,
+      "explanation": "requestRide does a check-then-act: findActiveForRider and create are independent pool queries with no transaction, lock, or uniqueness constraint visible, so both can pass the check. create inserts unconditionally, LIMIT 1 does not serialize anything, and res.locals is per request."
+    },
+    {
+      "prompt": "Where is the rule 'a ride that is in progress cannot be cancelled' enforced?",
+      "choices": [
+        "In DispatchService.cancelRide, before any write",
+        "In the SQL WHERE clause of setStatus",
+        "In the cancel HTTP handler before calling the service",
+        "In RideRepository.findById, which filters out in-progress rides"
+      ],
+      "answer": 0,
+      "explanation": "cancelRide throws RideConflict when status is in_progress or completed before calling setStatus. setStatus updates by id only, the handler only maps errors to status codes, and findById does not filter by status."
+    },
+    {
+      "prompt": "cancelRide throws RideNotFound (404) both when the ride does not exist and when it belongs to a different rider. What is the effect of that choice?",
+      "choices": [
+        "Another rider's ride is cancelled but the caller is told it was not found",
+        "A caller cannot tell whether a ride id they do not own exists",
+        "The driver is released even though the request is rejected",
+        "Express retries the request against the next matching route"
+      ],
+      "answer": 1,
+      "explanation": "Folding the ownership mismatch into the same RideNotFound error means a probing caller gets identical 404s for nonexistent and foreign rides, so ride ids are not confirmed to outsiders. The throw happens before setStatus or markAvailable, so nothing is changed, and the handler responds directly rather than falling through to another route."
+    }
+  ],
+  "concepts": [
+    "backend.design.layering",
+    "backend.data.orm_pitfalls",
+    "backend.concurrency.race_conditions"
+  ]
+}

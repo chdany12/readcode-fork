@@ -1,0 +1,67 @@
+{
+  "title": "Matchmaking lobby store with heartbeat expiry",
+  "name": "Matchmaking lobby store",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/redis.ts",
+      "content": "export interface Redis {\n  get(key: string): Promise<string | null>;\n  set(key: string, value: string, ...args: (string | number)[]): Promise<\"OK\" | null>;\n  expire(key: string, seconds: number): Promise<number>;\n  del(key: string): Promise<number>;\n  sadd(key: string, member: string): Promise<number>;\n  srem(key: string, member: string): Promise<number>;\n}\n\nexport interface Lobby {\n  id: string;\n  hostId: string;\n  mode: \"duel\" | \"squad\" | \"battle_royale\";\n  maxPlayers: number;\n  players: string[];\n  status: \"open\" | \"starting\";\n  updatedAt: number;\n}\n"
+    },
+    {
+      "path": "src/lobbyStore.ts",
+      "content": "import { randomUUID } from \"crypto\";\nimport { Lobby, Redis } from \"./redis\";\n\nconst LOBBY_TTL_SECONDS = 120;\nconst OPEN_LOBBIES = \"lobbies:open\";\n\nexport class LobbyFullError extends Error {}\nexport class LobbyNotFoundError extends Error {}\n\nexport class LobbyStore {\n  constructor(private readonly redis: Redis) {}\n\n  private key(id: string): string {\n    return `lobby:${id}`;\n  }\n\n  async create(hostId: string, mode: Lobby[\"mode\"], maxPlayers: number): Promise<Lobby> {\n    const lobby: Lobby = {\n      id: randomUUID(),\n      hostId,\n      mode,\n      maxPlayers,\n      players: [hostId],\n      status: \"open\",\n      updatedAt: Date.now(),\n    };\n    await this.redis.set(this.key(lobby.id), JSON.stringify(lobby), \"EX\", LOBBY_TTL_SECONDS, \"NX\");\n    await this.redis.sadd(OPEN_LOBBIES, lobby.id);\n    return lobby;\n  }\n\n  async get(id: string): Promise<Lobby | null> {\n    const raw = await this.redis.get(this.key(id));\n    if (!raw) {\n      await this.redis.srem(OPEN_LOBBIES, id);\n      return null;\n    }\n    return JSON.parse(raw) as Lobby;\n  }\n\n  async heartbeat(id: string): Promise<boolean> {\n    return (await this.redis.expire(this.key(id), LOBBY_TTL_SECONDS)) === 1;\n  }\n\n  async join(id: string, playerId: string): Promise<Lobby> {\n    const lobby = await this.get(id);\n    if (!lobby) throw new LobbyNotFoundError(id);\n    if (lobby.players.includes(playerId)) return lobby;\n    if (lobby.players.length >= lobby.maxPlayers) throw new LobbyFullError(id);\n\n    lobby.players.push(playerId);\n    lobby.updatedAt = Date.now();\n    await this.redis.set(this.key(id), JSON.stringify(lobby), \"XX\");\n    return lobby;\n  }\n\n  async leave(id: string, playerId: string): Promise<void> {\n    const lobby = await this.get(id);\n    if (!lobby) return;\n    lobby.players = lobby.players.filter((p) => p !== playerId);\n    if (lobby.players.length === 0) {\n      await this.redis.del(this.key(id));\n      await this.redis.srem(OPEN_LOBBIES, id);\n      return;\n    }\n    if (lobby.hostId === playerId) lobby.hostId = lobby.players[0];\n    lobby.updatedAt = Date.now();\n    await this.redis.set(this.key(id), JSON.stringify(lobby), \"XX\", \"KEEPTTL\");\n  }\n}\n"
+    },
+    {
+      "path": "src/hostHeartbeat.ts",
+      "content": "import { LobbyStore } from \"./lobbyStore\";\n\nexport class HostHeartbeatHandler {\n  constructor(private readonly lobbies: LobbyStore) {}\n\n  async onHostPing(lobbyId: string, hostId: string): Promise<\"ok\" | \"gone\" | \"not_host\"> {\n    const lobby = await this.lobbies.get(lobbyId);\n    if (!lobby) return \"gone\";\n    if (lobby.hostId !== hostId) return \"not_host\";\n    const alive = await this.lobbies.heartbeat(lobbyId);\n    return alive ? \"ok\" : \"gone\";\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/lobbyStore.ts",
+    "snippet": "await this.redis.set(this.key(id), JSON.stringify(lobby), \"XX\");"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code manages the expiry of lobby keys? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "In join, the lobby is written back with SET ... XX and no EX or KEEPTTL. A plain Redis SET removes any existing TTL, so once any player joins, the lobby key never expires. If the host then crashes or disconnects without calling leave, the heartbeat stops but the lobby stays in Redis and in lobbies:open forever, and players keep finding and joining a dead lobby. leave correctly uses KEEPTTL; join should do the same."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "The host stops sending pings and nobody calls join or leave. Roughly when does the lobby disappear?",
+      "choices": [
+        "Never, because the open-lobbies set still references it",
+        "Right away, because heartbeat deletes it",
+        "About 120 seconds after the last successful heartbeat (or after creation)",
+        "After 120 minutes"
+      ],
+      "answer": 2,
+      "explanation": "create sets the key with EX LOBBY_TTL_SECONDS (120), and each heartbeat resets it with EXPIRE for the same number of seconds. With no more pings, the key expires about 120 s later. The set entry is cleaned up lazily when get misses, and it does not keep the key alive. heartbeat never deletes anything, and the unit is seconds, not minutes."
+    },
+    {
+      "prompt": "What does onHostPing return when a ping arrives just after the lobby key expired?",
+      "choices": [
+        "\"gone\"",
+        "\"ok\", because EXPIRE recreates the key",
+        "\"not_host\"",
+        "It throws LobbyNotFoundError"
+      ],
+      "answer": 0,
+      "explanation": "get returns null for a missing key (and removes the id from lobbies:open), so onHostPing returns \"gone\". Even if the key expired between get and heartbeat, EXPIRE returns 0 for a missing key, which also gives \"gone\". EXPIRE never creates keys. onHostPing never throws LobbyNotFoundError; only join does."
+    },
+    {
+      "prompt": "Why does leave pass \"XX\" when it writes the lobby back?",
+      "choices": [
+        "To make the write atomic with the earlier get",
+        "To refresh the TTL to its full length",
+        "To stop leave from recreating a lobby that expired after it was read",
+        "To make the write fail if another player joined in the meantime"
+      ],
+      "answer": 2,
+      "explanation": "XX means \"only set if the key already exists\". If the lobby expired between get and set, the write is skipped instead of bringing a dead lobby back. XX does not make get-then-set atomic and does not detect changes made by other players (that would need WATCH or a version check). TTL handling comes from KEEPTTL, not from XX."
+    }
+  ],
+  "concepts": [
+    "backend.caching.ttls_and_expiry",
+    "backend.concurrency.race_conditions"
+  ]
+}

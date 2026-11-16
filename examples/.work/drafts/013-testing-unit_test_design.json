@@ -1,0 +1,69 @@
+{
+  "title": "Ledger transfer service and its unit tests",
+  "name": "Ledger transfer tests",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/ledgerRepository.ts",
+      "content": "export interface Account {\n  id: string;\n  balanceCents: bigint;\n  overdraftLimitCents: bigint;\n  frozen: boolean;\n}\n\nexport interface LedgerEntry {\n  accountId: string;\n  amountCents: bigint;\n  reference: string;\n  postedAt: Date;\n}\n\nexport interface LedgerTx {\n  lockAccount(id: string): Promise<Account>;\n  appendEntries(entries: LedgerEntry[]): Promise<void>;\n  updateBalance(id: string, balanceCents: bigint): Promise<void>;\n}\n\nexport interface LedgerRepository {\n  withTransaction<T>(fn: (tx: LedgerTx) => Promise<T>): Promise<T>;\n}\n"
+    },
+    {
+      "path": "src/transferService.ts",
+      "content": "import { LedgerRepository, Account, LedgerEntry } from \"./ledgerRepository\";\n\nexport class InsufficientFundsError extends Error {\n  constructor(public readonly accountId: string, public readonly shortfallCents: bigint) {\n    super(`account ${accountId} is short by ${shortfallCents} cents`);\n    this.name = \"InsufficientFundsError\";\n  }\n}\n\nexport class AccountFrozenError extends Error {\n  constructor(public readonly accountId: string) {\n    super(`account ${accountId} is frozen`);\n    this.name = \"AccountFrozenError\";\n  }\n}\n\nexport interface TransferRequest {\n  fromAccountId: string;\n  toAccountId: string;\n  amountCents: bigint;\n  reference: string;\n}\n\nexport class TransferService {\n  constructor(private readonly repo: LedgerRepository, private readonly clock: () => Date) {}\n\n  async transfer(req: TransferRequest): Promise<LedgerEntry[]> {\n    if (req.amountCents <= 0n) {\n      throw new RangeError(\"amount must be positive\");\n    }\n    if (req.fromAccountId === req.toAccountId) {\n      throw new RangeError(\"cannot transfer to the same account\");\n    }\n\n    return this.repo.withTransaction(async (tx) => {\n      const from: Account = await tx.lockAccount(req.fromAccountId);\n      const to: Account = await tx.lockAccount(req.toAccountId);\n\n      if (from.frozen) throw new AccountFrozenError(from.id);\n      if (to.frozen) throw new AccountFrozenError(to.id);\n\n      const available = from.balanceCents + from.overdraftLimitCents;\n      if (available < req.amountCents) {\n        throw new InsufficientFundsError(from.id, req.amountCents - available);\n      }\n\n      const postedAt = this.clock();\n      const entries: LedgerEntry[] = [\n        { accountId: from.id, amountCents: -req.amountCents, reference: req.reference, postedAt },\n        { accountId: to.id, amountCents: req.amountCents, reference: req.reference, postedAt },\n      ];\n      await tx.appendEntries(entries);\n      await tx.updateBalance(from.id, from.balanceCents - req.amountCents);\n      await tx.updateBalance(to.id, to.balanceCents + req.amountCents);\n      return entries;\n    });\n  }\n}\n"
+    },
+    {
+      "path": "src/transferService.test.ts",
+      "content": "import { TransferService, InsufficientFundsError, AccountFrozenError } from \"./transferService\";\nimport { Account, LedgerEntry, LedgerRepository, LedgerTx } from \"./ledgerRepository\";\n\nclass InMemoryLedger implements LedgerRepository {\n  accounts = new Map<string, Account>();\n  entries: LedgerEntry[] = [];\n\n  async withTransaction<T>(fn: (tx: LedgerTx) => Promise<T>): Promise<T> {\n    const snapshot = new Map([...this.accounts].map(([k, v]) => [k, { ...v }]));\n    const pending: LedgerEntry[] = [];\n    const tx: LedgerTx = {\n      lockAccount: async (id) => {\n        const acct = snapshot.get(id);\n        if (!acct) throw new Error(`unknown account ${id}`);\n        return { ...acct };\n      },\n      appendEntries: async (e) => { pending.push(...e); },\n      updateBalance: async (id, bal) => { snapshot.get(id)!.balanceCents = bal; },\n    };\n    const result = await fn(tx);\n    this.accounts = snapshot;\n    this.entries.push(...pending);\n    return result;\n  }\n}\n\nconst FIXED_NOW = new Date(\"2024-03-01T12:00:00Z\");\n\nfunction account(id: string, balance: bigint, extra: Partial<Account> = {}): Account {\n  return { id, balanceCents: balance, overdraftLimitCents: 0n, frozen: false, ...extra };\n}\n\ndescribe(\"TransferService\", () => {\n  let ledger: InMemoryLedger;\n  let service: TransferService;\n\n  beforeEach(() => {\n    ledger = new InMemoryLedger();\n    ledger.accounts.set(\"acc-a\", account(\"acc-a\", 10_000n));\n    ledger.accounts.set(\"acc-b\", account(\"acc-b\", 500n));\n    service = new TransferService(ledger, () => FIXED_NOW);\n  });\n\n  it(\"posts balanced entries and moves the balance\", async () => {\n    const entries = await service.transfer({\n      fromAccountId: \"acc-a\", toAccountId: \"acc-b\", amountCents: 2_500n, reference: \"inv-1\",\n    });\n    expect(entries.reduce((s, e) => s + e.amountCents, 0n)).toBe(0n);\n    expect(ledger.accounts.get(\"acc-a\")!.balanceCents).toBe(7_500n);\n    expect(ledger.accounts.get(\"acc-b\")!.balanceCents).toBe(3_000n);\n    expect(ledger.entries.every((e) => e.postedAt === FIXED_NOW)).toBe(true);\n  });\n\n  it(\"allows spending into the overdraft limit\", async () => {\n    ledger.accounts.set(\"acc-b\", account(\"acc-b\", 500n, { overdraftLimitCents: 1_000n }));\n    await service.transfer({\n      fromAccountId: \"acc-b\", toAccountId: \"acc-a\", amountCents: 1_500n, reference: \"od-1\",\n    });\n    expect(ledger.accounts.get(\"acc-b\")!.balanceCents).toBe(-1_000n);\n  });\n\n  it(\"rejects transfers beyond available funds and leaves balances untouched\", async () => {\n    expect(\n      service.transfer({ fromAccountId: \"acc-b\", toAccountId: \"acc-a\", amountCents: 501n, reference: \"x\" }),\n    ).rejects.toBeInstanceOf(InsufficientFundsError);\n    expect(ledger.accounts.get(\"acc-b\")!.balanceCents).toBe(500n);\n    expect(ledger.entries).toHaveLength(0);\n  });\n\n  it(\"refuses to debit a frozen account\", async () => {\n    ledger.accounts.set(\"acc-a\", account(\"acc-a\", 10_000n, { frozen: true }));\n    await expect(\n      service.transfer({ fromAccountId: \"acc-a\", toAccountId: \"acc-b\", amountCents: 1n, reference: \"f\" }),\n    ).rejects.toBeInstanceOf(AccountFrozenError);\n  });\n\n  it.each([0n, -100n])(\"rejects non-positive amount %s\", async (amount) => {\n    await expect(\n      service.transfer({ fromAccountId: \"acc-a\", toAccountId: \"acc-b\", amountCents: amount, reference: \"z\" }),\n    ).rejects.toThrow(RangeError);\n  });\n});\n"
+    }
+  ],
+  "defect": {
+    "path": "src/transferService.test.ts",
+    "snippet": "    expect(\n      service.transfer({ fromAccountId: \"acc-b\", toAccountId: \"acc-a\", amountCents: 501n, reference: \"x\" }),\n    ).rejects.toBeInstanceOf(InsufficientFundsError);"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how these unit tests verify the transfer service's behavior? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "In the insufficient-funds test, `expect(...).rejects.toBeInstanceOf(...)` is neither awaited nor returned. The assertion on the rejected promise runs after the test function has already resolved, so the test passes even if `transfer` succeeds or throws a different error (a failure would surface at best as an unhandled rejection unrelated to this test). The following balance checks also run before the transfer has settled, so they prove nothing about rollback. The test gives false confidence in the overdraft/insufficient-funds check; it should `await expect(...).rejects...` like the frozen-account test."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "If `transfer` throws AccountFrozenError after locking both accounts, what does InMemoryLedger leave in `ledger.accounts` and `ledger.entries`?",
+      "choices": [
+        "The debit is applied but no entries are recorded",
+        "Nothing changes: the snapshot and pending entries are discarded because the commit lines after `await fn(tx)` never run",
+        "Entries are recorded but balances are unchanged",
+        "Both accounts are marked frozen in the stored map"
+      ],
+      "answer": 1,
+      "explanation": "withTransaction works on a copied snapshot and a local `pending` array, and only assigns them back after `fn(tx)` resolves. A throw skips those lines, so stored state is untouched. No partial debit, entry, or frozen flag is written."
+    },
+    {
+      "prompt": "Why does the test suite inject `() => FIXED_NOW` instead of letting TransferService call `new Date()`?",
+      "choices": [
+        "new Date() is unavailable inside withTransaction",
+        "It makes the transfer faster in production",
+        "It lets the test assert the exact `postedAt` value deterministically, by identity",
+        "It forces both accounts to be locked in a consistent order"
+      ],
+      "answer": 2,
+      "explanation": "The clock is a constructor dependency, so tests can pass a fixed instant and assert `e.postedAt === FIXED_NOW`. It has nothing to do with performance, availability of Date, or lock ordering."
+    },
+    {
+      "prompt": "The overdraft test calls `ledger.accounts.set(\"acc-b\", ...)` inside the test. Why does this not affect other tests in the file?",
+      "choices": [
+        "beforeEach builds a fresh InMemoryLedger and service for every test",
+        "Jest runs each `it` in a separate process",
+        "The Map is frozen after the first test",
+        "withTransaction restores the original accounts after each transfer"
+      ],
+      "answer": 0,
+      "explanation": "`beforeEach` reassigns `ledger` and `service` before each test, so per-test mutations are isolated. Jest does not fork per test, the Map is never frozen, and withTransaction commits rather than restoring state."
+    }
+  ],
+  "concepts": [
+    "backend.testing.unit_test_design",
+    "backend.testing.mocking_and_fakes",
+    "backend.concurrency.async_await_pitfalls",
+    "backend.data.money_and_ledgers"
+  ]
+}

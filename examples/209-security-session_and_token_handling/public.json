@@ -1,0 +1,50 @@
+{
+  "id": "22f41e04-e322-4dfd-ad04-3aa28a0cd197",
+  "title": "Refresh token rotation for desktop sync clients",
+  "name": "Sync client token refresh",
+  "createdAt": "2026-11-15T09:44:42.031Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code rotates and invalidates refresh tokens? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does the store keep a sha256 hash of each refresh token rather than the token itself?",
+      "choices": [
+        "So that two devices can share the same refresh token",
+        "A leaked copy of the token table cannot be replayed directly, since the raw tokens are not stored",
+        "Hashing makes lookups by token faster than string comparison",
+        "It lets the server recover the userId from the token without a lookup"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client presents a valid, unexpired refresh token but sends a different deviceId than the one it was issued for. What happens?",
+      "choices": [
+        "A new token pair is issued bound to the new deviceId",
+        "The request fails with 400 because deviceId is validated in the route",
+        "The entire token family is revoked and the client receives 401 invalid_grant",
+        "Only that single token is revoked; other tokens in the family remain usable"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The refresh store is temporarily unreachable and findByHash rejects with a connection error. How does refreshHandler respond?",
+      "choices": [
+        "It rethrows the error so the framework's error handler deals with it, rather than returning 401",
+        "It returns 401 invalid_grant, logging the client out",
+        "It returns 400 because the token could not be parsed",
+        "It retries findByHash until it succeeds"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.security.session_and_token_handling",
+    "backend.security.authentication",
+    "backend.api.status_codes_and_error_responses"
+  ]
+}

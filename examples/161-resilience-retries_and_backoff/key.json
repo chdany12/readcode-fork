@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    3,
+    0,
+    1
+  ],
+  "explanations": [
+    "There is none. The idempotency key is created once per submit() call, outside the retried closure, so every attempt carries the same key and the bank can deduplicate a payout whose response was lost. Only 429, 5xx, and network-level TypeErrors (which fetch throws, including on timeout aborts surfaced as such) are retried; 4xx validation errors fail fast. Delays use capped exponential backoff with full jitter, Retry-After is honoured but capped, and attempts are bounded by maxAttempts. The random UUID suffix looks risky but is generated once per call, not per attempt.",
+    "ceiling = min(8000, 250 * 2^(4-1)) = 2000, and the delay is floor(random() * 2000), so 0 to 1999 ms. It is not fixed (full jitter), not capped at 8000 yet, and not a +/- band around 2000.",
+    "isRetryable returns true only for 429 or >= 500 (or TypeError), so a 400 makes withRetry rethrow immediately. 'duplicate' is only produced for 409, and Retry-After only matters for retryable errors.",
+    "hinted = min(30000, 8000) = 8000, and the sleep is max(jittered, hinted), so 8000 ms since jitter never exceeds 8000. The hint is used but capped, so not 30 s, and the wait is never zero here."
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "id": "47563dba-0951-4c7d-a18b-96756d6369c0",
+  "title": "Write-sharded ad campaign counters",
+  "name": "Campaign spend counters",
+  "createdAt": "2026-11-15T09:41:31.652Z",
+  "durationMinutes": 13,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code writes or reads the sharded campaign counters? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does record() spread a campaign's daily counters across 16 partition keys instead of one?",
+      "choices": [
+        "To keep each item under DynamoDB's 400 KB item size limit",
+        "Because ADD cannot be used twice on the same item",
+        "To avoid a hot partition: a single key has a per-partition write throughput ceiling that a busy campaign could exceed",
+        "So that each shard can have a different TTL"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two ad servers call record() for the same campaign at the same instant and happen to choose the same shard. What happens to the counts?",
+      "choices": [
+        "Both increments are applied, because ADD is an atomic server-side update",
+        "One increment is lost because the second write overwrites the first",
+        "The second call fails with a conditional check error",
+        "The increments are applied to two separate copies of the item"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "BatchGet returns some keys in UnprocessedKeys on every attempt (heavy throttling). What does dailyTotals do?",
+      "choices": [
+        "Returns totals with the unprocessed shards counted as zero",
+        "Retries indefinitely until all keys are read",
+        "Retries up to 5 calls total, then throws rather than returning partial totals",
+        "Falls back to reading each shard with GetItem"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.nosql_modeling",
+    "backend.distributed.sharding_and_partitioning",
+    "backend.concurrency.atomic_operations"
+  ]
+}

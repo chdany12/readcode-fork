@@ -1,0 +1,51 @@
+{
+  "id": "2e3f67c3-8b93-4c7a-8838-c0b12c8cc233",
+  "title": "Player profile cache with name lookups",
+  "name": "Player profile service",
+  "createdAt": "2026-11-15T09:41:31.679Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code keeps cached profile data consistent after updates? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A player's rating changes via recordMatchResult. Immediately afterwards, another service calls getByName for that player. What rating does it see?",
+      "choices": [
+        "The old rating, until NAME_TTL expires",
+        "The old rating, until PROFILE_TTL expires",
+        "An error, because the name entry was removed",
+        "The new rating"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why is the name index cached as name -> playerId rather than name -> full profile?",
+      "choices": [
+        "So that profile changes only need to invalidate one key (profile:<id>) instead of every name entry that points at it",
+        "Because Redis cannot store JSON under string keys",
+        "So that lookups by name skip Redis entirely",
+        "Because a player may have several profiles under one name"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two concurrent getById calls for the same uncached player arrive while a recordMatchResult for that player is in flight. Which outcome is possible?",
+      "choices": [
+        "Neither read can ever observe the old rating",
+        "A read loads the old rating from the repo before the update, then writes it to the cache after the DEL, leaving stale data until PROFILE_TTL expires",
+        "Both reads block until the update finishes",
+        "The update fails because the key is being written"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.caching.cache_invalidation",
+    "backend.caching.cache_aside_vs_write_through",
+    "backend.caching.stale_reads",
+    "backend.caching.ttls_and_expiry"
+  ]
+}

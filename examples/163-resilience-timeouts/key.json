@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/originClient.ts",
+        "startLine": 36,
+        "endLine": 36
+      }
+    },
+    1,
+    2,
+    2
+  ],
+  "explanations": [
+    "In OriginClient.fetchManifest, clearTimeout(timer) runs as soon as fetch resolves, which happens once response headers arrive. The body is then read with res.json() with no timer armed, so an origin that sends headers and then stalls (or trickles) the body leaves the request hanging indefinitely. The AbortError path never fires, so no OriginTimeoutError is raised, the stale-cache fallback is skipped, and the route never returns 504. The timer should be cleared in a finally block after the body has been read.",
+    "The cache entry is older than FRESH_MS, so getManifest calls the origin. The abort produces an OriginTimeoutError, and since `cached` exists the catch block logs a warning and returns the stale manifest. So the client gets it after the timeout. 504 only happens when nothing is cached. It is not served immediately because freshness fails first. 502 is for non-timeout errors.",
+    "A non-ok status throws a plain Error, not an OriginTimeoutError. ManifestService only falls back to the cache for OriginTimeoutError, so it rethrows, and the route maps non-timeout errors to 502. There is no retry logic, and 504 is only for OriginTimeoutError.",
+    "filter() returns manifest.renditions.slice(0, 1) when no rendition passes the bandwidth filter, so the player gets just the first rendition. It never returns an empty list, does not return everything, and there is no 400 path."
+  ]
+}

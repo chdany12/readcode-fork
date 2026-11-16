@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/appointmentRoutes.ts",
+        "startLine": 61,
+        "endLine": 63
+      }
+    },
+    1,
+    2,
+    3
+  ],
+  "explanations": [
+    "The PATCH handler copies every EDITABLE field from the body into `changes`, including fields the client did not send, which become `undefined`. Spreading `{ ...current, ...changes }` then overwrites the stored values with undefined, so a PATCH that only moves `startsAt` wipes `reason`, `notes` and `durationMinutes`. PATCH must only apply fields present in the request (e.g. check `field in body`).",
+    "The first PATCH saves version 4. The second compares its If-Match \"3\" to `\"${current.version}\"` = \"4\" and returns 412. 409 is only used for cancelled/completed status; there is no lock state; the ETag comparison is a plain string match, so strong ETags work.",
+    "The handler checks `current.status === \"cancelled\"` first and returns 200 with the existing record without bumping the version, so the retry is harmless. The 409 branch is only reached for checked_in/completed; nothing filters cancelled rows from `get`; no new resource is created.",
+    "PATCH rejects any field outside EDITABLE, and `status` is not listed, so state transitions go through a dedicated action endpoint that enforces 'booked -> cancelled' and treats repeats as no-ops. Express handles PATCH bodies fine, PATCH does return an ETag here, and cancellation keeps the same id."
+  ]
+}

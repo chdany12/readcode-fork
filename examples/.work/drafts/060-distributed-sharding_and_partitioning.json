@@ -1,0 +1,63 @@
+{
+  "title": "Salted video view counter",
+  "name": "Video view counter",
+  "language": "TypeScript",
+  "durationMinutes": 10,
+  "files": [
+    {
+      "path": "src/viewCounter.ts",
+      "content": "import type { Redis } from \"ioredis\";\n\nexport const SALT_BUCKETS = 16;\n\nexport function viewKey(videoId: string, bucket: number): string {\n  return `views:{${videoId}}:${bucket}`;\n}\n\nexport class ViewCounter {\n  constructor(private readonly redis: Redis) {}\n\n  async record(videoId: string, viewerSessionId: string): Promise<void> {\n    const bucket = bucketFor(viewerSessionId);\n    await this.redis.incr(viewKey(videoId, bucket));\n  }\n\n  async total(videoId: string): Promise<number> {\n    const keys: string[] = [];\n    for (let i = 0; i < SALT_BUCKETS - 1; i++) keys.push(viewKey(videoId, i));\n    const values = await this.redis.mget(...keys);\n    return values.reduce((sum, v) => sum + (v ? parseInt(v, 10) : 0), 0);\n  }\n\n  async reset(videoId: string): Promise<void> {\n    const keys = Array.from({ length: SALT_BUCKETS }, (_, i) => viewKey(videoId, i));\n    await this.redis.del(...keys);\n  }\n}\n\nfunction bucketFor(sessionId: string): number {\n  let h = 2166136261;\n  for (let i = 0; i < sessionId.length; i++) {\n    h ^= sessionId.charCodeAt(i);\n    h = Math.imul(h, 16777619);\n  }\n  return (h >>> 0) % SALT_BUCKETS;\n}\n"
+    },
+    {
+      "path": "src/viewsRouter.ts",
+      "content": "import express from \"express\";\nimport { ViewCounter } from \"./viewCounter\";\n\nexport function viewsRouter(counter: ViewCounter): express.Router {\n  const router = express.Router();\n\n  router.post(\"/videos/:videoId/views\", async (req, res) => {\n    const session = req.header(\"x-session-id\");\n    if (!session) {\n      res.status(400).json({ error: \"missing session\" });\n      return;\n    }\n    try {\n      await counter.record(req.params.videoId, session);\n      res.status(202).end();\n    } catch (err) {\n      req.log?.warn({ err, videoId: req.params.videoId }, \"view not recorded\");\n      res.status(202).end();\n    }\n  });\n\n  router.get(\"/videos/:videoId/views\", async (req, res, next) => {\n    try {\n      const total = await counter.total(req.params.videoId);\n      res.json({ videoId: req.params.videoId, views: total });\n    } catch (err) {\n      next(err);\n    }\n  });\n\n  router.delete(\"/videos/:videoId/views\", async (req, res, next) => {\n    try {\n      await counter.reset(req.params.videoId);\n      res.status(204).end();\n    } catch (err) {\n      next(err);\n    }\n  });\n\n  return router;\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/viewCounter.ts",
+    "snippet": "    for (let i = 0; i < SALT_BUCKETS - 1; i++) keys.push(viewKey(videoId, i));"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code reads or writes the partitioned counter keys? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "record() writes to buckets 0..15 (hash % SALT_BUCKETS), but total() only reads buckets 0..14 because the loop stops at SALT_BUCKETS - 1. Views landing in bucket 15 (about 1/16 of sessions) are never counted, so every video under-reports by roughly 6%."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Why does the key format wrap the video id in braces, as in views:{abc}:3?",
+      "choices": [
+        "Braces are required by Redis for numeric values",
+        "It makes keys sort by bucket number",
+        "In Redis Cluster the hash tag forces all buckets of one video into the same slot, so MGET and DEL across them work",
+        "It prevents key collisions between videos with similar ids"
+      ],
+      "answer": 2,
+      "explanation": "Redis Cluster hashes only the substring inside {} when present, so all bucket keys of a video share a slot and multi-key commands like MGET/DEL are allowed. Braces have nothing to do with value types or sort order, and the colon-separated prefix already distinguishes videos."
+    },
+    {
+      "prompt": "Given that hash tag, what does salting the key into 16 buckets actually achieve for a viral video?",
+      "choices": [
+        "It spreads write load across 16 cluster nodes",
+        "It reduces contention on a single key but all buckets still live on one node, so node-level hot spotting remains",
+        "It makes total() eventually consistent across replicas",
+        "It guarantees each viewer is counted only once"
+      ],
+      "answer": 1,
+      "explanation": "Because every bucket shares one hash tag, they map to one slot and one node; salting splits the single hot key into 16 keys but does not spread load across nodes. It has no effect on replica consistency, and nothing deduplicates viewers: the same session simply increments the same bucket again."
+    },
+    {
+      "prompt": "Redis is briefly unreachable. What do clients see when posting a view?",
+      "choices": [
+        "A 202, with the view silently lost and a warning logged",
+        "A 500 from the error middleware",
+        "A 400 because the session header is rejected",
+        "The request hangs until Redis recovers"
+      ],
+      "answer": 0,
+      "explanation": "The POST handler catches errors from record(), logs a warning, and still responds 202, so the view is dropped. It does not call next(err), so no 500; the 400 path is only for a missing header; and the catch path responds immediately after the failed call."
+    }
+  ],
+  "concepts": [
+    "backend.distributed.sharding_and_partitioning",
+    "backend.errors.swallowed_errors"
+  ]
+}

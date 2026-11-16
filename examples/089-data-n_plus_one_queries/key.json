@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/runHistoryHandler.ts",
+        "startLine": 27,
+        "endLine": 27
+      }
+    },
+    2,
+    1,
+    0
+  ],
+  "explanations": [
+    "RunHistoryHandler.list calls `this.store.jobsForRuns([r.id])` once per run inside `runs.map`, so a 100-run page issues 100 pipeline_jobs queries (N+1), even though jobsForRuns takes an array and can load every run's jobs in one `ANY` query. Because they run concurrently through Promise.all, a single page request can also take up to 100 pool connections at once, starving other requests. It should call jobsForRuns(runs.map(r => r.id)) once and group the rows by runId.",
+    "recentRuns clamps the limit with Math.min(limit, 100), and list compares runs.length to the same Math.min(limit, 100) when setting nextCursor. No error is raised, and the cursor is not always null.",
+    "Rows are ordered by id DESC, nextCursor is the last (smallest) id, and recentRuns adds `AND id < $3` for beforeId. It is keyset pagination, not an offset, and not timestamp-based.",
+    "summarize skips jobs with `durationMs === null`, so slowest stays null and slowestJob is null. No job is chosen by position, and the null check prevents comparing against null."
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/ticketService.ts",
+        "startLine": 32,
+        "endLine": 33
+      }
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "reassign() invalidates only updated.assigneeId, which is the new agent. The previous assignee (ticket.assigneeId) still has the ticket in their cached queue for up to 120 seconds, so two agents may work the same ticket. invalidate() already accepts several ids and filters nulls, so it should be called with both ticket.assigneeId and updated.assigneeId.",
+    "invalidate() filters nulls, builds an empty key list and returns without calling DEL. There is no wildcard deletion, no SET, and no null key reaches Redis.",
+    "escalate updates the repo and then deletes agent-queue:X. The next agentQueue call misses, loads from the repo, sorts urgent first, and re-caches. It does not wait for the TTL, and it does not patch the cached array directly.",
+    "The queue is a derived view (open tickets for an agent, sorted by priority and age). Deleting and rebuilding on read keeps that logic in one place. The cache stores the array as JSON, so storage is not the issue; deletion narrows but does not eliminate stale windows (a concurrent read can re-fill old data), and TTL is unrelated."
+  ]
+}

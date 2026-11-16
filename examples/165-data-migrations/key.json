@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "There is none. A session advisory lock serialises runners across deploy replicas, and the same pooled client holds it and releases it in a finally. Transactional migrations record themselves inside the same transaction, so a failure rolls back both the change and the record. CREATE INDEX CONCURRENTLY cannot run in a transaction, so it is correctly marked non-transactional and uses IF NOT EXISTS so a rerun after a crash is safe. The backfill is batched and idempotent (it only touches rows still NULL), so if it is interrupted before being recorded it simply resumes.",
+    "pg_advisory_lock blocks (it is not the try_ variant) until the first runner unlocks. The second then reads schema_migrations, sees every id with a matching checksum, and skips them. They never run concurrently, it does not fail fast, and work is not split.",
+    "Migrations are processed in sorted order, and for 01 the stored checksum differs from the hash of the new function source, so run() throws at that point. Later migrations come after it in the loop and are never reached. Nothing is reapplied or silently skipped.",
+    "Because 03 is non-transactional, each batch UPDATE commits on its own, and record() only runs after up() finishes. So committed batches persist, 03 has no row in schema_migrations, and the next run repeats it, touching only rows where triggered_by IS NULL. Nothing is rolled back, and no manual step is needed."
+  ]
+}

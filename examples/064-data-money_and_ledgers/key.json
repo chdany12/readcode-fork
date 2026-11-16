@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/invoiceParser.ts",
+        "startLine": 21,
+        "endLine": 21
+      }
+    },
+    1,
+    2,
+    1
+  ],
+  "explanations": [
+    "toCents multiplies a binary float by 100 and truncates. Many decimal amounts are not exactly representable: parseFloat(\"19.99\") * 100 is 1998.9999999999998 and parseFloat(\"0.29\") * 100 is 28.999999999999996, so Math.trunc yields 1998 and 28. Billed totals are silently understated by a cent on many lines, which skews reconciliation and dispute amounts. Parse the integer and fractional parts as strings, or at least use Math.round.",
+    "Lines are summed per tracking number in billedPerShipment (1,200), then compared once against the quote: 1,200 - 1,000 = 200 > 50, giving one overcharge of 200. Lines are not compared individually, and the shipment is known so no unknown_shipment.",
+    "totalBilledCents is incremented before the currency check, so every line counts. The expected total is accumulated only in the second loop over billedPerShipment, which contains a tracking number only if at least one line had matching currency. Mismatched lines are never added to disputableCents.",
+    "AMOUNT_RE allows a leading minus, so the credit parses as -300. Lines are summed per tracking number to 2,000, which equals the quote, so delta is 0 and nothing is reported. There is no credit discrepancy kind, and per-line comparison does not happen."
+  ]
+}

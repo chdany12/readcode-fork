@@ -1,0 +1,50 @@
+{
+  "id": "b0becd93-4a48-4db2-8794-dc73a46b0509",
+  "title": "Encrypted support ticket fields",
+  "name": "Ticket field encryption",
+  "createdAt": "2026-11-15T09:44:41.989Z",
+  "durationMinutes": 15,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code encrypts ticket data at rest? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A database administrator moves body_enc from ticket T1 into ticket T2's row. What happens when TicketRepository.get(T2) runs?",
+      "choices": [
+        "It returns T1's body under T2",
+        "It returns an empty body because the keyId differs",
+        "Decryption throws, because the ticket id is used as AAD and the auth tag no longer verifies",
+        "It succeeds only if both tickets share the same status"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The KMS endpoint becomes unreachable after the service has been running and has already decrypted tickets with the current key. What happens to new get() calls for those tickets?",
+      "choices": [
+        "They keep working because the key is held in the in-process cache",
+        "They fail after a 3-second timeout on every call",
+        "They hang forever because no timeout is set",
+        "They fall back to plaintext columns"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "How is the connection to the KMS protected in transit?",
+      "choices": [
+        "It is not; the key material is sent over plain HTTP",
+        "It uses HTTPS and trusts only certificates that chain to the configured KMS CA",
+        "It uses HTTPS but disables certificate verification",
+        "It encrypts the key material with the ticket's AAD"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.security.encryption_at_rest_and_in_transit",
+    "backend.security.secrets_handling",
+    "backend.resilience.timeouts"
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "id": "d398ec7c-58fe-40b0-83e3-7351e3e4a717",
+  "title": "Order placement against an inventory store interface",
+  "name": "Order reservation service",
+  "createdAt": "2026-11-15T09:41:31.532Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how OrderPlacementService consumes the results returned by InventoryStore.reserve? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The second of three order lines gets { status: \"insufficient\" } from reserve. What happens to the reservation made for the first line?",
+      "choices": [
+        "It stays reserved until a background job expires it",
+        "It is released in the catch block before the InsufficientStockError is rethrown",
+        "It is released only if the orders.insert call fails",
+        "It is converted into a backorder for the same order ref"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "If inventory.release throws for one reservation id during cleanup, what does the caller of placeOrder observe?",
+      "choices": [
+        "The release error replaces the original error",
+        "placeOrder returns the order ref anyway",
+        "The original error that triggered cleanup, after the remaining releases are still attempted",
+        "An AggregateError combining both failures"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does the InventoryStore interface return a ReserveResult union for insufficient stock instead of PgInventoryStore throwing InsufficientStockError itself?",
+      "choices": [
+        "Expected business outcomes become typed values the caller must inspect, while thrown errors are reserved for infrastructure failures",
+        "Throwing from inside a pg transaction would leave the row lock held forever",
+        "TypeScript cannot type-check thrown errors, so unions are faster at runtime",
+        "It lets PgInventoryStore avoid the ROLLBACK on that path"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.design.interface_design",
+    "backend.errors.cleanup_on_error_paths"
+  ]
+}

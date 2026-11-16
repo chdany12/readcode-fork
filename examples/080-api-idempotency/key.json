@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/ticketRoutes.ts",
+        "startLine": 32,
+        "endLine": 32
+      }
+    },
+    2,
+    0,
+    3
+  ],
+  "explanations": [
+    "The handler does a check-then-act: it reads the key with idem.find, creates the ticket, and only afterwards saves the key. Two concurrent requests with the same Idempotency-Key (a client retry fired while the first request is still running, e.g. after a client timeout) both see no record, both create a ticket and send a notification, and the second save silently overwrites the first via ON CONFLICT DO UPDATE. The key must be reserved atomically first (INSERT ... ON CONFLICT DO NOTHING as an in-progress marker, or a lock) before creating the ticket.",
+    "find only matches rows with created_at within the last 24 hours, so the old row is ignored and the ticket is created again. save uses ON CONFLICT ... DO UPDATE, so it refreshes the existing row rather than failing. There is no replay and no fingerprint comparison because find returned null.",
+    "Both find and save filter/conflict on (tenant_id, key), so the same key string in different tenants refers to different rows. None of the cross-tenant replay, rejection, or overwrite outcomes can happen.",
+    "notify is awaited inside create, so the error propagates before idem.save runs; the handler passes it to next(err). The ticket row was already inserted but no idempotency record exists, so the retry finds nothing and creates another ticket. Nothing was stored to replay or to compare a fingerprint against."
+  ]
+}

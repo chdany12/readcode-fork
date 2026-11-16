@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/deliveryTracker.ts",
+        "startLine": 35,
+        "endLine": 35
+      }
+    },
+    2,
+    1,
+    3
+  ],
+  "explanations": [
+    "The delivery_leg_minutes histogram is labeled with courier: leg.courier.id. Courier ids are unbounded, so every courier creates a new series per zone and vehicle, each holding a full set of buckets. As the fleet grows the in-process series map (and the metrics backend) grows without limit, causing memory growth, slow scrapes and high storage cost. Per-courier analysis belongs in logs or the database; the label should be dropped.",
+    "Both observe and inc come after await this.repo.save(leg); a rejection propagates out before either runs. Nothing records a fallback result.",
+    "requireOpenLeg throws \"already closed\" when deliveredAt is defined on the stored leg, so the second sequential call fails before any metric is touched.",
+    "deliveryResults uses labels zone and result, where result is \"delivered\" or one of the three failedReason values, giving four per zone. It never uses order ids."
+  ]
+}

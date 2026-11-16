@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "There is none. Messages are acked only after send succeeds, so a crash mid-send leads to redelivery, and the sender gets notificationId as an idempotency key so redelivery does not double-notify. In-flight work is bounded by maxInFlight: the loop only requests the remaining capacity and waits on Promise.race when full. Transient failures extend visibility with capped exponential backoff, permanent or exhausted ones go to the DLQ, and the original is acked only after the DLQ send succeeds. stop() ends polling, then waits for in-flight handlers before returning.",
+    "Without an ack the queue redelivers after the visibility timeout. send is called with idempotencyKey: job.notificationId so a repeat can be deduplicated downstream. Nothing is lost, nothing routes to the DLQ on a crash, and the queue never auto-acks.",
+    "capacity is 0, so it awaits Promise.race(this.inFlight), which resolves when any handler settles (tasks remove themselves in finally), then recomputes capacity. It never exceeds the limit, never calls receive with 0, and does not wait for all handlers.",
+    "receiveCount 3 is below maxAttempts, so the backoff is 30 * 2^(3-1) = 120 seconds (under the 900 cap) and visibility is changed accordingly. Dead-lettering needs a permanent error or receiveCount >= 5, there is no re-send, and there is no in-process retry."
+  ]
+}

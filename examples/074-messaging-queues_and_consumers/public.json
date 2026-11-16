@@ -1,0 +1,52 @@
+{
+  "id": "f8e59daa-fe81-42e1-9aff-ab1afabd9f42",
+  "title": "Video transcode worker with visibility-timeout heartbeats",
+  "name": "Transcode queue worker",
+  "createdAt": "2026-11-15T09:41:31.602Z",
+  "durationMinutes": 15,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this worker leases, extends, deletes, or retries queue messages? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A 1080p transcode takes 9 minutes. What keeps another worker from picking up the same message during that time?",
+      "choices": [
+        "The 10-second waitTimeSeconds on receive",
+        "Nothing; the message becomes visible again after 120 seconds",
+        "The inFlight counter, which is shared across all worker processes",
+        "The setInterval heartbeat that resets the visibility timeout to 120 seconds every 45 seconds"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A message arrives whose body is not valid JSON. What happens to it?",
+      "choices": [
+        "It is moved to the dead-letter queue right away, without retries",
+        "It is retried up to MAX_RECEIVES times and then dead-lettered",
+        "The exception escapes process() and stops runForever",
+        "It is deleted silently"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "concurrency is 4, and 4 transcodes are running. What does runForever do?",
+      "choices": [
+        "Calls receive with maxMessages = 0 in a tight loop",
+        "Sleeps 250 ms and checks again, without receiving, until a job finishes",
+        "Receives up to 10 more messages and queues them in memory",
+        "Waits for all four jobs to finish before receiving again"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.messaging.queues_and_consumers",
+    "backend.messaging.at_least_once_delivery",
+    "backend.messaging.dead_letter_queues",
+    "backend.messaging.backpressure",
+    "backend.api.idempotency"
+  ]
+}

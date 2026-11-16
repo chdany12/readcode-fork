@@ -1,0 +1,51 @@
+{
+  "id": "75334f7f-101b-48d0-8bde-3085bbf7aa97",
+  "title": "Unit tests for a recency-weighted search ranker",
+  "name": "Search ranker tests",
+  "createdAt": "2026-11-15T09:41:31.508Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how these unit tests are designed to verify the ranker's scoring and ordering? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "If the FixedClock were replaced with a clock returning Date.now(), what would happen to the test \"weights title matches above body matches\" when run today?",
+      "choices": [
+        "Nothing, because title weighting is independent of time",
+        "It would fail, because docs dated at NOW would be months old and their scores would decay below 3 and 1",
+        "It would pass only on the 31st of the month",
+        "It would throw, because Clock requires a fixed value"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "In the rank test, docs \"a\" and \"c\" both score 1. What does including both of them verify?",
+      "choices": [
+        "That duplicate documents are removed",
+        "That the limit is applied before sorting",
+        "That ties are broken deterministically by id, so \"a\" comes before \"c\" regardless of input order",
+        "That body matches are weighted equally to title matches"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does the future-dated document test expect a score of exactly 1?",
+      "choices": [
+        "Because Math.max(0, ...) clamps negative age to zero, so decay is 1",
+        "Because future documents are filtered out and given a default score",
+        "Because the half-life is applied in reverse and capped at 1",
+        "Because tokenize ignores documents with a future timestamp"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.testing.unit_test_design",
+    "backend.testing.mocking_and_fakes",
+    "backend.testing.flaky_tests",
+    "backend.design.dependency_injection"
+  ]
+}

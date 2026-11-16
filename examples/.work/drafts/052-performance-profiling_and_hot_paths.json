@@ -1,0 +1,65 @@
+{
+  "title": "Fare search ranking hot path",
+  "name": "Fare search ranking",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/rankOffers.ts",
+      "content": "export interface FareOffer {\n  offerId: string;\n  carrier: string;\n  priceCents: number;\n  durationMinutes: number;\n  stops: number;\n  departsAt: number;\n}\n\nexport interface RankedOffer extends FareOffer {\n  score: number;\n  badges: string[];\n}\n\nconst WEIGHTS = { price: 0.6, duration: 0.3, stops: 0.1 };\n\nexport function rankOffers(offers: FareOffer[], preferredCarriers: Set<string>): RankedOffer[] {\n  if (offers.length === 0) return [];\n  const fastest = offers.reduce((m, o) => Math.min(m, o.durationMinutes), Infinity);\n\n  const ranked = offers.map((o) => {\n    const cheapest = Math.min(...offers.map((x) => x.priceCents));\n    const priceRatio = o.priceCents / cheapest;\n    const durationRatio = o.durationMinutes / fastest;\n    let score = WEIGHTS.price * priceRatio + WEIGHTS.duration * durationRatio + WEIGHTS.stops * o.stops;\n    if (preferredCarriers.has(o.carrier)) score *= 0.95;\n\n    const badges: string[] = [];\n    if (o.priceCents === cheapest) badges.push(\"cheapest\");\n    if (o.durationMinutes === fastest) badges.push(\"fastest\");\n    if (o.stops === 0) badges.push(\"nonstop\");\n    return { ...o, score, badges };\n  });\n\n  ranked.sort((a, b) => a.score - b.score || a.departsAt - b.departsAt);\n  return ranked;\n}\n"
+    },
+    {
+      "path": "src/searchFares.ts",
+      "content": "import { performance } from \"perf_hooks\";\nimport { FareOffer, rankOffers } from \"./rankOffers\";\n\nexport interface SupplierClient {\n  search(origin: string, dest: string, date: string, signal: AbortSignal): Promise<FareOffer[]>;\n}\n\nexport interface Metrics {\n  timing(name: string, ms: number, tags?: Record<string, string>): void;\n  count(name: string, n: number, tags?: Record<string, string>): void;\n}\n\nexport async function searchFares(\n  suppliers: Record<string, SupplierClient>,\n  metrics: Metrics,\n  req: { origin: string; dest: string; date: string; preferred: string[]; limit: number }\n) {\n  const started = performance.now();\n  const controller = new AbortController();\n  const timer = setTimeout(() => controller.abort(), 2500);\n\n  const results = await Promise.allSettled(\n    Object.entries(suppliers).map(async ([name, client]) => {\n      const t0 = performance.now();\n      try {\n        return await client.search(req.origin, req.dest, req.date, controller.signal);\n      } finally {\n        metrics.timing(\"fares.supplier_ms\", performance.now() - t0, { supplier: name });\n      }\n    })\n  );\n  clearTimeout(timer);\n\n  const offers: FareOffer[] = [];\n  for (const r of results) {\n    if (r.status === \"fulfilled\") offers.push(...r.value);\n  }\n  metrics.count(\"fares.offers\", offers.length);\n\n  const t1 = performance.now();\n  const ranked = rankOffers(offers, new Set(req.preferred));\n  metrics.timing(\"fares.rank_ms\", performance.now() - t1);\n\n  metrics.timing(\"fares.total_ms\", performance.now() - started);\n  return {\n    total: ranked.length,\n    partial: results.some((r) => r.status === \"rejected\"),\n    items: ranked.slice(0, req.limit),\n  };\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/rankOffers.ts",
+    "snippet": "    const cheapest = Math.min(...offers.map((x) => x.priceCents));"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how the ranking code scales with the number of offers on the request hot path? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "`cheapest` is recomputed inside `offers.map`, building a new array of all prices and scanning it for every offer, so ranking is O(n^2) in allocations and work. With a few thousand offers from aggregated suppliers this dominates `fares.rank_ms` and blocks the event loop; spreading a very large array into Math.min can also throw a RangeError. It should be computed once before the map, like `fastest`."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "One supplier hangs and never responds. How does `searchFares` behave?",
+      "choices": [
+        "It waits indefinitely because allSettled waits for every promise",
+        "It throws, failing the whole search",
+        "After ~2.5s the abort signal fires; assuming the client honours it, that supplier rejects and the response comes back with `partial: true`",
+        "It returns immediately with only the fastest supplier's offers"
+      ],
+      "answer": 2,
+      "explanation": "The AbortController is aborted after 2500ms and its signal is passed to every `client.search`. A client that honours it rejects, `allSettled` records the rejection, and `partial` becomes true. allSettled never throws on rejection, and it waits for all promises to settle, not just the first."
+    },
+    {
+      "prompt": "On a latency dashboard, `fares.total_ms` p99 rises sharply while every `fares.supplier_ms` p99 stays flat. Which metric best tells you whether ranking is the cause?",
+      "choices": [
+        "fares.rank_ms, which times only the rankOffers call",
+        "fares.offers, which times the merge loop",
+        "fares.supplier_ms tagged by supplier",
+        "None; total_ms already includes everything separately"
+      ],
+      "answer": 0,
+      "explanation": "`fares.rank_ms` wraps exactly the `rankOffers` call, so comparing it with total_ms isolates ranking cost. `fares.offers` is a count, not a timing; supplier timings are flat by assumption; total_ms is a single aggregate."
+    },
+    {
+      "prompt": "How do offers from a preferred carrier get treated?",
+      "choices": [
+        "They are always placed first in the results",
+        "Their score is reduced by 5%, which moves them earlier only when they are close to a better-scoring offer",
+        "They receive a \"preferred\" badge but are ranked normally",
+        "Their price is discounted 5% before computing priceRatio"
+      ],
+      "answer": 1,
+      "explanation": "`score *= 0.95` lowers the score, and results sort ascending by score, so preferred offers win close calls but not large gaps. There is no forced-first logic, no \"preferred\" badge, and the price itself is not changed."
+    }
+  ],
+  "concepts": [
+    "backend.performance.profiling_and_hot_paths",
+    "backend.observability.metrics",
+    "backend.resilience.timeouts",
+    "backend.resilience.graceful_degradation"
+  ]
+}

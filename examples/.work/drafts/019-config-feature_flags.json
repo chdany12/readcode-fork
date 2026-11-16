@@ -1,0 +1,64 @@
+{
+  "title": "Matchmaking algorithm behind a refreshed flag snapshot",
+  "name": "Matchmaking flag switch",
+  "language": "TypeScript",
+  "durationMinutes": 11,
+  "files": [
+    {
+      "path": "src/gameFlags.ts",
+      "content": "export interface FlagSnapshot {\n  version: number;\n  flags: Record<string, boolean>;\n}\n\nexport interface FlagSource {\n  fetch(): Promise<FlagSnapshot>;\n}\n\nexport interface Logger {\n  warn(msg: string, fields?: Record<string, unknown>): void;\n}\n\nexport class GameFlags {\n  private snapshot: FlagSnapshot = { version: 0, flags: {} };\n  private timer?: NodeJS.Timeout;\n\n  constructor(\n    private readonly source: FlagSource,\n    private readonly log: Logger,\n    private readonly refreshMs = 15_000,\n  ) {}\n\n  async start(): Promise<void> {\n    await this.refresh();\n    this.timer = setInterval(() => void this.refresh(), this.refreshMs);\n  }\n\n  stop(): void {\n    if (this.timer) clearInterval(this.timer);\n  }\n\n  private async refresh(): Promise<void> {\n    try {\n      const next = await this.source.fetch();\n      if (next.version >= this.snapshot.version) {\n        this.snapshot = next;\n      }\n    } catch (err) {\n      this.log.warn(\"flag refresh failed, keeping last snapshot\", {\n        version: this.snapshot.version,\n        error: String(err),\n      });\n    }\n  }\n\n  isOn(name: string): boolean {\n    return this.snapshot.flags[name] ?? true;\n  }\n\n  currentVersion(): number {\n    return this.snapshot.version;\n  }\n}\n"
+    },
+    {
+      "path": "src/matchmaker.ts",
+      "content": "import { GameFlags } from \"./gameFlags\";\n\nexport interface QueuedPlayer {\n  playerId: string;\n  rating: number;\n  region: string;\n  queuedAt: number;\n}\n\nexport interface Match {\n  players: string[];\n  algorithm: \"legacy\" | \"skill_v2\";\n}\n\nconst TEAM_SIZE = 4;\n\nexport class Matchmaker {\n  constructor(private readonly flags: GameFlags) {}\n\n  formMatches(queue: QueuedPlayer[], now: number): Match[] {\n    const useSkillV2 = this.flags.isOn(\"matchmaking_skill_v2\");\n    const byRegion = new Map<string, QueuedPlayer[]>();\n    for (const p of queue) {\n      const list = byRegion.get(p.region) ?? [];\n      list.push(p);\n      byRegion.set(p.region, list);\n    }\n\n    const matches: Match[] = [];\n    for (const players of byRegion.values()) {\n      const ordered = useSkillV2\n        ? this.orderBySkill(players, now)\n        : [...players].sort((a, b) => a.queuedAt - b.queuedAt);\n      for (let i = 0; i + TEAM_SIZE <= ordered.length; i += TEAM_SIZE) {\n        matches.push({\n          players: ordered.slice(i, i + TEAM_SIZE).map((p) => p.playerId),\n          algorithm: useSkillV2 ? \"skill_v2\" : \"legacy\",\n        });\n      }\n    }\n    return matches;\n  }\n\n  private orderBySkill(players: QueuedPlayer[], now: number): QueuedPlayer[] {\n    return [...players].sort((a, b) => {\n      const waitBonusA = Math.min((now - a.queuedAt) / 1000, 300);\n      const waitBonusB = Math.min((now - b.queuedAt) / 1000, 300);\n      return a.rating - waitBonusA - (b.rating - waitBonusB);\n    });\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/gameFlags.ts",
+    "snippet": "    return this.snapshot.flags[name] ?? true;"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code evaluates feature flags when flag data is missing? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "GameFlags.isOn defaults unknown flags to true. Before the first successful fetch (or if start() is never awaited, or the flag is deleted from the source), the snapshot is empty and every flag, including the unreleased matchmaking_skill_v2, is treated as on. Flags guarding new behaviour should fail closed (default false) so missing data falls back to the proven path."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "The flag service goes down for ten minutes after the server has started successfully. How does GameFlags behave during the outage?",
+      "choices": [
+        "It clears the snapshot so every flag reads from its default",
+        "It keeps serving the last successfully fetched snapshot and logs a warning on each failed refresh",
+        "It stops the refresh timer after the first failure",
+        "It throws from isOn until the service recovers"
+      ],
+      "answer": 1,
+      "explanation": "refresh() catches the fetch error, logs a warning, and leaves this.snapshot untouched, so callers keep the last good values. The timer keeps firing, the snapshot is not cleared, and isOn never throws."
+    },
+    {
+      "prompt": "The flag source briefly serves a cached older response with a lower version number than the one already loaded. What happens?",
+      "choices": [
+        "The older snapshot replaces the newer one",
+        "refresh() throws and the timer stops",
+        "The older snapshot is ignored because its version is lower",
+        "Both snapshots are merged flag by flag"
+      ],
+      "answer": 2,
+      "explanation": "refresh() only assigns next when next.version >= this.snapshot.version, so a lower version is dropped. Nothing throws, and there is no merge logic."
+    },
+    {
+      "prompt": "matchmaking_skill_v2 is flipped on while formMatches is in the middle of processing a large queue. Which algorithm is used for that call?",
+      "choices": [
+        "The value read at the start of the call is used for every region in that call",
+        "Regions processed after the flip use skill_v2, earlier ones use legacy",
+        "Matches are labelled skill_v2 but ordered with the legacy sort",
+        "The call is aborted and retried"
+      ],
+      "answer": 0,
+      "explanation": "formMatches reads the flag once into useSkillV2 before iterating regions, and both the ordering and the algorithm label use that local value. formMatches is synchronous, so nothing can change the snapshot mid-call anyway; there is no abort or retry."
+    }
+  ],
+  "concepts": [
+    "backend.config.feature_flags",
+    "backend.resilience.graceful_degradation",
+    "backend.config.defaults_and_validation"
+  ]
+}

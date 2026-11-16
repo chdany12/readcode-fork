@@ -1,0 +1,65 @@
+{
+  "title": "Appointment scheduling REST endpoints",
+  "name": "Appointment scheduling API",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/appointmentStore.ts",
+      "content": "export type AppointmentStatus = \"booked\" | \"checked_in\" | \"completed\" | \"cancelled\";\n\nexport interface Appointment {\n  id: string;\n  patientId: string;\n  providerId: string;\n  startsAt: string;\n  durationMinutes: number;\n  reason: string;\n  notes: string | null;\n  status: AppointmentStatus;\n  version: number;\n}\n\nexport class AppointmentStore {\n  private rows = new Map<string, Appointment>();\n\n  async get(id: string): Promise<Appointment | undefined> {\n    return this.rows.get(id);\n  }\n\n  async listForProvider(providerId: string, day: string): Promise<Appointment[]> {\n    return [...this.rows.values()]\n      .filter((a) => a.providerId === providerId && a.startsAt.startsWith(day))\n      .sort((a, b) => a.startsAt.localeCompare(b.startsAt));\n  }\n\n  async save(appt: Appointment): Promise<void> {\n    this.rows.set(appt.id, appt);\n  }\n}\n"
+    },
+    {
+      "path": "src/appointmentRoutes.ts",
+      "content": "import express, { Request, Response } from \"express\";\nimport { randomUUID } from \"crypto\";\nimport { Appointment, AppointmentStore } from \"./appointmentStore\";\n\nconst EDITABLE = [\"startsAt\", \"durationMinutes\", \"reason\", \"notes\"] as const;\n\nexport function appointmentRouter(store: AppointmentStore) {\n  const router = express.Router();\n\n  router.get(\"/providers/:providerId/appointments\", async (req: Request, res: Response) => {\n    const day = String(req.query.date ?? \"\");\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(day)) {\n      return res.status(400).json({ error: \"date query parameter must be YYYY-MM-DD\" });\n    }\n    const items = await store.listForProvider(req.params.providerId, day);\n    res.json({ items });\n  });\n\n  router.post(\"/appointments\", async (req: Request, res: Response) => {\n    const { patientId, providerId, startsAt, durationMinutes, reason } = req.body ?? {};\n    if (!patientId || !providerId || !startsAt || !durationMinutes) {\n      return res.status(400).json({ error: \"patientId, providerId, startsAt, durationMinutes are required\" });\n    }\n    const appt: Appointment = {\n      id: randomUUID(),\n      patientId,\n      providerId,\n      startsAt,\n      durationMinutes,\n      reason: reason ?? \"\",\n      notes: null,\n      status: \"booked\",\n      version: 1,\n    };\n    await store.save(appt);\n    res.status(201).location(`/appointments/${appt.id}`).json(appt);\n  });\n\n  router.get(\"/appointments/:id\", async (req: Request, res: Response) => {\n    const appt = await store.get(req.params.id);\n    if (!appt) return res.status(404).json({ error: \"appointment not found\" });\n    res.set(\"ETag\", `\"${appt.version}\"`).json(appt);\n  });\n\n  router.patch(\"/appointments/:id\", async (req: Request, res: Response) => {\n    const current = await store.get(req.params.id);\n    if (!current) return res.status(404).json({ error: \"appointment not found\" });\n    if (current.status === \"cancelled\" || current.status === \"completed\") {\n      return res.status(409).json({ error: `cannot edit a ${current.status} appointment` });\n    }\n    const ifMatch = req.header(\"If-Match\");\n    if (ifMatch && ifMatch !== `\"${current.version}\"`) {\n      return res.status(412).json({ error: \"appointment was modified\" });\n    }\n    const body = req.body ?? {};\n    const unknown = Object.keys(body).filter((k) => !(EDITABLE as readonly string[]).includes(k));\n    if (unknown.length > 0) {\n      return res.status(400).json({ error: `fields not editable: ${unknown.join(\", \")}` });\n    }\n    const changes: Partial<Appointment> = {};\n    for (const field of EDITABLE) {\n      (changes as any)[field] = body[field];\n    }\n    const updated: Appointment = { ...current, ...changes, version: current.version + 1 };\n    await store.save(updated);\n    res.set(\"ETag\", `\"${updated.version}\"`).json(updated);\n  });\n\n  router.post(\"/appointments/:id/cancellation\", async (req: Request, res: Response) => {\n    const current = await store.get(req.params.id);\n    if (!current) return res.status(404).json({ error: \"appointment not found\" });\n    if (current.status === \"cancelled\") return res.status(200).json(current);\n    if (current.status !== \"booked\") {\n      return res.status(409).json({ error: `cannot cancel a ${current.status} appointment` });\n    }\n    const updated: Appointment = { ...current, status: \"cancelled\", version: current.version + 1 };\n    await store.save(updated);\n    res.status(200).json(updated);\n  });\n\n  return router;\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/appointmentRoutes.ts",
+    "snippet": "    for (const field of EDITABLE) {\n      (changes as any)[field] = body[field];\n    }"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how these endpoints apply updates to an appointment resource? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The PATCH handler copies every EDITABLE field from the body into `changes`, including fields the client did not send, which become `undefined`. Spreading `{ ...current, ...changes }` then overwrites the stored values with undefined, so a PATCH that only moves `startsAt` wipes `reason`, `notes` and `durationMinutes`. PATCH must only apply fields present in the request (e.g. check `field in body`)."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Two front-desk clients both GET appointment A (ETag \"3\") and then each send a PATCH with `If-Match: \"3\"`. What happens?",
+      "choices": [
+        "Both succeed and the second write silently overwrites the first",
+        "The first succeeds with ETag \"4\"; the second gets 412 because the version no longer matches",
+        "The second gets 409 because the appointment is already being edited",
+        "Both get 412 because If-Match must use weak ETags"
+      ],
+      "answer": 1,
+      "explanation": "The first PATCH saves version 4. The second compares its If-Match \"3\" to `\"${current.version}\"` = \"4\" and returns 412. 409 is only used for cancelled/completed status; there is no lock state; the ETag comparison is a plain string match, so strong ETags work."
+    },
+    {
+      "prompt": "A mobile client retries `POST /appointments/:id/cancellation` after a network timeout, and the first attempt actually succeeded. What does the retry return?",
+      "choices": [
+        "409, because the appointment is no longer booked",
+        "404, because cancelled appointments are hidden",
+        "200 with the cancelled appointment, unchanged",
+        "201, because a new cancellation sub-resource is created"
+      ],
+      "answer": 2,
+      "explanation": "The handler checks `current.status === \"cancelled\"` first and returns 200 with the existing record without bumping the version, so the retry is harmless. The 409 branch is only reached for checked_in/completed; nothing filters cancelled rows from `get`; no new resource is created."
+    },
+    {
+      "prompt": "Why does the router model cancellation as `POST /appointments/:id/cancellation` instead of letting clients PATCH `status` to \"cancelled\"?",
+      "choices": [
+        "Because Express cannot route PATCH requests with a body",
+        "Because PATCH responses cannot carry an ETag header",
+        "Because cancellation needs to create a new appointment id",
+        "Because status is not in EDITABLE, so the state transition has its own endpoint with its own rules (only from booked, repeat is a no-op)"
+      ],
+      "answer": 3,
+      "explanation": "PATCH rejects any field outside EDITABLE, and `status` is not listed, so state transitions go through a dedicated action endpoint that enforces 'booked -> cancelled' and treats repeats as no-ops. Express handles PATCH bodies fine, PATCH does return an ETag here, and cancellation keeps the same id."
+    }
+  ],
+  "concepts": [
+    "backend.api.rest_design",
+    "backend.api.status_codes_and_error_responses",
+    "backend.api.idempotency",
+    "backend.data.optimistic_vs_pessimistic_locking"
+  ]
+}

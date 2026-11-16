@@ -1,0 +1,50 @@
+{
+  "id": "66ec7868-7458-4d9f-a44d-228d4a7b0c7b",
+  "title": "Match tick loop and state broadcast",
+  "name": "Match tick loop",
+  "createdAt": "2026-11-15T09:41:31.575Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how the per-tick hot path scales with the number of players in a match? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "An operator sees tick_overrun_total climbing in a large match while tick_simulate_ms stays near zero. What does that tell them?",
+      "choices": [
+        "The movement integration is too slow and should be vectorized",
+        "The time is being spent in broadcast(), measured between t1 and t2",
+        "setInterval is drifting, so overruns are a timer artifact",
+        "applyInput is blocking the tick because it runs on the same loop"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends inputs with seq 7, then 5, then 8 (5 arrives late). What velocity is the player left with?",
+      "choices": [
+        "The velocity from seq 5, because it arrived most recently before 8",
+        "The velocity from seq 7, and seq 8 is rejected",
+        "The velocity from seq 8; seq 5 is ignored",
+        "An average of all three inputs"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does the per-recipient message compare squared distance against VIEW_RADIUS * VIEW_RADIUS instead of computing a real distance?",
+      "choices": [
+        "It avoids a square root per pair, which matters because this comparison runs for every recipient-player pair each tick",
+        "It is required because Math.sqrt is inaccurate for large coordinates",
+        "It makes the view region a square instead of a circle",
+        "It lets JSON.stringify skip players outside the radius automatically"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.performance.profiling_and_hot_paths",
+    "backend.observability.metrics",
+    "backend.realtime.connection_fanout"
+  ]
+}

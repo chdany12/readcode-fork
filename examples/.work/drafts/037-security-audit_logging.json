@@ -1,0 +1,61 @@
+{
+  "title": "Audited player bans for a game admin console",
+  "name": "Player moderation service",
+  "language": "TypeScript",
+  "durationMinutes": 11,
+  "files": [
+    {
+      "path": "src/types.ts",
+      "content": "export interface AdminSession {\n  adminId: string;\n  roles: ReadonlySet<string>;\n  ip: string;\n}\n\nexport interface PlayerBan {\n  playerId: string;\n  bannedUntil: Date | null;\n  reason: string;\n}\n\nexport interface AuditEntry {\n  id: string;\n  at: Date;\n  adminId: string;\n  sourceIp: string;\n  action: \"player.ban\" | \"player.unban\";\n  target: string;\n  result: \"applied\" | \"rejected\";\n  detail: Record<string, string | number | null>;\n}\n\nexport interface Tx {\n  getBan(playerId: string): Promise<PlayerBan | null>;\n  upsertBan(ban: PlayerBan): Promise<void>;\n  deleteBan(playerId: string): Promise<void>;\n  insertAudit(entry: AuditEntry): Promise<void>;\n}\n\nexport interface Db {\n  transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T>;\n  insertAudit(entry: AuditEntry): Promise<void>;\n}\n"
+    },
+    {
+      "path": "src/moderationService.ts",
+      "content": "import { randomUUID } from \"node:crypto\";\nimport { AdminSession, AuditEntry, Db } from \"./types\";\n\nexport class ModerationError extends Error {\n  constructor(message: string, readonly status: number) {\n    super(message);\n  }\n}\n\nconst MAX_BAN_DAYS = 365;\n\nexport class ModerationService {\n  constructor(private readonly db: Db, private readonly clock: () => Date = () => new Date()) {}\n\n  private entry(\n    session: AdminSession,\n    action: AuditEntry[\"action\"],\n    target: string,\n    result: AuditEntry[\"result\"],\n    detail: AuditEntry[\"detail\"],\n  ): AuditEntry {\n    return {\n      id: randomUUID(),\n      at: this.clock(),\n      adminId: session.adminId,\n      sourceIp: session.ip,\n      action,\n      target,\n      result,\n      detail,\n    };\n  }\n\n  async banPlayer(session: AdminSession, playerId: string, days: number | null, reason: string): Promise<void> {\n    if (!session.roles.has(\"moderator\")) {\n      await this.db.insertAudit(\n        this.entry(session, \"player.ban\", playerId, \"rejected\", { cause: \"missing_role\" }),\n      );\n      throw new ModerationError(\"forbidden\", 403);\n    }\n    if (days !== null && (!Number.isInteger(days) || days < 1 || days > MAX_BAN_DAYS)) {\n      throw new ModerationError(`days must be 1-${MAX_BAN_DAYS} or null`, 400);\n    }\n\n    const now = this.clock();\n    const bannedUntil = days === null ? null : new Date(now.getTime() + days * 86_400_000);\n\n    await this.db.transaction(async (tx) => {\n      const existing = await tx.getBan(playerId);\n      await tx.upsertBan({ playerId, bannedUntil, reason });\n      await tx.insertAudit(\n        this.entry(session, \"player.ban\", playerId, \"applied\", {\n          previousUntil: existing ? existing.bannedUntil?.toISOString() ?? \"permanent\" : null,\n          newUntil: bannedUntil?.toISOString() ?? \"permanent\",\n          reason,\n        }),\n      );\n    });\n  }\n\n  async unbanPlayer(session: AdminSession, playerId: string): Promise<boolean> {\n    if (!session.roles.has(\"moderator\")) {\n      await this.db.insertAudit(\n        this.entry(session, \"player.unban\", playerId, \"rejected\", { cause: \"missing_role\" }),\n      );\n      throw new ModerationError(\"forbidden\", 403);\n    }\n\n    return this.db.transaction(async (tx) => {\n      const existing = await tx.getBan(playerId);\n      if (!existing) {\n        return false;\n      }\n      await tx.deleteBan(playerId);\n      await tx.insertAudit(\n        this.entry(session, \"player.unban\", playerId, \"applied\", {\n          previousUntil: existing.bannedUntil?.toISOString() ?? \"permanent\",\n          previousReason: existing.reason,\n        }),\n      );\n      return true;\n    });\n  }\n}\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code records moderation actions in the audit trail? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is none. The actor and IP come from the server-side AdminSession, not from request input. Applied bans and unbans write their audit entry inside the same transaction as the change, so a change cannot commit without its record. The previous state is read before the write, so previousUntil reflects what was actually overwritten. Unauthorized attempts are recorded outside any transaction, so they persist even though the call throws. Unbanning a player who is not banned changes nothing and returns false, so skipping the audit entry there is reasonable."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Inside banPlayer's transaction, insertAudit fails after upsertBan succeeded. What is the final state?",
+      "choices": [
+        "The ban is applied but there is no audit entry",
+        "Neither the ban nor the audit entry persists, because the transaction rolls back",
+        "The ban is applied and a 'rejected' audit entry is written instead",
+        "The audit entry is retried until it succeeds"
+      ],
+      "answer": 1,
+      "explanation": "Both writes go through the same tx, so the failure aborts the transaction and the upsert is rolled back. There is no fallback 'rejected' write and no retry logic."
+    },
+    {
+      "prompt": "Why are the rejected (missing_role) entries written with db.insertAudit rather than inside a transaction?",
+      "choices": [
+        "Because transactions cannot contain inserts",
+        "So that they are faster and can be dropped under load",
+        "Because the method then throws; a transaction that ends in an exception would roll the entry back",
+        "Because rejected attempts must not include the admin's IP"
+      ],
+      "answer": 2,
+      "explanation": "The rejection path throws a ModerationError. A standalone insert means the record persists regardless; inside a transaction callback that throws, it would be rolled back with everything else. The entry does include the IP, and nothing drops it under load."
+    },
+    {
+      "prompt": "A moderator re-bans a player who is currently banned permanently, this time for 7 days. What does the audit detail record?",
+      "choices": [
+        "previousUntil: null, newUntil: a date 7 days ahead",
+        "previousUntil: \"permanent\", newUntil: \"permanent\"",
+        "No audit entry, because the player was already banned",
+        "previousUntil: \"permanent\", newUntil: a date 7 days ahead"
+      ],
+      "answer": 3,
+      "explanation": "existing is non-null with bannedUntil null, so previousUntil becomes \"permanent\"; null is used only when there was no ban row. newUntil is the computed date. An entry is always written on the applied path."
+    }
+  ],
+  "concepts": [
+    "backend.security.audit_logging",
+    "backend.data.transactions_and_isolation_levels",
+    "backend.security.authorization_checks"
+  ]
+}

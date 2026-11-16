@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/impressionBuffer.ts",
+        "startLine": 33,
+        "endLine": 33
+      }
+    },
+    1,
+    3,
+    0
+  ],
+  "explanations": [
+    "The defect is `return this.sink.insertRows(...)` without await inside the try. Returning a promise from an async function does not wait for it inside the try, so the catch never sees a rejected insert: the batch is never put back and impressions (and their cost) are lost, while the rejection escapes to the void-ed caller as an unhandled rejection. The finally also runs immediately, clearing `flushing` and counting the batch as flushed while the insert is still running, so a second flush can start concurrently. Writing `await this.sink.insertRows(...)` fixes both.",
+    "flush takes `this.pending.splice(0, this.maxBatch)`, and maxBatch defaults to 1000, so one call sends 1,000 and leaves 2,500 pending. It never sends all pending events at once; the remainder waits for the next timer tick or record() trigger.",
+    "record() always pushes to pending, then calls flush(), whose first line returns if `this.flushing` is true. Nothing is dropped, record() is synchronous so it cannot wait, and the guard prevents that call from starting a parallel insert.",
+    "toRow uses `new Date(evt.ts).toISOString()`, which always produces a UTC ISO-8601 string from epoch milliseconds. It is not the raw number, not local time (toISOString is always UTC), and not converted to seconds."
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/readingCrypto.ts",
+        "startLine": 26,
+        "endLine": 26
+      }
+    },
+    1,
+    3,
+    2
+  ],
+  "explanations": [
+    "sealReading() derives the GCM nonce deterministically from keyId and deviceId, so every reading from the same device under the same key reuses one IV. AES-GCM nonce reuse leaks the XOR of plaintexts (exposing GPS positions across readings) and lets an attacker recover the GHASH key and forge authentication tags. The IV must be random (randomBytes(12)) or a never-repeating counter per key.",
+    "Both seal and open call setAAD with the deviceId, so authenticating under device B's id fails in decipher.final() and the error propagates out of the map, rejecting the whole call. Nothing catches the error, so rows are not skipped, and no partial decryption occurs.",
+    "openReading() looks up sealed.keyId in ring.keys, so any row still sealed with the old key needs that key present. rewrapOlderThan() decrypts with the old key and reseals with the active one. Decryption needs the exact key, and IVs are stored per row.",
+    "append() seals an object with gps, batteryPct and sensors, while device_id and recorded_at are inserted as plaintext columns needed for indexing and querying. Base64 is just the encoding of the ciphertext, not the plaintext."
+  ]
+}

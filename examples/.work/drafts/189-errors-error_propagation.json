@@ -1,0 +1,69 @@
+{
+  "title": "Match scoring with optimistic retries and batch endpoint",
+  "name": "Match score batching",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/matchStore.ts",
+      "content": "export class StaleRevisionError extends Error {\n  constructor(public readonly matchId: string, public readonly expected: number) {\n    super(`match ${matchId} changed since revision ${expected}`);\n    this.name = \"StaleRevisionError\";\n  }\n}\n\nexport interface MatchState {\n  id: string;\n  revision: number;\n  players: string[];\n  scores: Record<string, number>;\n  status: \"lobby\" | \"active\" | \"finished\";\n}\n\nexport interface MatchStore {\n  load(matchId: string): Promise<MatchState | null>;\n  saveIfRevision(state: MatchState, expectedRevision: number): Promise<void>;\n}\n"
+    },
+    {
+      "path": "src/scoringService.ts",
+      "content": "import { MatchState, MatchStore, StaleRevisionError } from \"./matchStore\";\n\nexport class MatchNotFoundError extends Error {\n  constructor(matchId: string) {\n    super(`match ${matchId} not found`);\n    this.name = \"MatchNotFoundError\";\n  }\n}\n\nexport class InvalidMoveError extends Error {\n  constructor(message: string) {\n    super(message);\n    this.name = \"InvalidMoveError\";\n  }\n}\n\nexport interface ScoreEvent {\n  matchId: string;\n  playerId: string;\n  points: number;\n}\n\nconst MAX_ATTEMPTS = 3;\n\nexport class ScoringService {\n  constructor(\n    private readonly store: MatchStore,\n    private readonly log: (msg: string, fields: object) => void,\n  ) {}\n\n  async applyScore(event: ScoreEvent): Promise<MatchState> {\n    for (let attempt = 1; ; attempt++) {\n      try {\n        return await this.tryApply(event);\n      } catch (err) {\n        if (err instanceof StaleRevisionError && attempt < MAX_ATTEMPTS) {\n          this.log(\"score.retry\", { matchId: event.matchId, attempt });\n          continue;\n        }\n        throw err;\n      }\n    }\n  }\n\n  private async tryApply(event: ScoreEvent): Promise<MatchState> {\n    const current = await this.store.load(event.matchId);\n    if (!current) {\n      throw new MatchNotFoundError(event.matchId);\n    }\n    if (current.status !== \"active\") {\n      throw new InvalidMoveError(`match ${current.id} is ${current.status}`);\n    }\n    if (!current.players.includes(event.playerId)) {\n      throw new InvalidMoveError(`player ${event.playerId} is not in match ${current.id}`);\n    }\n\n    const next: MatchState = {\n      ...current,\n      revision: current.revision + 1,\n      scores: {\n        ...current.scores,\n        [event.playerId]: (current.scores[event.playerId] ?? 0) + event.points,\n      },\n    };\n    return this.persist(next, current.revision);\n  }\n\n  private async persist(next: MatchState, expected: number): Promise<MatchState> {\n    try {\n      await this.store.saveIfRevision(next, expected);\n      return next;\n    } catch (err) {\n      if (err instanceof StaleRevisionError) {\n        throw err;\n      }\n      this.log(\"score.persist_failed\", { matchId: next.id, error: String(err) });\n      throw new Error(`failed to persist match ${next.id}`, { cause: err });\n    }\n  }\n}\n"
+    },
+    {
+      "path": "src/scoreRoute.ts",
+      "content": "import { ScoringService, ScoreEvent, MatchNotFoundError, InvalidMoveError } from \"./scoringService\";\nimport { StaleRevisionError } from \"./matchStore\";\n\nexport interface Reply {\n  status: number;\n  body: unknown;\n}\n\nexport async function handleScoreBatch(\n  scoring: ScoringService,\n  events: ScoreEvent[],\n): Promise<Reply> {\n  const results: { matchId: string; ok: boolean; error?: string }[] = [];\n\n  for (const event of events) {\n    try {\n      await scoring.applyScore(event);\n      results.push({ matchId: event.matchId, ok: true });\n    } catch (err) {\n      if (err instanceof MatchNotFoundError || err instanceof InvalidMoveError) {\n        results.push({ matchId: event.matchId, ok: false, error: err.message });\n        continue;\n      }\n      if (err instanceof StaleRevisionError) {\n        return { status: 409, body: { error: \"match busy, retry\", results } };\n      }\n      results.push({ matchId: event.matchId, ok: false, error: \"internal\" });\n    }\n  }\n\n  const failed = results.filter((r) => !r.ok).length;\n  return { status: failed === 0 ? 200 : 207, body: { results } };\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/scoreRoute.ts",
+    "snippet": "      results.push({ matchId: event.matchId, ok: false, error: \"internal\" });"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how errors propagate from the store through the scoring service to the HTTP reply? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "Yes, in scoreRoute.ts the final fallback catch branch turns any unexpected error (for example the wrapped 'failed to persist match' error from a database outage) into a per-item 'internal' entry and keeps looping. The batch then returns 207 as if it were an ordinary partial validation failure: infrastructure failures never reach the framework's 5xx handling, alerting and error-rate metrics don't fire, the original cause is discarded without being logged at the boundary, and later events keep hammering the failing store. Unknown errors should be rethrown (or mapped to a 5xx) instead of being folded into business-level results."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "saveIfRevision rejects with StaleRevisionError on every call for one match. What does a single applyScore call for that match do?",
+      "choices": [
+        "Retries indefinitely until the save succeeds",
+        "Throws after the first failure because persist wraps the error",
+        "Makes three attempts, logging 'score.retry' twice, then throws StaleRevisionError",
+        "Makes three attempts and resolves with the last computed state"
+      ],
+      "answer": 2,
+      "explanation": "persist rethrows StaleRevisionError unchanged; applyScore continues while attempt < 3, so attempts 1 and 2 log and retry, and attempt 3 rethrows. The loop is bounded by MAX_ATTEMPTS, the error is not wrapped, and nothing returns a state on failure."
+    },
+    {
+      "prompt": "Why does persist await saveIfRevision inside the try block rather than returning the promise directly?",
+      "choices": [
+        "So that a rejected save is caught there and can be logged and wrapped with the match id",
+        "So that the save runs before the revision number is incremented",
+        "To prevent the returned state from being mutated by the caller",
+        "Because returning a promise from an async function is not allowed"
+      ],
+      "answer": 0,
+      "explanation": "Only an awaited rejection inside try is handled by the surrounding catch; returning the bare promise would let async rejections skip the logging and wrapping. The revision is computed before persist is called, mutation is unrelated, and returning promises from async functions is legal."
+    },
+    {
+      "prompt": "A batch has three events: the first succeeds, the second targets a finished match, the third hits a StaleRevisionError after all retries. What reply is produced?",
+      "choices": [
+        "207 with three results",
+        "409 with results for the first two events only",
+        "200 because the first event succeeded",
+        "409 with an empty results array"
+      ],
+      "answer": 1,
+      "explanation": "The InvalidMoveError for the finished match is recorded and the loop continues; the StaleRevisionError returns 409 immediately with the results collected so far (two entries). The third event never gets an entry, so it is not 207 with three, not 200, and not empty."
+    }
+  ],
+  "concepts": [
+    "backend.errors.error_propagation",
+    "backend.api.status_codes_and_error_responses",
+    "backend.resilience.retries_and_backoff",
+    "backend.data.optimistic_vs_pessimistic_locking"
+  ]
+}

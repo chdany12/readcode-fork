@@ -1,0 +1,49 @@
+{
+  "id": "4f5be0fa-98cc-456e-a2c4-cd3342172a84",
+  "title": "Date-versioned support ticket API",
+  "name": "Versioned ticket API",
+  "createdAt": "2026-11-15T09:44:42.013Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this API keeps older clients working as the ticket model evolves? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A ticket has status \"on_hold\" and priority \"urgent\". What does a client that sends no Support-Api-Version header see?",
+      "choices": [
+        "status \"on_hold\", priority \"urgent\"",
+        "A 400 unsupported_api_version error",
+        "status \"open\", priority \"normal\"",
+        "status \"pending\", priority \"high\""
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does resolveVersion call res.vary(\"Support-Api-Version\")?",
+      "choices": [
+        "So caches key responses by the version header and do not serve a v2 body to a v1 client for the same URL",
+        "So express validates the header format",
+        "So the browser resends the header on redirects",
+        "So the Sunset header is only sent once"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A product manager adds a new status \"escalated\" to TicketStatusV2. What happens at build time?",
+      "choices": [
+        "Nothing; v1 clients will receive \"escalated\"",
+        "TypeScript reports an error because V1_STATUS no longer covers every TicketStatusV2 key",
+        "toV1 throws at runtime for escalated tickets",
+        "The default version switches to 2024-09-15"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.versioning",
+    "backend.api.serialization_and_deserialization"
+  ]
+}

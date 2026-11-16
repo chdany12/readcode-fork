@@ -1,0 +1,50 @@
+{
+  "id": "159e7f6c-0ac3-499c-b995-75cff2e03619",
+  "title": "Locked migration runner for CI metadata",
+  "name": "Schema migration runner",
+  "createdAt": "2026-11-15T09:41:31.720Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code applies and records schema migrations? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two deploy pods start the runner at the same moment against the same database. What happens?",
+      "choices": [
+        "Both apply pending migrations concurrently, and the second fails on a duplicate key",
+        "The second blocks on pg_advisory_lock, then finds the migrations already recorded and runs nothing",
+        "The second fails immediately because the lock is taken",
+        "Each pod applies a disjoint half of the pending migrations"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Migration 01's up() is edited after it was applied in production, and the runner starts. What happens?",
+      "choices": [
+        "It reapplies 01 with the new code",
+        "It skips 01 silently and applies the rest",
+        "It throws before applying any later pending migration",
+        "It applies later migrations, then reports the mismatch"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The process is killed halfway through the backfill (migration 03). What is the state on the next run?",
+      "choices": [
+        "03 is not recorded, so it runs again and only updates rows still NULL",
+        "03 is recorded, so the remaining NULL rows are never filled",
+        "All backfilled rows are rolled back and 03 starts from scratch",
+        "The runner refuses to start until 03 is manually cleaned up"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.migrations",
+    "backend.concurrency.locking_and_lock_ordering",
+    "backend.data.transactions_and_isolation_levels"
+  ]
+}

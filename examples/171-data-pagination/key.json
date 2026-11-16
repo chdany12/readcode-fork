@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "There is none. The query orders by (created_at DESC, id DESC), a total order because id is unique, and the cursor predicate uses the same tuple with a row-value comparison `(created_at, id) < (...)`, so users sharing a created_at are neither skipped nor repeated. Fetching limit + 1 rows detects whether another page exists without an extra count, nextCursor is built from the last returned row, limit is clamped, the cursor is validated, and all values go through bind parameters. One thing that looks risky but is fine: created_at is emitted with toISOString, which has millisecond precision, so it only round-trips exactly if the column stores milliseconds; it is otherwise correct for typical timestamp usage here.",
+    "If more than limit rows come back, hasMore is true, the extra row is dropped, and a nextCursor is issued; otherwise nextCursor is null. The predicate is strict '<', so the cursor row is not included; status filtering happens in SQL, not afterwards; and LIMIT n returns up to n rows.",
+    "Ordering is newest first and the next page only asks for rows strictly older than the cursor. A newly created user is newer than the cursor, so it falls before it and is not returned in later pages, and nothing shifts. Offset pagination would cause the duplicate/shift; the cursor stays valid because it encodes values, not positions.",
+    "The decoded value is an object, not a two-element array, so the shape check throws InvalidCursorError (and the catch rethrows it as InvalidCursorError too). The cursor is not silently ignored and the query is never executed, so no Postgres error occurs."
+  ]
+}

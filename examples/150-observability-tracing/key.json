@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    0,
+    2
+  ],
+  "explanations": [
+    "There is no defect. The producer injects inside startActiveSpan, so the traceparent carried in the message attributes points at the PRODUCER span. The consumer extracts into ROOT_CONTEXT (not whatever context the poller happens to be in) and starts its CONSUMER span inside context.with(parent, ...), so it joins the producer's trace. Every span is ended in a finally block, errors are recorded and set to ERROR, and the notifier failure is deliberately recorded on its own span without failing the message, which is a design choice rather than a tracing error.",
+    "Extracting into ROOT_CONTEXT means the only parent information in the resulting context is what was in msg.attributes, so a span left active by the polling loop cannot become the parent. extract works with any base context, sampling is unaffected, and the span still joins the producer's trace rather than starting a new one.",
+    "The child's catch records the exception and sets ERROR but does not rethrow, and its finally ends it. Control returns normally to the consumer span, whose catch is not triggered, so it ends with no error and handle resolves. The finally always runs, so the child is ended.",
+    "The notification only fires when appendScan reports firstDelivery, so a redelivery appends (or the store dedupes) and does not notify again. Nothing throws on duplicates, and trace IDs are never used for deduplication."
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "title": "Restaurant-sharded order storage",
+  "name": "Sharded order repository",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/shardRouter.ts",
+      "content": "import { Pool } from \"pg\";\n\nexport interface ShardConfig {\n  id: number;\n  connectionString: string;\n}\n\nexport function hashKey(key: string): number {\n  let h = 0;\n  for (let i = 0; i < key.length; i++) {\n    h = (h << 5) - h + key.charCodeAt(i);\n    h |= 0;\n  }\n  return h;\n}\n\nexport class ShardRouter {\n  private readonly pools: Pool[];\n\n  constructor(shards: ShardConfig[]) {\n    if (shards.length === 0) throw new Error(\"at least one shard is required\");\n    this.pools = [...shards]\n      .sort((a, b) => a.id - b.id)\n      .map((s) => new Pool({ connectionString: s.connectionString, max: 10 }));\n  }\n\n  get shardCount(): number {\n    return this.pools.length;\n  }\n\n  shardFor(restaurantId: string): number {\n    return hashKey(restaurantId) % this.pools.length;\n  }\n\n  poolFor(restaurantId: string): Pool {\n    return this.pools[this.shardFor(restaurantId)];\n  }\n\n  all(): Pool[] {\n    return this.pools;\n  }\n\n  async close(): Promise<void> {\n    await Promise.all(this.pools.map((p) => p.end()));\n  }\n}\n"
+    },
+    {
+      "path": "src/orderRepository.ts",
+      "content": "import { ShardRouter } from \"./shardRouter\";\n\nexport interface OrderRow {\n  id: string;\n  restaurant_id: string;\n  customer_id: string;\n  status: string;\n  total_cents: number;\n  created_at: Date;\n}\n\nexport class OrderRepository {\n  constructor(private readonly router: ShardRouter) {}\n\n  async create(order: Omit<OrderRow, \"created_at\">): Promise<void> {\n    await this.router.poolFor(order.restaurant_id).query(\n      `INSERT INTO orders (id, restaurant_id, customer_id, status, total_cents)\n       VALUES ($1, $2, $3, $4, $5)`,\n      [order.id, order.restaurant_id, order.customer_id, order.status, order.total_cents],\n    );\n  }\n\n  async activeForRestaurant(restaurantId: string): Promise<OrderRow[]> {\n    const { rows } = await this.router.poolFor(restaurantId).query<OrderRow>(\n      `SELECT * FROM orders\n       WHERE restaurant_id = $1 AND status IN ('placed', 'preparing', 'ready')\n       ORDER BY created_at`,\n      [restaurantId],\n    );\n    return rows;\n  }\n\n  async recentForCustomer(customerId: string, limit = 20): Promise<OrderRow[]> {\n    const perShard = await Promise.all(\n      this.router.all().map((pool) =>\n        pool\n          .query<OrderRow>(\n            `SELECT * FROM orders WHERE customer_id = $1 ORDER BY created_at DESC LIMIT $2`,\n            [customerId, limit],\n          )\n          .then((r) => r.rows),\n      ),\n    );\n    return perShard\n      .flat()\n      .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())\n      .slice(0, limit);\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/shardRouter.ts",
+    "snippet": "    return hashKey(restaurantId) % this.pools.length;"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how restaurant IDs are mapped to shards? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "hashKey coerces to a signed 32-bit integer with h |= 0, so roughly half of all keys hash to a negative number. In JavaScript, % keeps the sign of the dividend, so shardFor returns a negative index, this.pools[negative] is undefined, and poolFor(...).query throws a TypeError for those restaurants. The result must be normalized, e.g. ((h % n) + n) % n or hashing with >>> 0."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "How many database round trips does recentForCustomer make with 8 shards, and why?",
+      "choices": [
+        "One, because customers are co-located with their restaurant",
+        "Two: one to find the customer's shard and one to read",
+        "Eight, because orders are partitioned by restaurant so a customer's orders can be on any shard",
+        "Eight sequentially, one after another"
+      ],
+      "answer": 2,
+      "explanation": "Orders are routed by restaurant_id, so a customer's orders are spread across shards; the method scatters the query to every pool in parallel via Promise.all and merges. There is no customer-to-shard lookup, and the queries run concurrently, not sequentially."
+    },
+    {
+      "prompt": "recentForCustomer is called with limit 20 on 4 shards. Is the merged result guaranteed to be the customer's 20 most recent orders overall?",
+      "choices": [
+        "No, because each shard only returns 20 rows",
+        "No, because the merge sorts ascending",
+        "Only if all orders are on a single shard",
+        "Yes: each shard returns its own top 20, and the global top 20 must be among those 80 rows"
+      ],
+      "answer": 3,
+      "explanation": "Any order in the global top 20 is also in its own shard's top 20, so taking the per-shard top 20, merging, sorting descending, and slicing to 20 is correct. The sort compares b to a, which is descending, and correctness does not depend on single-shard placement."
+    },
+    {
+      "prompt": "The team adds a fifth shard to a four-shard config. What happens to existing restaurants' data?",
+      "choices": [
+        "Most restaurants now map to a different shard, so their existing orders become invisible to activeForRestaurant until data is moved",
+        "Only about one fifth of restaurants move, because of consistent hashing",
+        "Nothing; existing rows keep their shard because the router remembers prior assignments",
+        "The constructor rejects the change because shard IDs must stay contiguous"
+      ],
+      "answer": 0,
+      "explanation": "Placement is hash mod shard count, so changing the count remaps most keys; no consistent hashing ring or assignment table exists, and reads go to the new shard where the old rows are not. The constructor only checks that the list is non-empty."
+    }
+  ],
+  "concepts": [
+    "backend.distributed.sharding_and_partitioning",
+    "backend.data.pagination"
+  ]
+}

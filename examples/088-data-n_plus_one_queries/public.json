@@ -1,0 +1,49 @@
+{
+  "id": "806c9cd3-269b-4389-b33d-d540596c2ca6",
+  "title": "Depot daily manifest builder",
+  "name": "Depot manifest builder",
+  "createdAt": "2026-11-15T09:41:31.622Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code queries the database while building a manifest? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "For a depot with 3,000 shipments across 4 carriers, how many queries does carriersByCode issue during one buildDailyManifest call?",
+      "choices": [
+        "4, one per carrier",
+        "3,000, one per shipment",
+        "1, using the de-duplicated carrier codes",
+        "0, because carriers are cached in the repository"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "If a shipment references a carrier code missing from the carriers table, what happens?",
+      "choices": [
+        "The whole manifest build throws and no manifest is returned",
+        "That shipment is skipped and the rest are returned",
+        "The line is emitted with an undefined carrier name",
+        "The shipment is grouped under an 'unknown' carrier"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does stopsForShipments return a Map keyed by shipment id rather than a flat array?",
+      "choices": [
+        "Because Postgres cannot ORDER BY with ANY",
+        "So callers can look up each shipment's stops in O(1) after a single batched query",
+        "To deduplicate stops that share the same facility code",
+        "Because Map preserves insertion order and arrays do not"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.n_plus_one_queries",
+    "backend.performance.profiling_and_hot_paths"
+  ]
+}

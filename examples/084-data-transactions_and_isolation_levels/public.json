@@ -1,0 +1,50 @@
+{
+  "id": "1b97a96d-e111-432c-948b-88e6ed906d82",
+  "title": "Pinned posts with a per-profile limit",
+  "name": "Profile pinned posts",
+  "createdAt": "2026-11-15T09:41:31.617Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code enforces the limit of three pinned posts under concurrent requests? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "An author has 2 pinned posts. Two pin() calls for two different posts run at the same time. What is the outcome?",
+      "choices": [
+        "Both succeed and the author ends up with 4 pinned posts",
+        "Exactly one succeeds; the other is retried and then fails with PinLimitError",
+        "Both fail with a serialization error returned to the caller",
+        "One succeeds and the other blocks until the first commits, then succeeds too"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Inside the work callback, PinLimitError is thrown. What does withTransaction do?",
+      "choices": [
+        "Retries up to maxAttempts because any error inside the callback is retried",
+        "Commits the transaction and then rethrows",
+        "Rolls back, releases the client, and rethrows immediately",
+        "Leaves the transaction open on the client so the caller can inspect it"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does listPinned() use pool.query directly instead of withTransaction?",
+      "choices": [
+        "It is a single read statement, which already sees one consistent snapshot, so an explicit transaction adds nothing",
+        "Because SERIALIZABLE transactions cannot run SELECT with ORDER BY",
+        "Because pool.query reads uncommitted pins from in-flight transactions",
+        "To bypass the row locks held by pin()"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.transactions_and_isolation_levels",
+    "backend.concurrency.race_conditions",
+    "backend.resilience.retries_and_backoff"
+  ]
+}

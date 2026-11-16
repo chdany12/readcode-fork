@@ -1,0 +1,63 @@
+{
+  "title": "Carrier invoice parsing and reconciliation",
+  "name": "Carrier invoice reconciliation",
+  "language": "TypeScript",
+  "durationMinutes": 15,
+  "files": [
+    {
+      "path": "src/invoiceParser.ts",
+      "content": "export interface CarrierInvoiceLine {\n  trackingNumber: string;\n  service: string;\n  chargeCents: number;\n  currency: string;\n}\n\nexport class InvoiceParseError extends Error {\n  constructor(message: string, public readonly lineNo: number) {\n    super(`line ${lineNo}: ${message}`);\n  }\n}\n\nconst AMOUNT_RE = /^-?\\d+(\\.\\d{1,2})?$/;\n\nexport function toCents(raw: string, lineNo: number): number {\n  const trimmed = raw.trim().replace(/,/g, \"\");\n  if (!AMOUNT_RE.test(trimmed)) {\n    throw new InvoiceParseError(`invalid amount \"${raw}\"`, lineNo);\n  }\n  return Math.trunc(parseFloat(trimmed) * 100);\n}\n\nexport function parseInvoiceCsv(csv: string): CarrierInvoiceLine[] {\n  const rows = csv.split(/\\r?\\n/).filter((r) => r.trim().length > 0);\n  const [header, ...body] = rows;\n  const cols = header.split(\",\").map((c) => c.trim().toLowerCase());\n  const idx = (name: string) => {\n    const i = cols.indexOf(name);\n    if (i < 0) throw new InvoiceParseError(`missing column ${name}`, 1);\n    return i;\n  };\n  const tIdx = idx(\"tracking\"), sIdx = idx(\"service\"), aIdx = idx(\"amount\"), cIdx = idx(\"currency\");\n\n  return body.map((row, i) => {\n    const cells = row.split(\",\");\n    const lineNo = i + 2;\n    return {\n      trackingNumber: cells[tIdx]?.trim() ?? \"\",\n      service: cells[sIdx]?.trim() ?? \"\",\n      chargeCents: toCents(cells[aIdx] ?? \"\", lineNo),\n      currency: (cells[cIdx] ?? \"\").trim().toUpperCase(),\n    };\n  });\n}\n"
+    },
+    {
+      "path": "src/reconcile.ts",
+      "content": "import { CarrierInvoiceLine } from \"./invoiceParser\";\n\nexport interface QuotedShipment {\n  trackingNumber: string;\n  quotedCents: number;\n  currency: string;\n}\n\nexport interface ShipmentRepo {\n  findQuotes(trackingNumbers: string[]): Promise<Map<string, QuotedShipment>>;\n}\n\nexport type Discrepancy =\n  | { kind: \"unknown_shipment\"; trackingNumber: string; chargeCents: number }\n  | { kind: \"currency_mismatch\"; trackingNumber: string; invoice: string; quote: string }\n  | { kind: \"overcharge\"; trackingNumber: string; deltaCents: number };\n\nexport interface ReconciliationResult {\n  totalBilledCents: number;\n  totalExpectedCents: number;\n  disputableCents: number;\n  discrepancies: Discrepancy[];\n}\n\nexport async function reconcile(\n  lines: CarrierInvoiceLine[],\n  repo: ShipmentRepo,\n  toleranceCents: number,\n): Promise<ReconciliationResult> {\n  const quotes = await repo.findQuotes([...new Set(lines.map((l) => l.trackingNumber))]);\n  const result: ReconciliationResult = {\n    totalBilledCents: 0,\n    totalExpectedCents: 0,\n    disputableCents: 0,\n    discrepancies: [],\n  };\n\n  const billedPerShipment = new Map<string, number>();\n  for (const line of lines) {\n    result.totalBilledCents += line.chargeCents;\n    const quote = quotes.get(line.trackingNumber);\n    if (!quote) {\n      result.discrepancies.push({ kind: \"unknown_shipment\", trackingNumber: line.trackingNumber, chargeCents: line.chargeCents });\n      result.disputableCents += line.chargeCents;\n      continue;\n    }\n    if (quote.currency !== line.currency) {\n      result.discrepancies.push({ kind: \"currency_mismatch\", trackingNumber: line.trackingNumber, invoice: line.currency, quote: quote.currency });\n      continue;\n    }\n    billedPerShipment.set(line.trackingNumber, (billedPerShipment.get(line.trackingNumber) ?? 0) + line.chargeCents);\n  }\n\n  for (const [tracking, billed] of billedPerShipment) {\n    const quote = quotes.get(tracking)!;\n    result.totalExpectedCents += quote.quotedCents;\n    const delta = billed - quote.quotedCents;\n    if (delta > toleranceCents) {\n      result.discrepancies.push({ kind: \"overcharge\", trackingNumber: tracking, deltaCents: delta });\n      result.disputableCents += delta;\n    }\n  }\n  return result;\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/invoiceParser.ts",
+    "snippet": "  return Math.trunc(parseFloat(trimmed) * 100);"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code converts and compares invoice amounts? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "toCents multiplies a binary float by 100 and truncates. Many decimal amounts are not exactly representable: parseFloat(\"19.99\") * 100 is 1998.9999999999998 and parseFloat(\"0.29\") * 100 is 28.999999999999996, so Math.trunc yields 1998 and 28. Billed totals are silently understated by a cent on many lines, which skews reconciliation and dispute amounts. Parse the integer and fractional parts as strings, or at least use Math.round."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A shipment was quoted at 1,000 cents and appears on the invoice as two lines of 600 cents each, same currency, toleranceCents = 50. What does reconcile report for it?",
+      "choices": [
+        "No discrepancy, since each line is within the quote",
+        "An overcharge with deltaCents 200",
+        "Two overcharges of 100 each",
+        "An unknown_shipment discrepancy for the second line"
+      ],
+      "answer": 1,
+      "explanation": "Lines are summed per tracking number in billedPerShipment (1,200), then compared once against the quote: 1,200 - 1,000 = 200 > 50, giving one overcharge of 200. Lines are not compared individually, and the shipment is known so no unknown_shipment."
+    },
+    {
+      "prompt": "How do currency_mismatch lines affect totalBilledCents and totalExpectedCents?",
+      "choices": [
+        "They are excluded from both totals",
+        "They are added to both totals",
+        "They are added to totalBilledCents, and the quote is added to totalExpectedCents only if some other line for the same shipment matched currency",
+        "They are added to disputableCents"
+      ],
+      "answer": 2,
+      "explanation": "totalBilledCents is incremented before the currency check, so every line counts. The expected total is accumulated only in the second loop over billedPerShipment, which contains a tracking number only if at least one line had matching currency. Mismatched lines are never added to disputableCents."
+    },
+    {
+      "prompt": "A shipment quoted at 2,000 cents has an invoice charge line of 2,300 cents and a carrier credit line of -300 cents (same currency), toleranceCents = 0. What is reported?",
+      "choices": [
+        "An overcharge of 300 cents",
+        "No discrepancy for this shipment",
+        "The negative line is rejected by AMOUNT_RE",
+        "An overcharge of 300 and a separate credit discrepancy"
+      ],
+      "answer": 1,
+      "explanation": "AMOUNT_RE allows a leading minus, so the credit parses as -300. Lines are summed per tracking number to 2,000, which equals the quote, so delta is 0 and nothing is reported. There is no credit discrepancy kind, and per-line comparison does not happen."
+    }
+  ],
+  "concepts": [
+    "backend.data.money_and_ledgers",
+    "backend.api.serialization_and_deserialization"
+  ]
+}

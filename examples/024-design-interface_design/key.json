@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    3,
+    0,
+    1
+  ],
+  "explanations": [
+    "There is none. MatchingStrategy.choose returns DriverCandidate | null and the dispatcher checks chosen !== null before using it, widening the radius otherwise. Every exit of dispatch returns a valid DispatchDecision variant, describe switches exhaustively with a never check, candidate arrays are readonly so strategies cannot mutate locator results (filter makes a new array anyway), and both time-based decisions read time through the injected Clock rather than Date.now.",
+    "lastRadius is updated on every iteration, so after the loop it is 10; the request is too old to defer, so no_drivers with 10 is returned. Deferral only happens when age < maxRequestAgeMs, 2 would be the first radius not the last, and a null choice just continues the loop.",
+    "Dispatcher filters nearby by vehicleClass before calling choose, so every strategy sees only matching drivers within the radius being searched. The idle filter lives inside NearestIdleStrategy, not the dispatcher, and the full eligible list is passed, not just the nearest.",
+    "Injecting Clock makes idle-time comparisons deterministic in tests and consistent with the dispatcher's own age check. choose stays synchronous, null lastTripEndedAt is treated as infinitely idle (eligible), and nothing is cached."
+  ]
+}

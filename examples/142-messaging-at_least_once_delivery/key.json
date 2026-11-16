@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/dispatchHandler.ts",
+        "startLine": 28,
+        "endLine": 32
+      }
+    },
+    3,
+    1,
+    0
+  ],
+  "explanations": [
+    "The dedupe key is claimed with SET NX before the carrier booking succeeds and is never removed on failure. When bookPickup fails and the message is released for retry (or the worker crashes), the redelivery finds the key already set, acks, and returns, so the pickup is never booked: the retry logic can never run a second attempt. The marker should be written only after a successful booking (the carrier idempotency key already protects against duplicate bookings), or deleted in the catch block before releasing.",
+    "On the second delivery receiveCount is 2, so delay = min(300, 2^2 * 5) = 20 seconds. 10 would be the delay after the first delivery (2^1 * 5), 5 would require receiveCount 0, and 40 corresponds to receiveCount 3.",
+    "A stable per-shipment idempotency key lets the carrier recognize a repeated request. A timeout only aborts the client side and can itself cause a resend; hset records results after the fact; MAX_ATTEMPTS limits retries but does not deduplicate them.",
+    "In the catch block, once receiveCount >= MAX_ATTEMPTS the handler logs and throws without calling ack or release, so the broker's visibility timeout and redrive (e.g. a DLQ) decide what happens. It does not ack, does not release with a delay on that path, and there is no in-process retry loop."
+  ]
+}

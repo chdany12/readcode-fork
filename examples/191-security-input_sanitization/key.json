@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/renderMention.ts",
+        "startLine": 38,
+        "endLine": 38
+      }
+    },
+    2,
+    0,
+    2
+  ],
+  "explanations": [
+    "Yes. The channel name is user-controlled, and it is interpolated into the HTML body without escapeHtml. stripControlChars only removes control characters, not < or \". A channel named something like <a href=\"https://phish.example\">reset your password</a> renders as live markup in every recipient's mail client, which allows phishing links or layout injection in mail that appears to come from the product. The sender and preview are escaped; the channel needs the same treatment in the HTML part.",
+    "safeLink resolves the URL against APP_ORIGIN; an absolute URL keeps its own origin, which differs from APP_ORIGIN, so the function returns APP_ORIGIN itself. The foreign URL is never used, the href is never empty, and absolute URLs are not appended to the base path.",
+    "The subject goes into a mail header, where CR/LF would end the header line or add new headers; removing \\u0000-\\u001f covers them. escapeHtml handles any characters, clampLength counts code points regardless, and the sender never goes into the URL.",
+    "The preview is escaped first, so the tags become entities, and the newline is then replaced with a real <br>. Because the replacement happens after escaping, the <br> is not itself escaped, and the bold tags stay inert text. The newline is converted, so the text does not stay on one line."
+  ]
+}

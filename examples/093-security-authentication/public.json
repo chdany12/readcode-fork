@@ -1,0 +1,50 @@
+{
+  "id": "4da11c12-1256-4750-9a67-2b505b8cf30f",
+  "title": "Signed merchant requests for a billing API",
+  "name": "Merchant signature authentication",
+  "createdAt": "2026-11-15T09:41:31.628Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this middleware authenticates merchant requests? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A merchant's key is revoked (revoked_at set) while a request signed with it is in flight. What happens to requests that arrive after the revocation commits?",
+      "choices": [
+        "They succeed until the 300-second tolerance window expires",
+        "They are rejected with 401 because findActive filters out revoked keys",
+        "They are rejected with 503 because the lookup throws",
+        "They succeed because the signature is still mathematically valid"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does the app capture `rawBody` in the express.json `verify` hook instead of signing `JSON.stringify(req.body)`?",
+      "choices": [
+        "Because JSON.stringify is too slow for payment payloads",
+        "Because express.json discards the body after parsing",
+        "Because re-serialising parsed JSON can change key order, whitespace, or number formatting, so the HMAC would not match the bytes the merchant signed",
+        "Because timingSafeEqual only accepts Buffers"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "If the database is unreachable during key lookup, how does the middleware respond, and why does that matter?",
+      "choices": [
+        "401, so clients treat it as bad credentials and stop retrying",
+        "It calls next() so charges are not blocked by an auth outage",
+        "It throws and Express returns a default 500 with a stack trace",
+        "503 auth_unavailable, so an outage is distinguishable from bad credentials and the request is never let through"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.security.authentication",
+    "backend.api.status_codes_and_error_responses",
+    "backend.api.serialization_and_deserialization"
+  ]
+}

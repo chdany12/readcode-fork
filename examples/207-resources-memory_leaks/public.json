@@ -1,0 +1,49 @@
+{
+  "id": "3a6a168f-8ec7-4843-8ea8-96212130a574",
+  "title": "Waiting for asynchronous payment outcomes",
+  "name": "Payment outcome waiter",
+  "createdAt": "2026-11-15T09:44:42.028Z",
+  "durationMinutes": 13,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code manages memory over the life of the process? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "An outcome event for payment P arrives before any request calls `wait(P)`. What happens when `wait(P)` is later called?",
+      "choices": [
+        "It waits until the timeout and rejects",
+        "It resolves immediately with the remembered outcome, as long as P is still among the most recent outcomes",
+        "It throws synchronously",
+        "It resolves with undefined"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "How does `remember` keep `recent` bounded?",
+      "choices": [
+        "It clears the whole map when it gets full",
+        "It evicts entries older than 15 seconds",
+        "It relies on the waiters being resolved",
+        "It re-inserts the updated id at the end and removes the first key in insertion order once size exceeds the limit"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does the handler call `waiter.wait` before `processor.submit`, and what is `outcomeP.catch(() => undefined)` for?",
+      "choices": [
+        "To register interest before the outcome can arrive, and to avoid an unhandled rejection when that promise later times out after submit failed",
+        "To make submit idempotent, and to retry the payment",
+        "To lock the paymentId, and to cancel the timer",
+        "Ordering does not matter; the catch logs the error"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.resources.memory_leaks",
+    "backend.resources.unbounded_buffers"
+  ]
+}

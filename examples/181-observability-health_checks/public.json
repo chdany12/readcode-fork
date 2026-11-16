@@ -1,0 +1,51 @@
+{
+  "id": "cecfa206-86d9-4767-884c-0da1b5d508e1",
+  "title": "Liveness and readiness for an ad event ingester",
+  "name": "Ingest service health checks",
+  "createdAt": "2026-11-15T09:41:31.742Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this service reports its health to the orchestrator? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The geoip cache is unreachable but ClickHouse and Kafka are fine. What does /healthz/ready return?",
+      "choices": [
+        "503 with status 'unavailable'",
+        "200 with status 'ok'",
+        "500 because a check threw",
+        "200 with status 'degraded'"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Ten readiness probes arrive at the same moment with an empty cache. How many times is each dependency pinged?",
+      "choices": [
+        "Ten times, once per probe",
+        "Once, because later probes await the same in-flight promise",
+        "Zero, because the cache is used",
+        "Once per probe that arrives after the timeout"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "ClickHouse's ping hangs indefinitely. What does a readiness probe observe?",
+      "choices": [
+        "The probe hangs until the orchestrator's own timeout",
+        "A fail result for clickhouse after checkTimeoutMs, with the ping's signal aborted, and a 503",
+        "The process is restarted by the liveness probe",
+        "A pass result because the ping never rejected"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.observability.health_checks",
+    "backend.resilience.timeouts",
+    "backend.resilience.graceful_shutdown",
+    "backend.resilience.graceful_degradation"
+  ]
+}

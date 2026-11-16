@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/seatInvoice.ts",
+        "startLine": 34,
+        "endLine": 34
+      }
+    },
+    1,
+    1,
+    1
+  ],
+  "explanations": [
+    "convertAddon converts USD to a major-unit amount in the target currency, then multiplies by 100 assuming the target also has 2 minor units. For JPY or KRW (0 minor units) the SSO add-on is 100x too large; for BHD (3 units) it is 10x too small. It should scale by 10 ** minorUnitsOf(plan.currency), which requires passing the target currency in.",
+    "BHD has 3 minor units; fracPart \"5\" is padded to \"500\", so 12 * 1000 + 500 = 12500. 1250 would assume 2 units; the error only fires if there are more fractional digits than allowed; 125 ignores scaling.",
+    "Math.round on each line could drift by up to half a minor unit per line; rounding the subtotal once keeps tax consistent with subtotal * rate. Formatting is unrelated, Math.round rounds to nearest (not up), and all lines share plan.currency.",
+    "0 passes the validation (integer, not negative). The seat line is perSeat * 0 = 0, and because ssoEnabled is true an add-on line of addonPerSeat * 0 = 0 is pushed; tax on 0 is 0. Nothing bills a minimum seat."
+  ]
+}

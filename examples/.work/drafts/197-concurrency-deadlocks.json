@@ -1,0 +1,65 @@
+{
+  "title": "Follow graph with per-user async locks",
+  "name": "Follow graph service",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/asyncMutex.ts",
+      "content": "export class AsyncMutex {\n  private locked = false;\n  private waiters: Array<() => void> = [];\n\n  async acquire(): Promise<() => void> {\n    if (!this.locked) {\n      this.locked = true;\n      return () => this.release();\n    }\n    await new Promise<void>((resolve) => this.waiters.push(resolve));\n    return () => this.release();\n  }\n\n  private release(): void {\n    const next = this.waiters.shift();\n    if (next) {\n      next();\n    } else {\n      this.locked = false;\n    }\n  }\n}\n\nexport class KeyedMutex {\n  private locks = new Map<string, AsyncMutex>();\n\n  forKey(key: string): AsyncMutex {\n    let m = this.locks.get(key);\n    if (!m) {\n      m = new AsyncMutex();\n      this.locks.set(key, m);\n    }\n    return m;\n  }\n}\n"
+    },
+    {
+      "path": "src/followService.ts",
+      "content": "import { KeyedMutex } from \"./asyncMutex\";\n\nexport interface UserCounters {\n  followers: number;\n  following: number;\n}\n\nexport interface GraphStore {\n  isFollowing(followerId: string, followeeId: string): Promise<boolean>;\n  insertEdge(followerId: string, followeeId: string): Promise<void>;\n  deleteEdge(followerId: string, followeeId: string): Promise<void>;\n  getCounters(userId: string): Promise<UserCounters>;\n  putCounters(userId: string, counters: UserCounters): Promise<void>;\n}\n\nexport class FollowService {\n  private readonly userLocks = new KeyedMutex();\n\n  constructor(private readonly store: GraphStore) {}\n\n  private async withUsers<T>(followerId: string, followeeId: string, fn: () => Promise<T>): Promise<T> {\n    const releaseFollower = await this.userLocks.forKey(followerId).acquire();\n    const releaseFollowee = await this.userLocks.forKey(followeeId).acquire();\n    try {\n      return await fn();\n    } finally {\n      releaseFollowee();\n      releaseFollower();\n    }\n  }\n\n  async follow(followerId: string, followeeId: string): Promise<boolean> {\n    if (followerId === followeeId) throw new Error(\"users cannot follow themselves\");\n\n    return this.withUsers(followerId, followeeId, async () => {\n      if (await this.store.isFollowing(followerId, followeeId)) return false;\n\n      const [a, b] = await Promise.all([\n        this.store.getCounters(followerId),\n        this.store.getCounters(followeeId),\n      ]);\n      await this.store.insertEdge(followerId, followeeId);\n      await Promise.all([\n        this.store.putCounters(followerId, { ...a, following: a.following + 1 }),\n        this.store.putCounters(followeeId, { ...b, followers: b.followers + 1 }),\n      ]);\n      return true;\n    });\n  }\n\n  async unfollow(followerId: string, followeeId: string): Promise<boolean> {\n    if (followerId === followeeId) return false;\n\n    return this.withUsers(followerId, followeeId, async () => {\n      if (!(await this.store.isFollowing(followerId, followeeId))) return false;\n\n      const [a, b] = await Promise.all([\n        this.store.getCounters(followerId),\n        this.store.getCounters(followeeId),\n      ]);\n      await this.store.deleteEdge(followerId, followeeId);\n      await Promise.all([\n        this.store.putCounters(followerId, { ...a, following: Math.max(0, a.following - 1) }),\n        this.store.putCounters(followeeId, { ...b, followers: Math.max(0, b.followers - 1) }),\n      ]);\n      return true;\n    });\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/followService.ts",
+    "snippet": "    const releaseFollower = await this.userLocks.forKey(followerId).acquire();\n    const releaseFollowee = await this.userLocks.forKey(followeeId).acquire();"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code acquires and releases its locks? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "withUsers locks the follower first and the followee second, so the order depends on the direction of the call. If user A follows B while B follows (or unfollows) A at the same moment, one call holds A and waits for B while the other holds B and waits for A. AsyncMutex has no timeout, so both promises wait forever, and every later follow/unfollow touching A or B queues behind them. Acquiring the two locks in a canonical order (for example sorted by user id) removes the cycle."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Three callers call acquire() on the same AsyncMutex: the first gets it, then the second and third wait. When the first releases, what happens?",
+      "choices": [
+        "locked becomes false and the second and third race for it",
+        "The second waiter is resumed and locked stays true; the third keeps waiting",
+        "Both waiters are resumed together",
+        "The third waiter is resumed first"
+      ],
+      "answer": 1,
+      "explanation": "release() shifts the first waiter from the FIFO array and calls it, handing over the lock without ever setting locked to false. locked only becomes false when there are no waiters. Only one waiter is resumed, and order is first-in first-out, so the third waits."
+    },
+    {
+      "prompt": "Why does follow() re-check isFollowing inside the locked section instead of before taking the locks?",
+      "choices": [
+        "Because store reads are not allowed outside a lock",
+        "To make the function faster when the edge already exists",
+        "Because Promise.all requires it",
+        "So two concurrent follows of the same pair cannot both pass the check and double-increment the counters"
+      ],
+      "answer": 3,
+      "explanation": "The read-modify-write on counters is only safe if the existence check and the update happen under the same locks; checking first and locking later would let two identical requests both see \"not following\" and each add one. The store has no such rule, checking inside the lock is not faster, and Promise.all has no bearing on it."
+    },
+    {
+      "prompt": "What does the KeyedMutex do with the AsyncMutex for a user after that user's operations finish?",
+      "choices": [
+        "Keeps it in the map indefinitely, so the map grows with every distinct user ever locked",
+        "Deletes it on release",
+        "Expires it after a timeout",
+        "Reuses a fixed pool of mutexes"
+      ],
+      "answer": 0,
+      "explanation": "forKey creates and stores a mutex on first use, and nothing ever removes entries from locks, so it keeps one mutex per distinct user for the life of the process. There is no delete on release, no expiry, and no fixed pool."
+    }
+  ],
+  "concepts": [
+    "backend.concurrency.deadlocks",
+    "backend.concurrency.locking_and_lock_ordering",
+    "backend.concurrency.race_conditions",
+    "backend.resources.memory_leaks"
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "title": "Structured logging in a travel booking handler",
+  "name": "Booking request logger",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/logger.ts",
+      "content": "export type Level = \"debug\" | \"info\" | \"warn\" | \"error\";\n\nconst LEVEL_ORDER: Record<Level, number> = { debug: 10, info: 20, warn: 30, error: 40 };\n\nexport type Fields = Record<string, unknown>;\n\nexport interface Sink {\n  write(line: string): void;\n}\n\nexport class Logger {\n  constructor(\n    private readonly sink: Sink,\n    private readonly minLevel: Level,\n    private readonly bindings: Fields = {},\n  ) {}\n\n  child(fields: Fields): Logger {\n    const merged = Object.assign(this.bindings, fields);\n    return new Logger(this.sink, this.minLevel, merged);\n  }\n\n  debug(msg: string, fields?: Fields) { this.log(\"debug\", msg, fields); }\n  info(msg: string, fields?: Fields) { this.log(\"info\", msg, fields); }\n  warn(msg: string, fields?: Fields) { this.log(\"warn\", msg, fields); }\n\n  error(msg: string, err: unknown, fields?: Fields) {\n    const errFields =\n      err instanceof Error\n        ? { \"error.type\": err.name, \"error.message\": err.message, \"error.stack\": err.stack }\n        : { \"error.message\": String(err) };\n    this.log(\"error\", msg, { ...errFields, ...fields });\n  }\n\n  private log(level: Level, msg: string, fields?: Fields) {\n    if (LEVEL_ORDER[level] < LEVEL_ORDER[this.minLevel]) return;\n    const record = {\n      ts: new Date().toISOString(),\n      level,\n      msg,\n      ...this.bindings,\n      ...fields,\n    };\n    this.sink.write(JSON.stringify(record));\n  }\n}\n\nexport const rootLogger = new Logger(\n  { write: (line) => process.stdout.write(line + \"\\n\") },\n  (process.env.LOG_LEVEL as Level) ?? \"info\",\n  { service: \"booking-api\", env: process.env.NODE_ENV ?? \"development\" },\n);\n"
+    },
+    {
+      "path": "src/bookingHandler.ts",
+      "content": "import { randomUUID } from \"crypto\";\nimport { Logger, rootLogger } from \"./logger\";\n\nexport interface BookingRequest {\n  userId: string;\n  tripId: string;\n  supplier: \"air\" | \"hotel\" | \"car\";\n  amountCents: number;\n}\n\nexport interface SupplierClient {\n  reserve(tripId: string, amountCents: number): Promise<{ confirmation: string }>;\n}\n\nexport class BookingHandler {\n  constructor(\n    private readonly suppliers: Record<BookingRequest[\"supplier\"], SupplierClient>,\n    private readonly log: Logger = rootLogger,\n  ) {}\n\n  async handle(req: BookingRequest, headers: Record<string, string | undefined>) {\n    const requestId = headers[\"x-request-id\"] ?? randomUUID();\n    const log = this.log.child({\n      requestId,\n      userId: req.userId,\n      tripId: req.tripId,\n      supplier: req.supplier,\n    });\n\n    const started = Date.now();\n    log.info(\"booking.started\", { amountCents: req.amountCents });\n\n    try {\n      const { confirmation } = await this.suppliers[req.supplier].reserve(\n        req.tripId,\n        req.amountCents,\n      );\n      log.info(\"booking.confirmed\", {\n        confirmation,\n        durationMs: Date.now() - started,\n      });\n      return { status: 201, body: { confirmation, requestId } };\n    } catch (err) {\n      log.error(\"booking.failed\", err, { durationMs: Date.now() - started });\n      return { status: 502, body: { error: \"supplier_unavailable\", requestId } };\n    }\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/logger.ts",
+    "snippet": "const merged = Object.assign(this.bindings, fields);"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code attaches per-request context to log records? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "In Logger.child, Object.assign(this.bindings, fields) mutates the parent's bindings object instead of copying it. Every child call writes requestId, userId, tripId and supplier into the root logger's shared bindings, so the root logger and all existing children share one object. Under concurrent bookings, a log line from request A can carry request B's requestId and userId (whichever child was created last), making logs misattributed and impossible to correlate. The fix is to merge into a fresh object: { ...this.bindings, ...fields }."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A booking fails with a supplier Error and the call site passes { durationMs }. Which fields does the emitted error record contain besides ts, level and msg?",
+      "choices": [
+        "Only durationMs; error details are dropped because fields replaces errFields",
+        "error.type, error.message, error.stack, durationMs, plus the logger's bindings",
+        "error.message as a stringified object, durationMs, and no bindings",
+        "The raw Error object under an \"err\" key, which JSON.stringify serializes as {}"
+      ],
+      "answer": 1,
+      "explanation": "error() builds errFields with error.type, error.message and error.stack for Error instances and spreads both errFields and fields into the record, and log() also spreads this.bindings. Fields are merged, not replaced; String(err) is only used for non-Error values; there is no \"err\" key holding the raw Error."
+    },
+    {
+      "prompt": "A caller passes a field named \"level\" in fields when calling log.info(\"booking.started\", { level: \"vip\" }). What appears in the JSON record?",
+      "choices": [
+        "\"level\": \"info\", because the logger's own fields are written last",
+        "Both values, as level and level_1",
+        "\"level\": \"vip\", because caller fields are spread after the built-in keys",
+        "The record is dropped because \"vip\" is not a valid level"
+      ],
+      "answer": 2,
+      "explanation": "In log(), the record literal lists ts, level and msg first and spreads bindings and fields afterwards, so a later key with the same name wins: level becomes \"vip\". Object spread never renames keys, and the level filter runs on the method's level argument, not on fields."
+    },
+    {
+      "prompt": "LOG_LEVEL is unset in production. Which booking events are written?",
+      "choices": [
+        "None; minLevel is undefined so every comparison is false",
+        "All events including debug, since there is no level configured",
+        "Only booking.failed",
+        "booking.started, booking.confirmed and booking.failed"
+      ],
+      "answer": 3,
+      "explanation": "process.env.LOG_LEVEL is undefined, so ?? falls back to \"info\". info (20) and error (40) are at or above the threshold, so started, confirmed and failed are all written; only debug would be filtered. It is not undefined, not unfiltered, and info events are not suppressed."
+    }
+  ],
+  "concepts": [
+    "backend.observability.structured_logging",
+    "backend.concurrency.shared_state_in_request_handlers"
+  ]
+}

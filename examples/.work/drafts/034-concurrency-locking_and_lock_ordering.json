@@ -1,0 +1,64 @@
+{
+  "title": "Serialized environment promotions in a CI system",
+  "name": "Environment promotion coordinator",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/environmentLock.ts",
+      "content": "export class EnvironmentLock {\n  private held = false;\n  private holder: string | null = null;\n  private readonly waiters: Array<() => void> = [];\n\n  async acquire(owner: string): Promise<void> {\n    while (this.held) {\n      await new Promise<void>((resolve) => this.waiters.push(resolve));\n    }\n    this.held = true;\n    this.holder = owner;\n  }\n\n  release(owner: string): void {\n    if (!this.held || this.holder !== owner) {\n      throw new Error(`lock not held by ${owner}`);\n    }\n    this.held = false;\n    this.holder = null;\n    const next = this.waiters.shift();\n    if (next) next();\n  }\n\n  currentHolder(): string | null {\n    return this.holder;\n  }\n}\n"
+    },
+    {
+      "path": "src/promotionCoordinator.ts",
+      "content": "import { EnvironmentLock } from \"./environmentLock\";\n\nexport interface Artifact {\n  pipelineId: string;\n  digest: string;\n}\n\nexport interface DeployTarget {\n  name: string;\n  apply(artifact: Artifact): Promise<void>;\n  healthCheck(): Promise<boolean>;\n  currentDigest(): Promise<string | null>;\n}\n\nexport interface DeployResult {\n  environment: string;\n  digest: string;\n  skipped: boolean;\n}\n\nexport class HealthCheckFailedError extends Error {\n  constructor(env: string, digest: string) {\n    super(`health check failed on ${env} for ${digest}`);\n    this.name = \"HealthCheckFailedError\";\n  }\n}\n\nexport class PromotionCoordinator {\n  private readonly locks = new Map<string, EnvironmentLock>();\n\n  constructor(private readonly targets: Map<string, DeployTarget>) {}\n\n  private lockFor(env: string): EnvironmentLock {\n    let lock = this.locks.get(env);\n    if (!lock) {\n      lock = new EnvironmentLock();\n      this.locks.set(env, lock);\n    }\n    return lock;\n  }\n\n  async promote(env: string, artifact: Artifact): Promise<DeployResult> {\n    const target = this.targets.get(env);\n    if (!target) {\n      throw new Error(`unknown environment ${env}`);\n    }\n    const owner = `${artifact.pipelineId}@${artifact.digest}`;\n    const lock = this.lockFor(env);\n\n    await lock.acquire(owner);\n    const deployed = await target.currentDigest();\n    if (deployed === artifact.digest) {\n      lock.release(owner);\n      return { environment: env, digest: artifact.digest, skipped: true };\n    }\n\n    await target.apply(artifact);\n    const healthy = await target.healthCheck();\n    if (!healthy) {\n      lock.release(owner);\n      throw new HealthCheckFailedError(env, artifact.digest);\n    }\n    lock.release(owner);\n    return { environment: env, digest: artifact.digest, skipped: false };\n  }\n\n  status(): Record<string, string | null> {\n    const out: Record<string, string | null> = {};\n    for (const [env, lock] of this.locks) {\n      out[env] = lock.currentHolder();\n    }\n    return out;\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/promotionCoordinator.ts",
+    "snippet": "    await target.apply(artifact);"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code acquires and releases the per-environment lock? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The lock is released by hand on each expected path, but not in a finally block. If target.apply() rejects (or currentDigest()/healthCheck() throw), the exception leaves promote() with the lock still held. Every later promotion to that environment waits in acquire() forever, and status() keeps reporting the failed pipeline as the holder. Wrapping the work after acquire() in try/finally fixes it."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Two pipelines call promote(\"staging\", ...) with different digests at nearly the same time. What happens?",
+      "choices": [
+        "Both apply concurrently because each gets its own EnvironmentLock",
+        "The second throws immediately because the lock is held",
+        "The second waits until the first releases, then checks currentDigest() and deploys",
+        "The second is skipped because currentDigest() was read before the first finished"
+      ],
+      "answer": 2,
+      "explanation": "lockFor() returns the same EnvironmentLock per environment name, and acquire() parks the second caller in waiters until release() wakes it. It then reads currentDigest() under the lock, sees the first pipeline's digest, and deploys its own. It does not throw, and the digest read happens after waiting, not before."
+    },
+    {
+      "prompt": "Why does EnvironmentLock.acquire() re-check `this.held` in a while loop after being woken instead of just taking the lock?",
+      "choices": [
+        "Because release() wakes every waiter at once",
+        "Because another caller can call acquire() and take the lock between the wake-up and the woken waiter resuming",
+        "Because Promises can resolve more than once",
+        "It is unnecessary; an if statement would behave identically in every case"
+      ],
+      "answer": 1,
+      "explanation": "release() resolves the next waiter, but that waiter only resumes on a later microtask. A brand-new acquire() call running in between sees held === false and takes the lock, so the woken waiter must check again. release() wakes only one waiter, and promises resolve once."
+    },
+    {
+      "prompt": "A pipeline re-promotes a digest that is already live in production. What does promote() do?",
+      "choices": [
+        "Re-applies it and runs the health check again",
+        "Throws HealthCheckFailedError because nothing changed",
+        "Returns skipped: true without ever touching the lock",
+        "Returns skipped: true without calling apply(), after acquiring and releasing the lock"
+      ],
+      "answer": 3,
+      "explanation": "The digest comparison happens after acquire(), so it reflects the state under the lock; on a match it releases and returns skipped: true without apply() or healthCheck(). Nothing throws, and the lock is taken first."
+    }
+  ],
+  "concepts": [
+    "backend.concurrency.locking_and_lock_ordering",
+    "backend.errors.cleanup_on_error_paths",
+    "backend.concurrency.async_await_pitfalls"
+  ]
+}

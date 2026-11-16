@@ -1,0 +1,68 @@
+{
+  "title": "Fanning out new posts to follower timelines from a queue",
+  "name": "Timeline fanout consumer",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/queue.ts",
+      "content": "export interface QueueMessage<T> {\n  id: string;\n  body: T;\n  deliveryCount: number;\n}\n\nexport interface QueueClient<T> {\n  receive(max: number, waitMs: number): Promise<QueueMessage<T>[]>;\n  ack(id: string): Promise<void>;\n  nack(id: string, delayMs: number): Promise<void>;\n  deadLetter(id: string, reason: string): Promise<void>;\n}\n\nexport interface PostPublished {\n  postId: string;\n  authorId: string;\n  publishedAt: string;\n}\n"
+    },
+    {
+      "path": "src/stores.ts",
+      "content": "export interface FollowerPage {\n  userIds: string[];\n  nextCursor?: string;\n}\n\nexport interface TimelineEntry {\n  userId: string;\n  postId: string;\n  authorId: string;\n  publishedAt: string;\n}\n\nexport interface FollowerStore {\n  page(authorId: string, limit: number, cursor?: string): Promise<FollowerPage>;\n}\n\nexport interface TimelineStore {\n  // Upsert keyed on (userId, postId): re-inserting an existing entry is a no-op.\n  insertMany(entries: TimelineEntry[]): Promise<void>;\n}\n"
+    },
+    {
+      "path": "src/timelineFanoutConsumer.ts",
+      "content": "import { QueueClient, QueueMessage, PostPublished } from \"./queue\";\nimport { FollowerStore, TimelineStore } from \"./stores\";\n\nexport interface FanoutOptions {\n  batchSize: number;\n  maxDeliveries: number;\n  pageSize: number;\n}\n\nexport class TimelineFanoutConsumer {\n  private running = false;\n  private loop: Promise<void> | null = null;\n\n  constructor(\n    private readonly queue: QueueClient<PostPublished>,\n    private readonly followers: FollowerStore,\n    private readonly timelines: TimelineStore,\n    private readonly opts: FanoutOptions,\n    private readonly log: (msg: string, fields: Record<string, unknown>) => void,\n  ) {}\n\n  start(): void {\n    if (this.running) return;\n    this.running = true;\n    this.loop = this.run();\n  }\n\n  async stop(): Promise<void> {\n    this.running = false;\n    await this.loop;\n  }\n\n  private async run(): Promise<void> {\n    while (this.running) {\n      const batch = await this.queue.receive(this.opts.batchSize, 20_000);\n      await Promise.all(batch.map((m) => this.handle(m)));\n    }\n  }\n\n  private async handle(msg: QueueMessage<PostPublished>): Promise<void> {\n    const { postId, authorId, publishedAt } = msg.body;\n    try {\n      let cursor: string | undefined;\n      do {\n        const page = await this.followers.page(authorId, this.opts.pageSize, cursor);\n        await this.timelines.insertMany(\n          page.userIds.map((userId) => ({ userId, postId, authorId, publishedAt })),\n        );\n        cursor = page.nextCursor;\n      } while (cursor);\n      await this.queue.ack(msg.id);\n    } catch (err) {\n      const reason = err instanceof Error ? err.message : String(err);\n      if (msg.deliveryCount >= this.opts.maxDeliveries) {\n        this.log(\"fanout dead-lettered\", { postId, deliveryCount: msg.deliveryCount, reason });\n        await this.queue.deadLetter(msg.id, reason);\n        return;\n      }\n      const delayMs = Math.min(60_000, 1_000 * 2 ** msg.deliveryCount);\n      this.log(\"fanout retry scheduled\", { postId, deliveryCount: msg.deliveryCount, delayMs, reason });\n      await this.queue.nack(msg.id, delayMs);\n    }\n  }\n}\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this consumer receives, acknowledges, retries, or dead-letters messages? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is no defect. The message is acked only after every follower page has been written, so a crash mid-fanout leaves it unacked and it is redelivered. Redelivery re-inserts pages already written, but insertMany upserts on (userId, postId), so repeats are harmless. Failures are nacked with capped exponential backoff, and once deliveryCount reaches maxDeliveries the message is dead-lettered rather than retried forever. stop() waits for the loop, which finishes the in-flight batch before returning."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "The process crashes after the second of five follower pages has been inserted for a post. What happens?",
+      "choices": [
+        "The post is lost for the remaining followers because the message was already acknowledged",
+        "The message is redelivered and fanout restarts from the first page; the first two pages are re-inserted without creating duplicates",
+        "The message is redelivered and fanout resumes from the third page using the saved cursor",
+        "The message goes straight to the dead-letter queue because a partial write was detected"
+      ],
+      "answer": 1,
+      "explanation": "ack is called only after the do/while loop finishes, so the message is still unacked when the process dies and gets redelivered. The cursor lives only in a local variable, so fanout starts again from page one. insertMany upserts on (userId, postId), so those repeat writes do not create duplicates. Nothing saves the cursor, and nothing dead-letters a message because of a partial write."
+    },
+    {
+      "prompt": "With maxDeliveries = 5, a message fails on every attempt, and deliveryCount starts at 1 on the first delivery. What does the consumer do?",
+      "choices": [
+        "Retries forever with the delay capped at 60 seconds",
+        "Dead-letters it after the first failure",
+        "Nacks it on deliveries 1 through 4 with delays of 2s, 4s, 8s and 16s, then dead-letters it on delivery 5",
+        "Nacks it five times and then drops it silently"
+      ],
+      "answer": 2,
+      "explanation": "The check is deliveryCount >= maxDeliveries, so deliveries 1 to 4 are nacked with a delay of 1000 * 2^deliveryCount (2s, 4s, 8s, 16s, all under the 60s cap). On delivery 5 the check is true and the message is dead-lettered with the error as the reason. It never retries forever, does not dead-letter on the first failure, and does not drop the message silently."
+    },
+    {
+      "prompt": "One message in a batch of 10 is for an author with millions of followers and takes minutes to fan out. How does this affect the other messages?",
+      "choices": [
+        "The other nine are processed concurrently, but the consumer will not receive a new batch until the slow one finishes",
+        "The other nine wait for the slow message to finish before they start",
+        "The consumer receives new batches while the slow message is still running, so concurrency is unbounded",
+        "The slow message is cancelled after 20 seconds by the receive wait time"
+      ],
+      "answer": 0,
+      "explanation": "handle is started for every message in the batch at once, and run() awaits Promise.all before calling receive again. So the nine others run in parallel and finish quickly, but no new work is pulled until the slow fanout completes; concurrency is bounded by batchSize. The 20,000 ms passed to receive is a long-poll wait for new messages, not a timeout on handling."
+    }
+  ],
+  "concepts": [
+    "backend.messaging.queues_and_consumers",
+    "backend.messaging.at_least_once_delivery",
+    "backend.messaging.dead_letter_queues",
+    "backend.resilience.retries_and_backoff",
+    "backend.messaging.backpressure",
+    "backend.data.pagination"
+  ]
+}

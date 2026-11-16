@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/campaignCache.ts",
+        "startLine": 33,
+        "endLine": 33
+      }
+    },
+    0,
+    2,
+    1
+  ],
+  "explanations": [
+    "apply only skips an incoming state whose version equals the cached one; any other version, including an older one, overwrites the entry. If a pause event (v8) arrives and then a delayed event or a warm() snapshot taken earlier delivers v7 (active), the cache reverts to active and the bidder keeps spending on a paused campaign until another change arrives. The check should be existing.version >= incoming.version.",
+    "snapshotAgeMs returns Infinity when loadedAt is 0, which exceeds MAX_SNAPSHOT_AGE_MS, so bid returns null before looking at any entry. Nothing throws, and status checks are never bypassed.",
+    "isServable returns null for B because it is paused; C is below the floor and skipped. A is the only remaining candidate. A paused candidate only excludes itself, not the whole request.",
+    "The only freshness guard is snapshotAgeMs, which measures time since the last warm(), not since the last event. Entries carry no timestamp, isServable checks only status, and nothing calls loadAll on lookup."
+  ]
+}

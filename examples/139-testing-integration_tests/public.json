@@ -1,0 +1,51 @@
+{
+  "id": "42496f70-360f-4533-b92b-37e2cd1aef08",
+  "title": "Integration tests for a social feed query",
+  "name": "Social feed query tests",
+  "createdAt": "2026-11-15T09:41:31.683Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how these integration tests set up data and assert on the results? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does the pagination test pass the last item's createdAt rather than an offset to fetch the second page?",
+      "choices": [
+        "Offsets are not supported by Postgres with ORDER BY",
+        "The cursor filters on created_at < cursor, so the second page starts strictly after the last item seen and stays stable if newer posts are inserted between calls",
+        "It makes the query use fewer bind parameters",
+        "An offset would return the pages in ascending order"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does seedUser append part of a UUID to each handle?",
+      "choices": [
+        "Handles must be valid UUIDs",
+        "It makes the feed sort deterministic",
+        "So a unique constraint on handle cannot collide if rows from another test or a parallel run are still present",
+        "To bypass the follows foreign key"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "In the first test, what does seeding a deleted post with the newest timestamp verify that a deleted post with the oldest timestamp would not?",
+      "choices": [
+        "That the deleted_at filter is applied before LIMIT, since the deleted post would otherwise be first in the result",
+        "That the JOIN on follows is correct",
+        "That posts from unfollowed users are hidden",
+        "Nothing; both positions test the same thing equally"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.testing.integration_tests",
+    "backend.concurrency.async_await_pitfalls",
+    "backend.testing.flaky_tests",
+    "backend.data.pagination"
+  ]
+}

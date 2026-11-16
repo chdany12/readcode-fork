@@ -1,0 +1,50 @@
+{
+  "id": "a37cbb47-13bf-42c7-b61b-fb4e58b4133b",
+  "title": "Organization member role assignment",
+  "name": "Org role assignment",
+  "createdAt": "2026-11-15T09:41:31.609Z",
+  "durationMinutes": 13,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code decides whether the actor may change another member's role? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A user with the billing role calls the endpoint to change a member's role to billing. What is the response?",
+      "choices": [
+        "204, because billing outranks member",
+        "404 not_found",
+        "403 role_management_requires_admin",
+        "409 last_owner"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The sole owner of an org tries to change their own role to admin. What happens?",
+      "choices": [
+        "409 last_owner, and the role is unchanged",
+        "204, and the org is left with no owner",
+        "403 cannot_modify_higher_role",
+        "204, because owners can always change roles"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Someone who is not a member of org X sends a role change for X. Why is the outcome 404 rather than 403?",
+      "choices": [
+        "Because the target user lookup fails first",
+        "Because the actor lookup returns null and the service throws NotFoundError, hiding whether the org exists",
+        "Because the route checks org existence before calling the service",
+        "Because ROLE_RANK has no entry for non-members"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.security.authorization_checks",
+    "backend.api.status_codes_and_error_responses",
+    "backend.security.audit_logging"
+  ]
+}

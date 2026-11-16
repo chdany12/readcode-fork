@@ -1,0 +1,63 @@
+{
+  "title": "Encrypting device telemetry before storage",
+  "name": "Telemetry sealing store",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/readingCrypto.ts",
+      "content": "import { createCipheriv, createDecipheriv, createHash } from \"node:crypto\";\n\nconst ALGORITHM = \"aes-256-gcm\";\nconst FORMAT_VERSION = 1;\n\nexport interface SealedReading {\n  v: number;\n  keyId: string;\n  iv: string;\n  tag: string;\n  data: string;\n}\n\nexport interface KeyRing {\n  activeKeyId: string;\n  keys: Map<string, Buffer>;\n}\n\nfunction deviceIv(deviceId: string, keyId: string): Buffer {\n  return createHash(\"sha256\").update(`${keyId}:${deviceId}`).digest().subarray(0, 12);\n}\n\nexport function sealReading(ring: KeyRing, deviceId: string, payload: object): SealedReading {\n  const key = ring.keys.get(ring.activeKeyId);\n  if (!key || key.length !== 32) throw new Error(`active key ${ring.activeKeyId} unavailable`);\n  const iv = deviceIv(deviceId, ring.activeKeyId);\n  const cipher = createCipheriv(ALGORITHM, key, iv);\n  cipher.setAAD(Buffer.from(deviceId, \"utf8\"));\n  const data = Buffer.concat([cipher.update(JSON.stringify(payload), \"utf8\"), cipher.final()]);\n  return {\n    v: FORMAT_VERSION,\n    keyId: ring.activeKeyId,\n    iv: iv.toString(\"base64\"),\n    tag: cipher.getAuthTag().toString(\"base64\"),\n    data: data.toString(\"base64\"),\n  };\n}\n\nexport function openReading(ring: KeyRing, deviceId: string, sealed: SealedReading): unknown {\n  if (sealed.v !== FORMAT_VERSION) throw new Error(`unsupported format ${sealed.v}`);\n  const key = ring.keys.get(sealed.keyId);\n  if (!key) throw new Error(`unknown key ${sealed.keyId}`);\n  const decipher = createDecipheriv(ALGORITHM, key, Buffer.from(sealed.iv, \"base64\"));\n  decipher.setAAD(Buffer.from(deviceId, \"utf8\"));\n  decipher.setAuthTag(Buffer.from(sealed.tag, \"base64\"));\n  const plain = Buffer.concat([decipher.update(Buffer.from(sealed.data, \"base64\")), decipher.final()]);\n  return JSON.parse(plain.toString(\"utf8\"));\n}\n"
+    },
+    {
+      "path": "src/telemetryStore.ts",
+      "content": "import { Pool } from \"pg\";\nimport { KeyRing, SealedReading, openReading, sealReading } from \"./readingCrypto\";\n\nexport interface TelemetryReading {\n  deviceId: string;\n  recordedAt: Date;\n  gps?: { lat: number; lon: number };\n  batteryPct: number;\n  sensors: Record<string, number>;\n}\n\nexport class TelemetryStore {\n  constructor(private readonly db: Pool, private readonly ring: KeyRing) {}\n\n  async append(reading: TelemetryReading): Promise<void> {\n    const sealed = sealReading(this.ring, reading.deviceId, {\n      gps: reading.gps ?? null,\n      batteryPct: reading.batteryPct,\n      sensors: reading.sensors,\n    });\n    await this.db.query(\n      \"INSERT INTO telemetry (device_id, recorded_at, key_id, sealed) VALUES ($1, $2, $3, $4)\",\n      [reading.deviceId, reading.recordedAt, sealed.keyId, JSON.stringify(sealed)],\n    );\n  }\n\n  async recent(deviceId: string, limit = 100): Promise<TelemetryReading[]> {\n    const { rows } = await this.db.query(\n      \"SELECT recorded_at, sealed FROM telemetry WHERE device_id = $1 ORDER BY recorded_at DESC LIMIT $2\",\n      [deviceId, Math.min(Math.max(limit, 1), 1000)],\n    );\n    return rows.map((row) => {\n      const body = openReading(this.ring, deviceId, JSON.parse(row.sealed) as SealedReading) as Omit<\n        TelemetryReading,\n        \"deviceId\" | \"recordedAt\"\n      > & { gps: TelemetryReading[\"gps\"] | null };\n      return {\n        deviceId,\n        recordedAt: row.recorded_at,\n        gps: body.gps ?? undefined,\n        batteryPct: body.batteryPct,\n        sensors: body.sensors,\n      };\n    });\n  }\n\n  async rewrapOlderThan(cutoff: Date, batchSize = 500): Promise<number> {\n    const { rows } = await this.db.query(\n      \"SELECT id, device_id, sealed FROM telemetry WHERE key_id <> $1 AND recorded_at < $2 LIMIT $3\",\n      [this.ring.activeKeyId, cutoff, batchSize],\n    );\n    for (const row of rows) {\n      const body = openReading(this.ring, row.device_id, JSON.parse(row.sealed) as SealedReading) as object;\n      const resealed = sealReading(this.ring, row.device_id, body);\n      await this.db.query(\"UPDATE telemetry SET key_id = $1, sealed = $2 WHERE id = $3\", [\n        resealed.keyId,\n        JSON.stringify(resealed),\n        row.id,\n      ]);\n    }\n    return rows.length;\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/readingCrypto.ts",
+    "snippet": "  const iv = deviceIv(deviceId, ring.activeKeyId);"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code encrypts telemetry at rest? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "sealReading() derives the GCM nonce deterministically from keyId and deviceId, so every reading from the same device under the same key reuses one IV. AES-GCM nonce reuse leaks the XOR of plaintexts (exposing GPS positions across readings) and lets an attacker recover the GHASH key and forge authentication tags. The IV must be random (randomBytes(12)) or a never-repeating counter per key."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "An attacker with database write access copies a sealed blob from device A's row into a row belonging to device B. What happens when recent() is called for device B?",
+      "choices": [
+        "The reading is returned as if device B had sent it",
+        "openReading() throws because the deviceId is bound as additional authenticated data",
+        "The row is skipped silently and the remaining readings are returned",
+        "The reading is decrypted but its gps field is dropped"
+      ],
+      "answer": 1,
+      "explanation": "Both seal and open call setAAD with the deviceId, so authenticating under device B's id fails in decipher.final() and the error propagates out of the map, rejecting the whole call. Nothing catches the error, so rows are not skipped, and no partial decryption occurs."
+    },
+    {
+      "prompt": "After activeKeyId is rotated to a new key, what is required for old rows to remain readable through recent()?",
+      "choices": [
+        "Nothing; recent() only works on rows already rewrapped",
+        "Only the new key, because GCM can decrypt with any key from the same ring",
+        "The old IVs must be regenerated with the new key id",
+        "The old key must stay in ring.keys until rewrapOlderThan() has migrated those rows"
+      ],
+      "answer": 3,
+      "explanation": "openReading() looks up sealed.keyId in ring.keys, so any row still sealed with the old key needs that key present. rewrapOlderThan() decrypts with the old key and reseals with the active one. Decryption needs the exact key, and IVs are stored per row."
+    },
+    {
+      "prompt": "Which reading fields are protected by encryption at rest in the telemetry table?",
+      "choices": [
+        "All fields including device_id and recorded_at",
+        "Only gps, because the other fields are numeric",
+        "gps, batteryPct and sensors; device_id and recorded_at stay in plaintext columns",
+        "None; the sealed column stores base64 that anyone can decode"
+      ],
+      "answer": 2,
+      "explanation": "append() seals an object with gps, batteryPct and sensors, while device_id and recorded_at are inserted as plaintext columns needed for indexing and querying. Base64 is just the encoding of the ciphertext, not the plaintext."
+    }
+  ],
+  "concepts": [
+    "backend.security.encryption_at_rest_and_in_transit",
+    "backend.security.secrets_handling"
+  ]
+}

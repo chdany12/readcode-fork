@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    3,
+    1,
+    0
+  ],
+  "explanations": [
+    "There is none. The fetch is bounded by an AbortController timeout that is always cleared in finally; a failed refresh keeps the last good snapshot instead of clearing it; invalid percentages are skipped rather than poisoning the snapshot; the snapshot is swapped in one assignment so readers never see a half-built map; unknown flags fall back to explicit defaults; bucketing hashes flag key plus device id and uses `< rolloutPercent` over 0-99, so 0% is fully off and 100% fully on; the firmware gate compares numerically, so 1.10 sorts after 1.9.",
+    "refresh() only assigns `this.snapshot` after a successful fetch; on error it logs and leaves the old map. Defaults apply only to keys missing from the snapshot, and isEnabled never throws.",
+    "compareVersions parses segments as integers, so 2 = 2, then 9 - 10 < 0, and the firmware gate returns false before bucketing. A string comparison would wrongly rank 2.9.4 higher; segment padding does not matter here.",
+    "unref() tells the event loop not to wait on this timer, so the process can exit once other work is done. It does not change threading, logging, or timing of the first tick."
+  ]
+}

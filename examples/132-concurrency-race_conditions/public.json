@@ -1,0 +1,50 @@
+{
+  "id": "cf96842c-1d3a-475b-863d-60c6b197940f",
+  "title": "Clinic appointment slot booking",
+  "name": "Appointment slot booker",
+  "createdAt": "2026-11-15T09:41:31.676Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how AppointmentBooker handles concurrent bookings and cancellations for the same slot? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Three bookings for slot A arrive at once. The first one's repository save rejects. What happens to the other two?",
+      "choices": [
+        "They hang forever because the lock is never released",
+        "They run in order after the first finishes, because release() is called in finally",
+        "They run in parallel because the failed call clears the lock map",
+        "They fail with the same error as the first"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Bookings for slot A and slot B arrive at the same time. How do they interact?",
+      "choices": [
+        "They are serialized behind one global lock",
+        "Slot B waits until slot A's tail entry is deleted",
+        "They can run concurrently because locks are keyed by slotId",
+        "Slot B is rejected while slot A is locked"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does runExclusive check this.tails.get(key) === tail before deleting?",
+      "choices": [
+        "To avoid removing a newer waiter's tail, which would let a later caller skip the queue",
+        "To prevent a memory leak when fn throws",
+        "Because Map.delete throws if the key is missing",
+        "To make the first caller always run before the others"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.race_conditions",
+    "backend.concurrency.locking_and_lock_ordering",
+    "backend.errors.cleanup_on_error_paths"
+  ]
+}

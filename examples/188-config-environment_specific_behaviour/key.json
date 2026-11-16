@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    2,
+    2
+  ],
+  "explanations": [
+    "There is none. Every environment-dependent switch fails closed: production is rejected if the rail host is a sandbox, non-production is rejected if it is not; the clock override throws outside development/test rather than being silently ignored; demo seeding requires both a local env and an explicit SEED_DEMO_ACCOUNTS flag; DB TLS is on for everything except development/test; and production has no default transfer limit, so a missing MAX_TRANSFER_MINOR fails the regex on the empty string instead of inheriting the 100000 dev default. LEDGER_ENV itself must be an explicit known value, so a typo cannot fall through to a permissive mode.",
+    "The override block throws 'only allowed in development and test' whenever isLocal is false, and staging is not local, so boot fails. It is not silently ignored (there is no fallback branch), not applied (the throw happens first), and seeding is disabled in staging anyway.",
+    "For production the fallback is the empty string, which does not match /^[0-9]+$/, so loadLedgerConfig throws before BigInt is called. The 100000 default only applies outside production; BigInt('') would yield 0n, but it is never reached; nothing is deferred to transfer time.",
+    "readEnv trims and lowercases, so 'Production' becomes the valid 'production'. With isLive true and a sandbox rail host, the first rail check throws. It is not unknown after lowercasing, there is no fallback to development, and requireDbTls would be true for production anyway."
+  ]
+}

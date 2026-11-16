@@ -1,0 +1,51 @@
+{
+  "id": "87c550d1-b25e-42c9-9d6b-d7d2c9365349",
+  "title": "Refund endpoint with idempotency key reservation",
+  "name": "Charge refund service",
+  "createdAt": "2026-11-15T09:41:31.614Z",
+  "durationMinutes": 15,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code records outcomes against idempotency keys? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client retries a refund with the same key while the first request is still waiting on the gateway. What does the retry receive?",
+      "choices": [
+        "The 201 from the first request once it completes",
+        "409 request_in_progress",
+        "422 idempotency_key_mismatch",
+        "A second refund is issued"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A merchant reuses key K, which earlier refunded 500 cents on charge ch_1, to request a 700-cent refund on ch_1. What happens?",
+      "choices": [
+        "The original 201 for 500 cents is replayed",
+        "A 700-cent refund is issued",
+        "422 idempotency_key_mismatch",
+        "409 request_in_progress"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The request asks to refund more than the remaining refundable amount. Which statement about a retry with the same key and body is correct?",
+      "choices": [
+        "The retry re-checks the charge and may succeed if another refund was reversed",
+        "The retry gets 409 because the key stays in_progress",
+        "The first request throws and releases the key, so the retry runs fresh",
+        "The retry replays the stored 422 invalid_refund_amount"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.idempotency",
+    "backend.api.status_codes_and_error_responses",
+    "backend.data.money_and_ledgers",
+    "backend.concurrency.race_conditions"
+  ]
+}

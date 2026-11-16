@@ -1,0 +1,63 @@
+{
+  "title": "Ad campaign budget pacer",
+  "name": "Campaign budget pacer",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/spendStore.ts",
+      "content": "export interface SpendStore {\n  getSpentMicros(campaignId: string, day: string): Promise<number>;\n  setSpentMicros(campaignId: string, day: string, value: number): Promise<void>;\n}\n\nexport class RedisSpendStore implements SpendStore {\n  constructor(private readonly redis: {\n    get(key: string): Promise<string | null>;\n    set(key: string, value: string, mode: \"EX\", ttl: number): Promise<unknown>;\n  }) {}\n\n  private key(campaignId: string, day: string): string {\n    return `spend:${campaignId}:${day}`;\n  }\n\n  async getSpentMicros(campaignId: string, day: string): Promise<number> {\n    const raw = await this.redis.get(this.key(campaignId, day));\n    return raw === null ? 0 : Number(raw);\n  }\n\n  async setSpentMicros(campaignId: string, day: string, value: number): Promise<void> {\n    await this.redis.set(this.key(campaignId, day), String(value), \"EX\", 60 * 60 * 48);\n  }\n}\n"
+    },
+    {
+      "path": "src/budgetPacer.ts",
+      "content": "import { SpendStore } from \"./spendStore\";\n\nexport interface Campaign {\n  id: string;\n  dailyBudgetMicros: number;\n  bidMicros: number;\n  active: boolean;\n}\n\nexport interface CampaignLookup {\n  get(campaignId: string): Promise<Campaign | null>;\n}\n\nexport type ChargeResult =\n  | { ok: true; remainingMicros: number }\n  | { ok: false; reason: \"inactive\" | \"budget_exhausted\" | \"unknown_campaign\" };\n\nfunction utcDay(ts: number): string {\n  return new Date(ts).toISOString().slice(0, 10);\n}\n\nexport class BudgetPacer {\n  constructor(\n    private readonly campaigns: CampaignLookup,\n    private readonly spend: SpendStore,\n    private readonly now: () => number = Date.now,\n  ) {}\n\n  async chargeImpression(campaignId: string): Promise<ChargeResult> {\n    const campaign = await this.campaigns.get(campaignId);\n    if (!campaign) return { ok: false, reason: \"unknown_campaign\" };\n    if (!campaign.active) return { ok: false, reason: \"inactive\" };\n\n    const day = utcDay(this.now());\n    const spent = await this.spend.getSpentMicros(campaign.id, day);\n    const next = spent + campaign.bidMicros;\n    if (next > campaign.dailyBudgetMicros) {\n      return { ok: false, reason: \"budget_exhausted\" };\n    }\n\n    await this.spend.setSpentMicros(campaign.id, day, next);\n    return { ok: true, remainingMicros: campaign.dailyBudgetMicros - next };\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/budgetPacer.ts",
+    "snippet": "    await this.spend.setSpentMicros(campaign.id, day, next);"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how BudgetPacer handles concurrent impression charges for the same campaign? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "chargeImpression reads the spend, checks it, then writes back an absolute value with setSpentMicros. Concurrent charges (across requests or ad server instances) for the same campaign can all read the same spent value and each write spent + bid, so increments are lost: the counter under-reports spend and the budget check passes for impressions that exceed the daily budget. The update needs to be atomic, for example Redis INCRBY and checking the returned total (or a Lua script / WATCH transaction)."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A campaign has dailyBudgetMicros 1,000,000, bidMicros 300,000, and 900,000 already spent today. What does a single charge return?",
+      "choices": [
+        "{ ok: true, remainingMicros: 100000 }",
+        "{ ok: true, remainingMicros: -200000 }",
+        "{ ok: false, reason: \"budget_exhausted\" }",
+        "{ ok: false, reason: \"inactive\" }"
+      ],
+      "answer": 2,
+      "explanation": "next = 900,000 + 300,000 = 1,200,000 which exceeds the budget, so the method returns budget_exhausted without writing. It never returns a negative remaining value from this path, and the campaign is active."
+    },
+    {
+      "prompt": "How does spend reset at the start of a new day?",
+      "choices": [
+        "A scheduled job deletes the spend keys at midnight",
+        "The key includes the UTC date, so a new day reads a fresh key that defaults to 0",
+        "The 48 hour TTL expires the previous value before the next day",
+        "It never resets; budgets are cumulative"
+      ],
+      "answer": 1,
+      "explanation": "utcDay produces the date string used in the spend:<id>:<day> key, and a missing key returns 0. The TTL only cleans up old keys and does not drive the reset; there is no scheduled job."
+    },
+    {
+      "prompt": "The day key is computed from this.now() in UTC. What is a consequence for an advertiser in UTC-8?",
+      "choices": [
+        "Their budget resets at 4pm local time (midnight UTC)",
+        "Their budget resets at local midnight",
+        "Their budget never resets",
+        "Each impression uses a random day key"
+      ],
+      "answer": 0,
+      "explanation": "toISOString is always UTC, so the day boundary is UTC midnight, which is 4pm in UTC-8. Nothing converts to the advertiser's local timezone."
+    }
+  ],
+  "concepts": [
+    "backend.concurrency.race_conditions",
+    "backend.concurrency.atomic_operations"
+  ]
+}

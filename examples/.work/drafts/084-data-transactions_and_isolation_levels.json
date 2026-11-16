@@ -1,0 +1,61 @@
+{
+  "title": "Pinned posts with a per-profile limit",
+  "name": "Profile pinned posts",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/tx.ts",
+      "content": "import { Pool, PoolClient } from \"pg\";\n\nconst SERIALIZATION_FAILURE = \"40001\";\nconst DEADLOCK_DETECTED = \"40P01\";\n\nexport type IsolationLevel = \"READ COMMITTED\" | \"REPEATABLE READ\" | \"SERIALIZABLE\";\n\nexport async function withTransaction<T>(\n  pool: Pool,\n  isolation: IsolationLevel,\n  work: (client: PoolClient) => Promise<T>,\n  maxAttempts = 4\n): Promise<T> {\n  let attempt = 0;\n  for (;;) {\n    attempt++;\n    const client = await pool.connect();\n    try {\n      await client.query(`BEGIN ISOLATION LEVEL ${isolation}`);\n      const result = await work(client);\n      await client.query(\"COMMIT\");\n      return result;\n    } catch (err: any) {\n      await client.query(\"ROLLBACK\").catch(() => undefined);\n      const retryable = err?.code === SERIALIZATION_FAILURE || err?.code === DEADLOCK_DETECTED;\n      if (!retryable || attempt >= maxAttempts) throw err;\n      await new Promise((r) => setTimeout(r, 10 * 2 ** attempt + Math.random() * 10));\n    } finally {\n      client.release();\n    }\n  }\n}\n"
+    },
+    {
+      "path": "src/pinnedPostService.ts",
+      "content": "import { Pool } from \"pg\";\nimport { withTransaction } from \"./tx\";\n\nexport class PinLimitError extends Error {\n  constructor(public readonly limit: number) {\n    super(`profile already has ${limit} pinned posts`);\n  }\n}\n\nexport class PostNotFoundError extends Error {}\n\nconst MAX_PINNED = 3;\n\nexport class PinnedPostService {\n  constructor(private readonly pool: Pool) {}\n\n  async pin(authorId: string, postId: string): Promise<void> {\n    await withTransaction(this.pool, \"SERIALIZABLE\", async (client) => {\n      const post = await client.query(\n        `SELECT id, pinned FROM posts WHERE id = $1 AND author_id = $2 AND deleted_at IS NULL`,\n        [postId, authorId]\n      );\n      if (post.rowCount === 0) throw new PostNotFoundError(postId);\n      if (post.rows[0].pinned) return;\n\n      const { rows } = await client.query(\n        `SELECT count(*)::int AS n FROM posts\n          WHERE author_id = $1 AND pinned = true AND deleted_at IS NULL`,\n        [authorId]\n      );\n      if (rows[0].n >= MAX_PINNED) throw new PinLimitError(MAX_PINNED);\n\n      await client.query(\n        `UPDATE posts SET pinned = true, pinned_at = now() WHERE id = $1`,\n        [postId]\n      );\n      await client.query(\n        `INSERT INTO feed_events (author_id, post_id, kind, created_at)\n         VALUES ($1, $2, 'pinned', now())`,\n        [authorId, postId]\n      );\n    });\n  }\n\n  async unpin(authorId: string, postId: string): Promise<void> {\n    await withTransaction(this.pool, \"SERIALIZABLE\", async (client) => {\n      const { rowCount } = await client.query(\n        `UPDATE posts SET pinned = false, pinned_at = NULL\n          WHERE id = $1 AND author_id = $2 AND pinned = true`,\n        [postId, authorId]\n      );\n      if (rowCount === 0) return;\n      await client.query(\n        `INSERT INTO feed_events (author_id, post_id, kind, created_at)\n         VALUES ($1, $2, 'unpinned', now())`,\n        [authorId, postId]\n      );\n    });\n  }\n\n  async listPinned(authorId: string): Promise<string[]> {\n    const { rows } = await this.pool.query(\n      `SELECT id FROM posts\n        WHERE author_id = $1 AND pinned = true AND deleted_at IS NULL\n        ORDER BY pinned_at DESC`,\n      [authorId]\n    );\n    return rows.map((r) => r.id);\n  }\n}\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code enforces the limit of three pinned posts under concurrent requests? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is none. The count-then-update in pin() is a classic write-skew pattern, but it runs under SERIALIZABLE. If two pin() calls for the same author both read a count of 2 and each updates a different post, PostgreSQL's serializable snapshot isolation detects the read/write dependency cycle and aborts one with 40001. withTransaction rolls back, waits, and retries; on retry the count is 3 and PinLimitError is thrown. Each attempt uses a fresh connection and the error is rethrown once attempts are exhausted."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "An author has 2 pinned posts. Two pin() calls for two different posts run at the same time. What is the outcome?",
+      "choices": [
+        "Both succeed and the author ends up with 4 pinned posts",
+        "Exactly one succeeds; the other is retried and then fails with PinLimitError",
+        "Both fail with a serialization error returned to the caller",
+        "One succeeds and the other blocks until the first commits, then succeeds too"
+      ],
+      "answer": 1,
+      "explanation": "Under SERIALIZABLE, the two transactions read overlapping rows (the count) and each writes a row the other read, so one is aborted with 40001. withTransaction retries it; the fresh attempt sees 3 pinned and throws PinLimitError, which is not retryable. Four pins would need a weaker isolation level, the error is not surfaced because it is retried, and serializable checks do not simply block-and-proceed."
+    },
+    {
+      "prompt": "Inside the work callback, PinLimitError is thrown. What does withTransaction do?",
+      "choices": [
+        "Retries up to maxAttempts because any error inside the callback is retried",
+        "Commits the transaction and then rethrows",
+        "Rolls back, releases the client, and rethrows immediately",
+        "Leaves the transaction open on the client so the caller can inspect it"
+      ],
+      "answer": 2,
+      "explanation": "The catch block always runs ROLLBACK, and since PinLimitError has no 40001/40P01 code, retryable is false and it is rethrown; finally releases the client. Only serialization and deadlock errors are retried, COMMIT is skipped because the throw happens before it, and the client is never handed back mid-transaction."
+    },
+    {
+      "prompt": "Why does listPinned() use pool.query directly instead of withTransaction?",
+      "choices": [
+        "It is a single read statement, which already sees one consistent snapshot, so an explicit transaction adds nothing",
+        "Because SERIALIZABLE transactions cannot run SELECT with ORDER BY",
+        "Because pool.query reads uncommitted pins from in-flight transactions",
+        "To bypass the row locks held by pin()"
+      ],
+      "answer": 0,
+      "explanation": "A single statement gets its own snapshot in PostgreSQL, so wrapping it in a transaction provides no extra consistency. SERIALIZABLE supports any SELECT, PostgreSQL never exposes uncommitted data, and plain reads are not blocked by row locks anyway."
+    }
+  ],
+  "concepts": [
+    "backend.data.transactions_and_isolation_levels",
+    "backend.concurrency.race_conditions",
+    "backend.resilience.retries_and_backoff"
+  ]
+}

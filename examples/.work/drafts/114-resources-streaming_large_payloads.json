@@ -1,0 +1,62 @@
+{
+  "title": "Agency booking CSV export",
+  "name": "Booking CSV export",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/bookingExport.ts",
+      "content": "import { Router, Request, Response } from \"express\";\nimport { pipeline } from \"node:stream/promises\";\nimport { Readable } from \"node:stream\";\nimport { Pool } from \"pg\";\nimport Cursor from \"pg-cursor\";\nimport { toCsvRow, CSV_HEADER, BookingRow } from \"./csv\";\n\nconst BATCH_SIZE = 500;\n\nexport function bookingExportRouter(pool: Pool): Router {\n  const router = Router();\n\n  router.get(\"/agencies/:agencyId/bookings/export.csv\", async (req: Request, res: Response) => {\n    const agencyId = req.params.agencyId;\n    const from = String(req.query.from ?? \"\");\n    const to = String(req.query.to ?? \"\");\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(from) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(to)) {\n      res.status(400).json({ error: \"from and to must be YYYY-MM-DD\" });\n      return;\n    }\n\n    const client = await pool.connect();\n    const cursor = client.query(\n      new Cursor<BookingRow>(\n        `SELECT booking_ref, traveller_name, departs_at, origin, destination, fare_cents, currency\n           FROM bookings\n          WHERE agency_id = $1 AND departs_at >= $2 AND departs_at < $3\n          ORDER BY departs_at, booking_ref`,\n        [agencyId, from, to],\n      ),\n    );\n\n    async function* rows(): AsyncGenerator<string> {\n      yield CSV_HEADER;\n      while (true) {\n        const batch = await cursor.read(BATCH_SIZE);\n        if (batch.length === 0) return;\n        for (const row of batch) yield toCsvRow(row);\n      }\n    }\n\n    res.status(200);\n    res.setHeader(\"Content-Type\", \"text/csv; charset=utf-8\");\n    res.setHeader(\"Content-Disposition\", `attachment; filename=\"bookings-${from}-${to}.csv\"`);\n\n    try {\n      await pipeline(Readable.from(rows()), res);\n    } catch (err) {\n      req.log?.warn({ err, agencyId }, \"booking export aborted\");\n      if (!res.headersSent) res.status(500).end();\n    } finally {\n      await cursor.close().catch(() => undefined);\n      client.release();\n    }\n  });\n\n  return router;\n}\n"
+    },
+    {
+      "path": "src/csv.ts",
+      "content": "export interface BookingRow {\n  booking_ref: string;\n  traveller_name: string;\n  departs_at: Date;\n  origin: string;\n  destination: string;\n  fare_cents: number;\n  currency: string;\n}\n\nexport const CSV_HEADER = \"booking_ref,traveller_name,departs_at,origin,destination,fare,currency\\n\";\n\nfunction escape(field: string): string {\n  if (/[\",\\n\\r]/.test(field)) return `\"${field.replace(/\"/g, '\"\"')}\"`;\n  return field;\n}\n\nexport function toCsvRow(r: BookingRow): string {\n  const fare = (r.fare_cents / 100).toFixed(2);\n  return [\n    r.booking_ref,\n    r.traveller_name,\n    r.departs_at.toISOString(),\n    r.origin,\n    r.destination,\n    fare,\n    r.currency,\n  ].map(escape).join(\",\") + \"\\n\";\n}\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this endpoint streams a potentially very large booking export to the client? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is none. Rows are pulled from a server-side cursor 500 at a time, and Readable.from over an async generator is pull-based, so stream.pipeline only asks for the next batch when res can accept more data; memory stays bounded by roughly one batch. If the client disconnects, pipeline rejects and destroys the source, and the finally block closes the cursor and releases the pooled connection on every path."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A client downloads a 2-million-row export over a slow mobile connection. How does memory on the API server behave?",
+      "choices": [
+        "It stays roughly bounded, because the generator only reads the next cursor batch when the response stream pulls more data",
+        "It grows to hold all 2 million rows before sending",
+        "It grows by 500 rows every tick regardless of the client's speed",
+        "It is bounded only because Express buffers responses to disk"
+      ],
+      "answer": 0,
+      "explanation": "Readable.from(rows()) only advances the async generator when the readable needs data, and pipeline respects res's backpressure. So cursor.read is called at the client's pace. Nothing loads all rows up front, nothing reads on a timer, and Express does not spill responses to disk."
+    },
+    {
+      "prompt": "The user closes the browser tab halfway through the download. What happens to the database connection?",
+      "choices": [
+        "It stays checked out until the query naturally finishes",
+        "It is released only when the pool's idle timeout fires",
+        "pipeline rejects, the error is logged, then the cursor is closed and the connection is returned to the pool",
+        "The process crashes because res emits an unhandled error"
+      ],
+      "answer": 2,
+      "explanation": "pipeline rejects on premature close of res and destroys the source; the catch logs it and the finally always closes the cursor and calls client.release(). Pool idle timeouts and crashes don't come into it."
+    },
+    {
+      "prompt": "Why does the query ORDER BY departs_at, booking_ref rather than just departs_at?",
+      "choices": [
+        "Postgres cursors require a unique ORDER BY",
+        "It makes the output order deterministic when several bookings share a departure time",
+        "It lets the query use a hash join",
+        "It is needed so the CSV header row is emitted first"
+      ],
+      "answer": 1,
+      "explanation": "Ties on departs_at would otherwise come back in arbitrary order, so repeated exports could differ. Cursors don't require a unique ordering, join strategy is unrelated, and the header is yielded by the generator before any rows."
+    }
+  ],
+  "concepts": [
+    "backend.resources.streaming_large_payloads",
+    "backend.messaging.backpressure",
+    "backend.errors.cleanup_on_error_paths",
+    "backend.data.connection_pooling"
+  ]
+}

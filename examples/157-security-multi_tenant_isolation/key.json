@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    2,
+    2
+  ],
+  "explanations": [
+    "There is no defect. The queries in SyncService that filter only on path look risky, but isolation is enforced by row-level security: FORCE ROW LEVEL SECURITY applies the policy even to the table owner, and USING/WITH CHECK limit reads and writes to rows where tenant_id matches app.tenant_id. withTenant sets that value with set_config(..., true), which is transaction-local, inside BEGIN, so it is cleared at COMMIT or ROLLBACK and never leaks to the next user of the pooled connection. If the setting is missing, current_setting(..., true) returns NULL and the policy matches no rows. The tenant id is also validated as a UUID and passed as a bind parameter.",
+    "With false, set_config sets the value for the session, not just the current transaction. Pooled connections are reused, so the value would outlive the request (a later caller that skipped setting it would act as the earlier tenant). With true it is reset at COMMIT/ROLLBACK. The policy is still enforced either way, and both forms are valid.",
+    "The UPDATE is conditioned on revision = $2. Postgres row locking serializes the two; after the first commits, the second re-checks the row, sees revision 5, and updates nothing. It then reads the current revision and throws ConflictError(path, 5). Only one write wins, and nothing is silently overwritten.",
+    "ON CONFLICT (tenant_id, path) DO NOTHING suppresses the unique violation and returns zero rows, so the code falls through to the SELECT and throws ConflictError with the current revision. No row is replaced or duplicated, and no raw database error reaches the caller."
+  ]
+}

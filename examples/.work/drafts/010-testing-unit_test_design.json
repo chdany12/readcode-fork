@@ -1,0 +1,62 @@
+{
+  "title": "Unit tests for a recency-weighted search ranker",
+  "name": "Search ranker tests",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "ranker.ts",
+      "content": "export interface Clock {\n  now(): number;\n}\n\nexport interface IndexedDoc {\n  id: string;\n  title: string;\n  body: string;\n  updatedAt: number;\n}\n\nexport interface ScoredHit {\n  id: string;\n  score: number;\n}\n\nconst DAY_MS = 24 * 60 * 60 * 1000;\n\nexport function tokenize(text: string): string[] {\n  return text\n    .toLowerCase()\n    .split(/[^a-z0-9]+/)\n    .filter((t) => t.length > 1);\n}\n\nexport class Ranker {\n  constructor(\n    private readonly clock: Clock,\n    private readonly titleWeight = 3,\n    private readonly halfLifeDays = 30,\n  ) {}\n\n  score(query: string, doc: IndexedDoc): number {\n    const terms = new Set(tokenize(query));\n    if (terms.size === 0) return 0;\n\n    const titleTokens = tokenize(doc.title);\n    const bodyTokens = tokenize(doc.body);\n    let raw = 0;\n    for (const term of terms) {\n      raw += this.titleWeight * titleTokens.filter((t) => t === term).length;\n      raw += bodyTokens.filter((t) => t === term).length;\n    }\n    if (raw === 0) return 0;\n\n    const ageDays = Math.max(0, this.clock.now() - doc.updatedAt) / DAY_MS;\n    const decay = Math.pow(0.5, ageDays / this.halfLifeDays);\n    return raw * decay;\n  }\n\n  rank(query: string, docs: IndexedDoc[], limit: number): ScoredHit[] {\n    return docs\n      .map((d) => ({ id: d.id, score: this.score(query, d) }))\n      .filter((h) => h.score > 0)\n      .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))\n      .slice(0, limit);\n  }\n}\n"
+    },
+    {
+      "path": "ranker.test.ts",
+      "content": "import { Clock, IndexedDoc, Ranker, tokenize } from \"./ranker\";\n\nconst NOW = Date.UTC(2026, 0, 31);\nconst DAY = 24 * 60 * 60 * 1000;\n\nclass FixedClock implements Clock {\n  constructor(private readonly t: number) {}\n  now() { return this.t; }\n}\n\nfunction doc(overrides: Partial<IndexedDoc> & { id: string }): IndexedDoc {\n  return { title: \"\", body: \"\", updatedAt: NOW, ...overrides };\n}\n\ndescribe(\"tokenize\", () => {\n  it(\"lowercases, splits on punctuation and drops single characters\", () => {\n    expect(tokenize(\"Re-Index a SHARD, v2!\")).toEqual([\"re\", \"index\", \"shard\", \"v2\"]);\n  });\n});\n\ndescribe(\"Ranker\", () => {\n  const ranker = new Ranker(new FixedClock(NOW));\n\n  it(\"weights title matches above body matches\", () => {\n    const inTitle = doc({ id: \"t\", title: \"shard rebalance\" });\n    const inBody = doc({ id: \"b\", body: \"shard rebalance\" });\n\n    expect(ranker.score(\"shard\", inTitle)).toBe(3);\n    expect(ranker.score(\"shard\", inBody)).toBe(1);\n  });\n\n  it(\"halves the score after one half-life\", () => {\n    const fresh = doc({ id: \"f\", body: \"replica\" });\n    const old = doc({ id: \"o\", body: \"replica\", updatedAt: NOW - 30 * DAY });\n\n    expect(ranker.score(\"replica\", old)).toBeCloseTo(ranker.score(\"replica\", fresh) / 2, 10);\n  });\n\n  it(\"does not boost documents dated in the future\", () => {\n    const future = doc({ id: \"x\", body: \"replica\", updatedAt: NOW + 5 * DAY });\n    expect(ranker.score(\"replica\", future)).toBe(1);\n  });\n\n  it(\"returns zero for queries with no usable terms\", () => {\n    expect(ranker.score(\"a ! ?\", doc({ id: \"z\", body: \"a b c\" }))).toBe(0);\n  });\n\n  it(\"drops non-matching docs, orders by score, breaks ties by id, and applies the limit\", () => {\n    const docs = [\n      doc({ id: \"c\", body: \"merge\" }),\n      doc({ id: \"a\", body: \"merge\" }),\n      doc({ id: \"top\", title: \"merge\" }),\n      doc({ id: \"miss\", body: \"unrelated\" }),\n    ];\n\n    expect(ranker.rank(\"merge\", docs, 3)).toEqual([\n      { id: \"top\", score: 3 },\n      { id: \"a\", score: 1 },\n      { id: \"c\", score: 1 },\n    ]);\n    expect(ranker.rank(\"merge\", docs, 1).map((h) => h.id)).toEqual([\"top\"]);\n  });\n});\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how these unit tests are designed to verify the ranker's scoring and ordering? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is none. Time is injected through a FixedClock, so recency decay is deterministic rather than depending on Date.now(). The shared `ranker` at describe level is stateless, so sharing it cannot leak state between tests. Exact equality is used where values are integers (no decay at age 0), and toBeCloseTo is used for the half-life ratio where floating point is involved. The rank test includes a tie and a non-match, so it actually exercises the id tie-break, the filter, and the limit."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "If the FixedClock were replaced with a clock returning Date.now(), what would happen to the test \"weights title matches above body matches\" when run today?",
+      "choices": [
+        "Nothing, because title weighting is independent of time",
+        "It would fail, because docs dated at NOW would be months old and their scores would decay below 3 and 1",
+        "It would pass only on the 31st of the month",
+        "It would throw, because Clock requires a fixed value"
+      ],
+      "answer": 1,
+      "explanation": "doc() defaults updatedAt to NOW (Jan 31 2026). With a real clock, ageDays is large, the decay factor is well under 1, and the exact toBe(3)/toBe(1) checks fail. Title weighting is multiplied by decay, so it is not time independent; the day of month is irrelevant; nothing throws."
+    },
+    {
+      "prompt": "In the rank test, docs \"a\" and \"c\" both score 1. What does including both of them verify?",
+      "choices": [
+        "That duplicate documents are removed",
+        "That the limit is applied before sorting",
+        "That ties are broken deterministically by id, so \"a\" comes before \"c\" regardless of input order",
+        "That body matches are weighted equally to title matches"
+      ],
+      "answer": 2,
+      "explanation": "\"c\" appears before \"a\" in the input, but the expected output has \"a\" first, which only holds because of `a.id.localeCompare(b.id)` in the sort comparator. Nothing is deduplicated, the limit is applied after sort, and \"top\" scoring 3 shows title and body are not equal."
+    },
+    {
+      "prompt": "Why does the future-dated document test expect a score of exactly 1?",
+      "choices": [
+        "Because Math.max(0, ...) clamps negative age to zero, so decay is 1",
+        "Because future documents are filtered out and given a default score",
+        "Because the half-life is applied in reverse and capped at 1",
+        "Because tokenize ignores documents with a future timestamp"
+      ],
+      "answer": 0,
+      "explanation": "ageDays uses Math.max(0, now - updatedAt), so a negative age becomes 0 and 0.5^0 = 1, leaving the single body match's raw score of 1. There is no filtering of future docs, no reversed half-life, and tokenize does not look at timestamps."
+    }
+  ],
+  "concepts": [
+    "backend.testing.unit_test_design",
+    "backend.testing.mocking_and_fakes",
+    "backend.testing.flaky_tests",
+    "backend.design.dependency_injection"
+  ]
+}

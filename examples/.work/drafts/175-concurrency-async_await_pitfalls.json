@@ -1,0 +1,64 @@
+{
+  "title": "Incremental catalog reindexing job",
+  "name": "Catalog reindex job",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/types.ts",
+      "content": "export interface ProductDoc {\n  id: string;\n  title: string;\n  description: string;\n  updatedAt: string;\n}\n\nexport interface CatalogStore {\n  listChangedSince(cursor: string, limit: number): Promise<{ docs: ProductDoc[]; nextCursor: string | null }>;\n}\n\nexport interface SearchIndex {\n  upsert(id: string, fields: Record<string, unknown>): Promise<void>;\n  refresh(): Promise<void>;\n}\n\nexport interface CursorStore {\n  load(job: string): Promise<string>;\n  save(job: string, cursor: string): Promise<void>;\n}\n\nexport interface Tokenizer {\n  analyze(text: string): Promise<string[]>;\n}\n"
+    },
+    {
+      "path": "src/catalogReindexer.ts",
+      "content": "import { CatalogStore, CursorStore, ProductDoc, SearchIndex, Tokenizer } from \"./types\";\n\nconst JOB = \"catalog-reindex\";\n\nexport class CatalogReindexer {\n  constructor(\n    private readonly catalog: CatalogStore,\n    private readonly index: SearchIndex,\n    private readonly cursors: CursorStore,\n    private readonly tokenizer: Tokenizer,\n    private readonly pageSize = 100,\n  ) {}\n\n  async runOnce(): Promise<number> {\n    let cursor = await this.cursors.load(JOB);\n    let total = 0;\n\n    for (;;) {\n      const page = await this.catalog.listChangedSince(cursor, this.pageSize);\n      if (page.docs.length === 0) break;\n\n      await this.indexPage(page.docs);\n      total += page.docs.length;\n\n      if (!page.nextCursor) break;\n      cursor = page.nextCursor;\n      await this.cursors.save(JOB, cursor);\n    }\n\n    if (total > 0) await this.index.refresh();\n    return total;\n  }\n\n  private async indexPage(docs: ProductDoc[]): Promise<void> {\n    docs.forEach(async (doc) => {\n      const fields = await this.buildFields(doc);\n      await this.index.upsert(doc.id, fields);\n    });\n  }\n\n  private async buildFields(doc: ProductDoc): Promise<Record<string, unknown>> {\n    const [titleTokens, descTokens] = await Promise.all([\n      this.tokenizer.analyze(doc.title),\n      this.tokenizer.analyze(doc.description),\n    ]);\n    return {\n      title: doc.title,\n      title_tokens: titleTokens,\n      description_tokens: descTokens.slice(0, 512),\n      updated_at: doc.updatedAt,\n    };\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/catalogReindexer.ts",
+    "snippet": "    docs.forEach(async (doc) => {"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this job sequences indexing work with saving its progress? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The defect is docs.forEach(async (doc) => ...) in indexPage. forEach ignores the promises the async callback returns, so indexPage resolves immediately, before any upsert finishes. runOnce then saves the cursor and calls refresh() while upserts are still running, and any upsert rejection becomes an unhandled rejection instead of failing the run. If the process dies or an upsert fails, the cursor has already moved past documents that were never indexed, so they are silently skipped. Use await Promise.all(docs.map(...)) or a for...of loop with await."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "When is the cursor saved relative to listing the page it describes?",
+      "choices": [
+        "Before listChangedSince is called for that page",
+        "Only once, at the end of runOnce",
+        "After indexPage returns for the page, and only when nextCursor is non-null",
+        "After refresh() completes"
+      ],
+      "answer": 2,
+      "explanation": "Inside the loop, cursors.save runs after await this.indexPage(...) and after the `if (!page.nextCursor) break` check, so it saves only when a next cursor exists. It is not saved before listing, not once at the end, and refresh() runs after the loop."
+    },
+    {
+      "prompt": "How are the title and description tokenized for one document in buildFields?",
+      "choices": [
+        "Sequentially: title first, then description",
+        "Concurrently, and buildFields waits for both before returning",
+        "Concurrently, but buildFields returns before the description finishes",
+        "Only the title is tokenized; the description is copied"
+      ],
+      "answer": 1,
+      "explanation": "Both analyze calls are started inside Promise.all and the result is awaited, so they run concurrently and both finish before the fields object is built. They are not sequential, the await means nothing returns early, and description tokens are produced (then truncated to 512)."
+    },
+    {
+      "prompt": "A run finds no changed documents on the first page. What does runOnce do?",
+      "choices": [
+        "Saves the same cursor and refreshes the index",
+        "Refreshes the index but does not save a cursor",
+        "Returns 0 without saving a cursor or refreshing",
+        "Loops forever re-reading the empty page"
+      ],
+      "answer": 2,
+      "explanation": "An empty docs array hits `break` before indexing or saving, total stays 0, and refresh is guarded by `if (total > 0)`. So nothing is saved or refreshed, and the break prevents looping."
+    }
+  ],
+  "concepts": [
+    "backend.concurrency.async_await_pitfalls",
+    "backend.errors.error_propagation",
+    "backend.data.pagination"
+  ]
+}

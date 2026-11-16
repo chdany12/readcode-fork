@@ -1,0 +1,62 @@
+{
+  "title": "Sharded notification inbox",
+  "name": "Sharded notification inbox",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/shardRouter.ts",
+      "content": "import { createHash } from \"crypto\";\nimport { Pool } from \"pg\";\n\nexport class InboxShardRouter {\n  constructor(private readonly pools: Pool[]) {\n    if (pools.length === 0) throw new Error(\"at least one shard required\");\n  }\n\n  shardIndex(key: string): number {\n    const digest = createHash(\"md5\").update(key).digest();\n    return digest.readUInt32BE(0) % this.pools.length;\n  }\n\n  poolFor(userId: string): Pool {\n    return this.pools[this.shardIndex(userId)];\n  }\n\n  all(): Pool[] {\n    return this.pools;\n  }\n}\n"
+    },
+    {
+      "path": "src/inboxService.ts",
+      "content": "import { randomUUID } from \"crypto\";\nimport { InboxShardRouter } from \"./shardRouter\";\n\nexport interface Notification {\n  id: string;\n  userId: string;\n  kind: string;\n  body: string;\n  createdAt: Date;\n  readAt: Date | null;\n}\n\nexport class InboxService {\n  constructor(private readonly router: InboxShardRouter) {}\n\n  async deliver(userId: string, kind: string, body: string): Promise<Notification> {\n    const id = randomUUID();\n    const pool = this.router.poolFor(userId);\n    const { rows } = await pool.query(\n      `INSERT INTO notifications (id, user_id, kind, body, created_at)\n       VALUES ($1, $2, $3, $4, now())\n       RETURNING id, user_id, kind, body, created_at, read_at`,\n      [id, userId, kind, body],\n    );\n    return toNotification(rows[0]);\n  }\n\n  async list(userId: string, limit = 50): Promise<Notification[]> {\n    const pool = this.router.poolFor(userId);\n    const { rows } = await pool.query(\n      `SELECT id, user_id, kind, body, created_at, read_at\n         FROM notifications\n        WHERE user_id = $1\n        ORDER BY created_at DESC\n        LIMIT $2`,\n      [userId, Math.min(limit, 200)],\n    );\n    return rows.map(toNotification);\n  }\n\n  async unreadCount(userId: string): Promise<number> {\n    const pool = this.router.poolFor(userId);\n    const { rows } = await pool.query(\n      `SELECT count(*)::int AS n FROM notifications WHERE user_id = $1 AND read_at IS NULL`,\n      [userId],\n    );\n    return rows[0].n;\n  }\n\n  async markRead(userId: string, notificationId: string): Promise<boolean> {\n    const pool = this.router.poolFor(notificationId);\n    const { rowCount } = await pool.query(\n      `UPDATE notifications SET read_at = now()\n        WHERE id = $1 AND user_id = $2 AND read_at IS NULL`,\n      [notificationId, userId],\n    );\n    return (rowCount ?? 0) > 0;\n  }\n\n  async purgeOlderThan(days: number): Promise<number> {\n    let total = 0;\n    for (const pool of this.router.all()) {\n      const { rowCount } = await pool.query(\n        `DELETE FROM notifications WHERE created_at < now() - ($1 || ' days')::interval`,\n        [String(days)],\n      );\n      total += rowCount ?? 0;\n    }\n    return total;\n  }\n}\n\nfunction toNotification(r: any): Notification {\n  return {\n    id: r.id,\n    userId: r.user_id,\n    kind: r.kind,\n    body: r.body,\n    createdAt: r.created_at,\n    readAt: r.read_at,\n  };\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/inboxService.ts",
+    "snippet": "    const pool = this.router.poolFor(notificationId);"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code routes queries to shards? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "markRead routes by notificationId (poolFor(notificationId)) while rows are written to the shard chosen by userId. The UPDATE usually lands on a shard that does not hold the row, matches nothing, and returns false, so notifications stay unread and the unread badge never clears (it only works by chance when both keys hash to the same shard)."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "An operator adds a fifth database to the four-element pools array and restarts. What happens to existing notifications?",
+      "choices": [
+        "They are rebalanced automatically on the next deliver() call",
+        "Most users' reads now go to a shard that does not hold their existing rows, so their history appears missing",
+        "Only users whose IDs hash above 2^31 are affected",
+        "Nothing; MD5 output is stable so each user keeps the same shard"
+      ],
+      "answer": 1,
+      "explanation": "shardIndex uses digest % pools.length; changing the modulus from 4 to 5 remaps roughly 80% of keys. No code migrates rows, so list() queries the new shard and finds nothing. MD5 being stable does not help because the modulus changed; nothing rebalances on write; the effect is not limited to a hash range."
+    },
+    {
+      "prompt": "Why does purgeOlderThan iterate over every pool rather than calling poolFor?",
+      "choices": [
+        "Because the purge is not scoped to a single user, so rows matching the predicate can live on any shard",
+        "Because poolFor throws for non-user keys",
+        "To hold a transaction across all shards so the purge is atomic",
+        "Because DELETE statements must always be broadcast for replication"
+      ],
+      "answer": 0,
+      "explanation": "The DELETE filters only on created_at, which is not the shard key, so matching rows are spread across all shards and a scatter is required. poolFor accepts any string; there is no cross-shard transaction (each pool is queried independently and a failure midway leaves earlier shards purged); replication is unrelated."
+    },
+    {
+      "prompt": "How does unreadCount(userId) behave in terms of shard access?",
+      "choices": [
+        "It queries all shards and sums the counts",
+        "It queries one shard chosen by a random UUID",
+        "It queries exactly the one shard chosen by hashing the userId",
+        "It reads from a cached counter, not a shard"
+      ],
+      "answer": 2,
+      "explanation": "unreadCount calls router.poolFor(userId) and runs one count query against that pool, which is the shard where deliver() wrote that user's rows. There is no scatter, no randomness in routing (the UUID is the row id, not a routing key), and no cache."
+    }
+  ],
+  "concepts": [
+    "backend.distributed.sharding_and_partitioning"
+  ]
+}

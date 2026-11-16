@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "There is none. The count-then-update in pin() is a classic write-skew pattern, but it runs under SERIALIZABLE. If two pin() calls for the same author both read a count of 2 and each updates a different post, PostgreSQL's serializable snapshot isolation detects the read/write dependency cycle and aborts one with 40001. withTransaction rolls back, waits, and retries; on retry the count is 3 and PinLimitError is thrown. Each attempt uses a fresh connection and the error is rethrown once attempts are exhausted.",
+    "Under SERIALIZABLE, the two transactions read overlapping rows (the count) and each writes a row the other read, so one is aborted with 40001. withTransaction retries it; the fresh attempt sees 3 pinned and throws PinLimitError, which is not retryable. Four pins would need a weaker isolation level, the error is not surfaced because it is retried, and serializable checks do not simply block-and-proceed.",
+    "The catch block always runs ROLLBACK, and since PinLimitError has no 40001/40P01 code, retryable is false and it is rethrown; finally releases the client. Only serialization and deadlock errors are retried, COMMIT is skipped because the throw happens before it, and the client is never handed back mid-transaction.",
+    "A single statement gets its own snapshot in PostgreSQL, so wrapping it in a transaction provides no extra consistency. SERIALIZABLE supports any SELECT, PostgreSQL never exposes uncommitted data, and plain reads are not blocked by row locks anyway."
+  ]
+}

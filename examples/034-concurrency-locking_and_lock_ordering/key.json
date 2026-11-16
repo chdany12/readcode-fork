@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/promotionCoordinator.ts",
+        "startLine": 57,
+        "endLine": 57
+      }
+    },
+    2,
+    1,
+    3
+  ],
+  "explanations": [
+    "The lock is released by hand on each expected path, but not in a finally block. If target.apply() rejects (or currentDigest()/healthCheck() throw), the exception leaves promote() with the lock still held. Every later promotion to that environment waits in acquire() forever, and status() keeps reporting the failed pipeline as the holder. Wrapping the work after acquire() in try/finally fixes it.",
+    "lockFor() returns the same EnvironmentLock per environment name, and acquire() parks the second caller in waiters until release() wakes it. It then reads currentDigest() under the lock, sees the first pipeline's digest, and deploys its own. It does not throw, and the digest read happens after waiting, not before.",
+    "release() resolves the next waiter, but that waiter only resumes on a later microtask. A brand-new acquire() call running in between sees held === false and takes the lock, so the woken waiter must check again. release() wakes only one waiter, and promises resolve once.",
+    "The digest comparison happens after acquire(), so it reflects the state under the lock; on a match it releases and returns skipped: true without apply() or healthCheck(). Nothing throws, and the lock is taken first."
+  ]
+}

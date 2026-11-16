@@ -1,0 +1,64 @@
+{
+  "title": "Tracing an interbank transfer through the ledger",
+  "name": "Ledger transfer tracing",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/ledgerClient.ts",
+      "content": "import { context, propagation, SpanKind, SpanStatusCode, trace } from \"@opentelemetry/api\";\n\nconst tracer = trace.getTracer(\"payments-transfer\", \"2.3.0\");\n\nexport interface LedgerClientOptions {\n  baseUrl: string;\n  timeoutMs: number;\n}\n\nexport interface PostingRequest {\n  transferId: string;\n  debitAccount: string;\n  creditAccount: string;\n  amountMinor: bigint;\n  currency: string;\n}\n\nexport class LedgerClient {\n  constructor(private readonly opts: LedgerClientOptions) {}\n\n  async post(req: PostingRequest): Promise<{ journalId: string }> {\n    return tracer.startActiveSpan(\n      \"ledger.post_journal\",\n      { kind: SpanKind.CLIENT, attributes: { \"transfer.id\": req.transferId, \"ledger.currency\": req.currency } },\n      async (span) => {\n        const headers: Record<string, string> = {\n          \"content-type\": \"application/json\",\n          \"idempotency-key\": req.transferId,\n        };\n        propagation.inject(context.active(), headers);\n\n        const res = await fetch(`${this.opts.baseUrl}/v1/journals`, {\n          method: \"POST\",\n          headers,\n          body: JSON.stringify({ ...req, amountMinor: req.amountMinor.toString() }),\n          signal: AbortSignal.timeout(this.opts.timeoutMs),\n        });\n        span.setAttribute(\"http.response.status_code\", res.status);\n\n        if (!res.ok) {\n          const msg = `ledger responded ${res.status}`;\n          span.setStatus({ code: SpanStatusCode.ERROR, message: msg });\n          span.end();\n          throw new Error(msg);\n        }\n        const body = (await res.json()) as { journalId: string };\n        span.setAttribute(\"ledger.journal_id\", body.journalId);\n        span.end();\n        return body;\n      },\n    );\n  }\n}\n"
+    },
+    {
+      "path": "src/transferService.ts",
+      "content": "import { SpanStatusCode, trace } from \"@opentelemetry/api\";\nimport { LedgerClient, PostingRequest } from \"./ledgerClient\";\n\nconst tracer = trace.getTracer(\"payments-transfer\", \"2.3.0\");\n\nexport interface TransferStore {\n  reserve(transferId: string, accountId: string, amountMinor: bigint): Promise<void>;\n  markPosted(transferId: string, journalId: string): Promise<void>;\n  release(transferId: string): Promise<void>;\n}\n\nexport class TransferService {\n  constructor(private readonly store: TransferStore, private readonly ledger: LedgerClient) {}\n\n  async execute(req: PostingRequest): Promise<string> {\n    return tracer.startActiveSpan(\"transfer.execute\", async (span) => {\n      span.setAttributes({\n        \"transfer.id\": req.transferId,\n        \"transfer.currency\": req.currency,\n      });\n      try {\n        await tracer.startActiveSpan(\"transfer.reserve_funds\", async (child) => {\n          try {\n            await this.store.reserve(req.transferId, req.debitAccount, req.amountMinor);\n          } finally {\n            child.end();\n          }\n        });\n\n        let journalId: string;\n        try {\n          ({ journalId } = await this.ledger.post(req));\n        } catch (err) {\n          span.addEvent(\"transfer.reservation_released\");\n          await this.store.release(req.transferId);\n          throw err;\n        }\n\n        await this.store.markPosted(req.transferId, journalId);\n        return journalId;\n      } catch (err) {\n        span.recordException(err as Error);\n        span.setStatus({ code: SpanStatusCode.ERROR });\n        throw err;\n      } finally {\n        span.end();\n      }\n    });\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/ledgerClient.ts",
+    "snippet": "        const res = await fetch(`${this.opts.baseUrl}/v1/journals`, {\n          method: \"POST\",\n          headers,\n          body: JSON.stringify({ ...req, amountMinor: req.amountMinor.toString() }),\n          signal: AbortSignal.timeout(this.opts.timeoutMs),\n        });"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code creates, propagates, or finishes trace spans? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "In LedgerClient.post, span.end() is only called on the !res.ok path and the success path. If fetch itself rejects (the AbortSignal timeout fires, DNS fails, connection reset) or res.json() throws, the exception escapes the callback with the ledger.post_journal span never ended and never marked as an error. That span is never exported, so exactly the failures you most want to see (timeouts to the ledger) show up as a parent transfer.execute span with an error and a missing child. The fix is a try/catch/finally around the body that records the exception, sets ERROR status and always calls span.end()."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Which span is the parent of ledger.post_journal, and what span ID does the ledger service receive in its traceparent header?",
+      "choices": [
+        "transfer.reserve_funds is the parent; the ledger sees transfer.reserve_funds's ID",
+        "transfer.execute is the parent; the ledger sees transfer.execute's ID",
+        "There is no parent; the ledger receives a new root trace",
+        "transfer.execute is the parent; the ledger sees ledger.post_journal's ID"
+      ],
+      "answer": 3,
+      "explanation": "reserve_funds has already ended and its active context was restored when its callback returned, so when ledger.post is called the active span is transfer.execute. startActiveSpan makes ledger.post_journal active inside its callback, so propagation.inject(context.active(), ...) writes ledger.post_journal's span ID, making the ledger's server span its child. It is not a new root, and the parent's ID is not what gets injected."
+    },
+    {
+      "prompt": "store.reserve throws because the account has insufficient funds. Which spans end up with ERROR status?",
+      "choices": [
+        "transfer.reserve_funds and transfer.execute",
+        "Only transfer.execute",
+        "Only transfer.reserve_funds",
+        "Neither, because the error is rethrown before status is set"
+      ],
+      "answer": 1,
+      "explanation": "The reserve_funds callback only has a finally that ends the child; it does not set status, so the child ends with UNSET status. The error propagates to execute's outer catch, which calls recordException and setStatus(ERROR) before rethrowing, and finally ends that span. So only transfer.execute is marked as an error."
+    },
+    {
+      "prompt": "Why is the amount passed to the ledger as amountMinor.toString() rather than as the bigint itself?",
+      "choices": [
+        "JSON.stringify throws a TypeError on bigint values, so it must be converted",
+        "The ledger API requires amounts in major units",
+        "Converting avoids floating-point rounding when the span attribute is recorded",
+        "toString() strips the currency so the ledger can apply its own"
+      ],
+      "answer": 0,
+      "explanation": "JSON.stringify cannot serialise a bigint and throws a TypeError, so the code converts it to a decimal string, which also preserves exact minor-unit precision. The value is still in minor units, it is not recorded as a span attribute, and a bigint carries no currency."
+    }
+  ],
+  "concepts": [
+    "backend.observability.tracing",
+    "backend.errors.cleanup_on_error_paths",
+    "backend.api.serialization_and_deserialization"
+  ]
+}

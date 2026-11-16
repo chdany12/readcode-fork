@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/playbackUrlService.ts",
+        "startLine": 48,
+        "endLine": 48
+      }
+    },
+    1,
+    2,
+    1
+  ],
+  "explanations": [
+    "The manifest-probe warning logs `manifestUrl: signed.url`. `redact` only masks values by key name, and `manifestUrl` is not in SENSITIVE_KEYS, so the full URL string is logged, including the `sig` signature, its expiry, and the unmasked viewer id in `vid`. Anyone with log access can replay a working playback URL until it expires and see raw viewer ids. The URL should be stripped of its query string (or only the path logged) before logging.",
+    "`redact` checks `SENSITIVE_KEYS.has(k)` per key and recurses with `depth + 1` for nested objects and arrays, stopping at depth 5. It never looks at string contents, so pattern scanning is wrong; numbers/booleans are returned as-is but strings are not masked by default; nesting is handled.",
+    "`maskViewer` returns \"****\" when the id has 4 or fewer characters. The `slice` format only applies to longer ids, and \"[REDACTED]\" comes from `redact`, which is not used for this field.",
+    "`sign` HMACs `${path}:${expires}`, and the path includes the rendition, so editing it breaks the signature. Expiry is `now + ttlSeconds` (300 by default). Nothing in the code makes the URL single-use or non-expiring."
+  ]
+}

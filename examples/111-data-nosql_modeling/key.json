@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/appointmentRepo.ts",
+        "startLine": 62,
+        "endLine": 62
+      }
+    },
+    3,
+    1,
+    0
+  ],
+  "explanations": [
+    "The provider slot Put has no ConditionExpression. The patient-side item always has a fresh sk (it includes the new appointmentId), so its attribute_not_exists check never fails. Two patients booking the same provider slot concurrently (or one after another) both succeed: the second Put silently overwrites the provider's SLOT item, while both patients keep an appointment record. The slot Put needs ConditionExpression: \"attribute_not_exists(pk)\".",
+    "providerDay queries the provider pk with begins_with(sk, 'SLOT#date'), and patientUpcoming queries the patient pk with sk >= APPT#from. Duplicating items per access pattern is standard NoSQL modeling. It isn't a backup, DynamoDB has no two-key requirement, and single-item transactions are allowed.",
+    "BookingService normalizes slotStart with toISOString, so sort keys look like SLOT#2026-03-02T09:15:00.000Z and a prefix match on the date picks up exactly that day. No scan, day item, or GSI is involved.",
+    "recordAudit runs after the transaction, outside the try/catch, so its error propagates to the caller while the appointment is already committed. It isn't in the transaction, isn't a SlotConflictError, and isn't swallowed."
+  ]
+}

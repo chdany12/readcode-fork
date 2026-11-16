@@ -1,0 +1,69 @@
+{
+  "title": "Failed-login lockout counter",
+  "name": "Login lockout throttle",
+  "language": "TypeScript",
+  "durationMinutes": 11,
+  "files": [
+    {
+      "path": "src/auth/kv.ts",
+      "content": "export interface KeyValueStore {\n  get(key: string): Promise<string | null>;\n  set(key: string, value: string, opts?: { ttlSeconds?: number }): Promise<void>;\n  incr(key: string): Promise<number>;\n  expire(key: string, ttlSeconds: number): Promise<void>;\n  del(key: string): Promise<void>;\n}\n"
+    },
+    {
+      "path": "src/auth/loginThrottle.ts",
+      "content": "import { KeyValueStore } from \"./kv\";\n\nexport interface LockoutPolicy {\n  maxFailures: number;\n  windowSeconds: number;\n  lockSeconds: number;\n}\n\nexport type LoginGate = { allowed: true } | { allowed: false; retryAfterSeconds: number };\n\nexport class LoginThrottle {\n  constructor(\n    private readonly kv: KeyValueStore,\n    private readonly policy: LockoutPolicy,\n    private readonly now: () => number = Date.now,\n  ) {}\n\n  private failKey(username: string) {\n    return `auth:fail:${username.toLowerCase()}`;\n  }\n\n  private lockKey(username: string) {\n    return `auth:lock:${username.toLowerCase()}`;\n  }\n\n  async check(username: string): Promise<LoginGate> {\n    const lockedUntil = await this.kv.get(this.lockKey(username));\n    if (lockedUntil) {\n      const remainingMs = Number(lockedUntil) - this.now();\n      if (remainingMs > 0) {\n        return { allowed: false, retryAfterSeconds: Math.ceil(remainingMs / 1000) };\n      }\n    }\n    return { allowed: true };\n  }\n\n  async recordFailure(username: string): Promise<void> {\n    const key = this.failKey(username);\n    const current = Number((await this.kv.get(key)) ?? \"0\");\n    const failures = current + 1;\n    await this.kv.set(key, String(failures), { ttlSeconds: this.policy.windowSeconds });\n\n    if (failures >= this.policy.maxFailures) {\n      const until = this.now() + this.policy.lockSeconds * 1000;\n      await this.kv.set(this.lockKey(username), String(until), {\n        ttlSeconds: this.policy.lockSeconds,\n      });\n      await this.kv.del(key);\n    }\n  }\n\n  async recordSuccess(username: string): Promise<void> {\n    await this.kv.del(this.failKey(username));\n  }\n}\n"
+    },
+    {
+      "path": "src/auth/loginService.ts",
+      "content": "import { LoginThrottle } from \"./loginThrottle\";\n\nexport interface CredentialVerifier {\n  verify(username: string, password: string): Promise<{ userId: string } | null>;\n}\n\nexport type LoginResult =\n  | { status: \"ok\"; userId: string }\n  | { status: \"invalid\" }\n  | { status: \"locked\"; retryAfterSeconds: number };\n\nexport class LoginService {\n  constructor(\n    private readonly throttle: LoginThrottle,\n    private readonly verifier: CredentialVerifier,\n  ) {}\n\n  async login(username: string, password: string): Promise<LoginResult> {\n    const gate = await this.throttle.check(username);\n    if (!gate.allowed) {\n      return { status: \"locked\", retryAfterSeconds: gate.retryAfterSeconds };\n    }\n\n    const user = await this.verifier.verify(username, password);\n    if (!user) {\n      await this.throttle.recordFailure(username);\n      return { status: \"invalid\" };\n    }\n\n    await this.throttle.recordSuccess(username);\n    return { status: \"ok\", userId: user.userId };\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/auth/loginThrottle.ts",
+    "snippet": "    const current = Number((await this.kv.get(key)) ?? \"0\");\n    const failures = current + 1;\n    await this.kv.set(key, String(failures), { ttlSeconds: this.policy.windowSeconds });"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code counts failed login attempts? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "recordFailure does a read-modify-write: kv.get, add one, kv.set. Concurrent failures for the same username (exactly what a password-spraying script produces) read the same value and each write current + 1, so many attempts count as one and the lockout threshold is reached far later, or never. The store already offers incr, which increments atomically; it should be used (with expire on the first increment). As a side effect, each set also resets the window TTL."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A user has 2 recorded failures (maxFailures is 5) and then logs in successfully. What happens to the counter?",
+      "choices": [
+        "It keeps its value until the window TTL expires",
+        "It is deleted, so the next failure starts from 1",
+        "It is decremented by one",
+        "It is set to maxFailures to force re-verification"
+      ],
+      "answer": 1,
+      "explanation": "LoginService calls recordSuccess after a successful verify, which deletes the fail key. Nothing waits for TTL, decrements, or sets it to the maximum."
+    },
+    {
+      "prompt": "Login attempts arrive for \"Alice\" and \"alice\". How are they counted?",
+      "choices": [
+        "Separately, since keys are case-sensitive",
+        "Only the first-seen casing is counted",
+        "Together, because both keys lowercase the username",
+        "Neither is counted, because the verifier rejects mixed case"
+      ],
+      "answer": 2,
+      "explanation": "failKey and lockKey call username.toLowerCase(), so both map to the same keys. There is no first-seen logic and the verifier does not affect key naming."
+    },
+    {
+      "prompt": "While an account is locked, a client keeps sending login requests with the correct password. What does LoginService do?",
+      "choices": [
+        "Returns locked with retryAfterSeconds, without calling the credential verifier",
+        "Verifies the password and unlocks the account if it is correct",
+        "Verifies the password and records another failure",
+        "Returns invalid so the client cannot tell the account is locked"
+      ],
+      "answer": 0,
+      "explanation": "login() calls throttle.check first and returns { status: \"locked\", retryAfterSeconds } when the lock key is in the future, before verifier.verify runs. Correct passwords do not unlock, no failure is recorded, and the status is locked, not invalid."
+    }
+  ],
+  "concepts": [
+    "backend.concurrency.atomic_operations",
+    "backend.concurrency.race_conditions",
+    "backend.resilience.rate_limiting",
+    "backend.security.authentication"
+  ]
+}

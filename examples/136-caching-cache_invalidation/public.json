@@ -1,0 +1,50 @@
+{
+  "id": "f1d1a6a0-e0ac-423d-aacb-c10f029f5082",
+  "title": "Cached agent ticket queues",
+  "name": "Agent ticket queues",
+  "createdAt": "2026-11-15T09:41:31.680Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code invalidates cached agent queues when tickets change? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "An unassigned ticket (assigneeId null) has its status set to solved. What does setStatus do to the cache?",
+      "choices": [
+        "It throws because a null key is passed to Redis",
+        "It deletes every agent's queue",
+        "It makes no Redis call, because invalidate filters out the null id and skips DEL when no keys remain",
+        "It writes an empty queue for the null agent"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Agent X escalates one of their tickets to urgent. When does X's queue reflect the new ordering?",
+      "choices": [
+        "On X's next agentQueue call, which misses the cache and re-sorts from the repo",
+        "Only after QUEUE_TTL_SECONDS expires",
+        "Never, the cached order is kept until the ticket is solved",
+        "Immediately, because escalate rewrites the cached array in place"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does this design invalidate (delete) the queue rather than update the cached array on each ticket change?",
+      "choices": [
+        "Redis cannot store arrays",
+        "Deleting avoids re-implementing filtering and sorting on each write; the next read rebuilds the queue from the repo",
+        "Deleting guarantees no reader can ever observe stale data",
+        "Updating in place would require a longer TTL"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.caching.cache_invalidation",
+    "backend.caching.cache_aside_vs_write_through",
+    "backend.caching.stale_reads"
+  ]
+}

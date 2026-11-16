@@ -1,0 +1,65 @@
+{
+  "title": "Account statement endpoints",
+  "name": "Account statements API",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/ledgerRepo.ts",
+      "content": "export interface LedgerEntry {\n  id: string;\n  accountId: string;\n  postedAt: Date;\n  amountMinor: bigint;\n  description: string;\n}\n\nexport interface Statement {\n  id: string;\n  accountId: string;\n  periodStart: Date;\n  periodEnd: Date;\n  openingBalanceMinor: bigint;\n  closingBalanceMinor: bigint;\n  entryCount: number;\n  createdAt: Date;\n}\n\nexport interface LedgerRepo {\n  findAccount(accountId: string, ownerId: string): Promise<{ id: string; currency: string } | null>;\n  balanceAt(accountId: string, at: Date): Promise<bigint>;\n  entriesBetween(accountId: string, from: Date, to: Date): Promise<LedgerEntry[]>;\n  lastStatement(accountId: string): Promise<Statement | null>;\n  insertStatement(s: Statement): Promise<void>;\n  getStatement(accountId: string, statementId: string): Promise<Statement | null>;\n}\n"
+    },
+    {
+      "path": "src/statementRoutes.ts",
+      "content": "import express, { Request, Response, NextFunction } from \"express\";\nimport { randomUUID } from \"crypto\";\nimport { LedgerRepo, Statement } from \"./ledgerRepo\";\n\nfunction toJson(s: Statement, currency: string) {\n  return {\n    id: s.id,\n    periodStart: s.periodStart.toISOString(),\n    periodEnd: s.periodEnd.toISOString(),\n    currency,\n    openingBalance: s.openingBalanceMinor.toString(),\n    closingBalance: s.closingBalanceMinor.toString(),\n    entryCount: s.entryCount,\n    links: { self: `/accounts/${s.accountId}/statements/${s.id}` },\n  };\n}\n\nexport function statementRouter(repo: LedgerRepo) {\n  const router = express.Router();\n\n  async function loadAccount(req: Request, res: Response, next: NextFunction) {\n    const ownerId = res.locals.customerId as string;\n    const account = await repo.findAccount(req.params.accountId, ownerId);\n    if (!account) {\n      res.status(404).json({ error: \"account_not_found\" });\n      return;\n    }\n    res.locals.account = account;\n    next();\n  }\n\n  router.get(\"/accounts/:accountId/statements/latest\", loadAccount, async (req, res, next) => {\n    try {\n      const account = res.locals.account;\n      const previous = await repo.lastStatement(account.id);\n      const periodStart = previous ? previous.periodEnd : new Date(0);\n      const periodEnd = new Date();\n      const [opening, closing, entries] = await Promise.all([\n        repo.balanceAt(account.id, periodStart),\n        repo.balanceAt(account.id, periodEnd),\n        repo.entriesBetween(account.id, periodStart, periodEnd),\n      ]);\n      const statement: Statement = {\n        id: randomUUID(),\n        accountId: account.id,\n        periodStart,\n        periodEnd,\n        openingBalanceMinor: opening,\n        closingBalanceMinor: closing,\n        entryCount: entries.length,\n        createdAt: new Date(),\n      };\n      await repo.insertStatement(statement);\n      res.json(toJson(statement, account.currency));\n    } catch (err) {\n      next(err);\n    }\n  });\n\n  router.get(\"/accounts/:accountId/statements/:statementId\", loadAccount, async (req, res, next) => {\n    try {\n      const account = res.locals.account;\n      const statement = await repo.getStatement(account.id, req.params.statementId);\n      if (!statement) return res.status(404).json({ error: \"statement_not_found\" });\n      res.set(\"Cache-Control\", \"private, max-age=86400\").json(toJson(statement, account.currency));\n    } catch (err) {\n      next(err);\n    }\n  });\n\n  router.get(\"/accounts/:accountId/statements/:statementId/entries\", loadAccount, async (req, res, next) => {\n    try {\n      const account = res.locals.account;\n      const statement = await repo.getStatement(account.id, req.params.statementId);\n      if (!statement) return res.status(404).json({ error: \"statement_not_found\" });\n      const entries = await repo.entriesBetween(account.id, statement.periodStart, statement.periodEnd);\n      res.json({\n        statementId: statement.id,\n        items: entries.map((e) => ({\n          id: e.id,\n          postedAt: e.postedAt.toISOString(),\n          amount: e.amountMinor.toString(),\n          description: e.description,\n        })),\n      });\n    } catch (err) {\n      next(err);\n    }\n  });\n\n  return router;\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/statementRoutes.ts",
+    "snippet": "      await repo.insertStatement(statement);"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how these endpoints map HTTP methods to operations on statement resources? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "`GET /statements/latest` creates and persists a new statement on every call. GET must be safe, but here every page refresh, browser prefetch, proxy retry or monitoring probe inserts a statement and moves the next period's start, so customers get a stream of tiny statements covering arbitrary slivers of time. Statement generation should be a POST (or a scheduled job), with `latest` only reading the most recent stored statement."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A customer requests `/accounts/ACC-9/statements/S-1` where S-1 exists but ACC-9 belongs to a different customer. What is returned?",
+      "choices": [
+        "404 account_not_found, from the loadAccount middleware",
+        "403 Forbidden, because the account exists",
+        "404 statement_not_found, because the statement lookup fails",
+        "200 with the statement, since statement ids are globally unique"
+      ],
+      "answer": 0,
+      "explanation": "`loadAccount` calls `findAccount(accountId, ownerId)`, which returns null for an account the caller doesn't own, and responds 404 account_not_found before the handler runs. No 403 path exists, the statement lookup never runs, and that lookup is also scoped by account id."
+    },
+    {
+      "prompt": "Why are balances serialized with `.toString()` rather than returned as numbers?",
+      "choices": [
+        "Express cannot send numeric fields in JSON",
+        "To make balances sortable as strings by clients",
+        "The values are bigint minor units, which JSON.stringify cannot serialize and which may exceed safe JS number precision",
+        "To hide the currency precision from clients"
+      ],
+      "answer": 2,
+      "explanation": "`openingBalanceMinor` etc. are `bigint`; JSON.stringify throws on bigint, and converting to number could lose precision above 2^53. Strings preserve exact minor units. Express sends numbers fine; string sorting of amounts is wrong anyway; currency is sent explicitly."
+    },
+    {
+      "prompt": "What does the entries sub-resource return for a stored statement?",
+      "choices": [
+        "Only entries posted after the statement was created",
+        "Entries from the account between that statement's periodStart and periodEnd, recomputed from the ledger",
+        "A snapshot of entries stored alongside the statement row",
+        "All entries for the account, paginated"
+      ],
+      "answer": 1,
+      "explanation": "The handler loads the statement and calls `entriesBetween(account.id, statement.periodStart, statement.periodEnd)`. Nothing is snapshotted with the statement (only `entryCount` is stored), and there is no pagination or filtering by createdAt."
+    }
+  ],
+  "concepts": [
+    "backend.api.rest_design",
+    "backend.api.serialization_and_deserialization",
+    "backend.security.authorization_checks",
+    "backend.data.money_and_ledgers"
+  ]
+}

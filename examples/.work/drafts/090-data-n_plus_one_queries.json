@@ -1,0 +1,64 @@
+{
+  "title": "Quarterly access review report",
+  "name": "Access review report",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/directoryRepository.ts",
+      "content": "import { Pool } from \"pg\";\n\nexport interface MemberRow {\n  userId: string;\n  email: string;\n  status: \"active\" | \"suspended\";\n  mfaEnrolled: boolean;\n}\n\nexport interface RoleGrant {\n  userId: string;\n  roleName: string;\n  grantedBy: string | null;\n  grantedAt: Date;\n}\n\nexport class DirectoryRepository {\n  constructor(private readonly pool: Pool) {}\n\n  async membersOfOrg(orgId: string): Promise<MemberRow[]> {\n    const { rows } = await this.pool.query(\n      `SELECT u.id AS \"userId\", u.email, m.status, u.mfa_enrolled AS \"mfaEnrolled\"\n         FROM org_memberships m\n         JOIN users u ON u.id = m.user_id\n        WHERE m.org_id = $1\n        ORDER BY u.email`,\n      [orgId],\n    );\n    return rows;\n  }\n\n  async grantsForUsers(orgId: string, userIds: string[]): Promise<RoleGrant[]> {\n    if (userIds.length === 0) return [];\n    const { rows } = await this.pool.query(\n      `SELECT g.user_id AS \"userId\", r.name AS \"roleName\", g.granted_by AS \"grantedBy\",\n              g.granted_at AS \"grantedAt\"\n         FROM role_grants g\n         JOIN roles r ON r.id = g.role_id\n        WHERE g.org_id = $1 AND g.user_id = ANY($2)`,\n      [orgId, userIds],\n    );\n    return rows;\n  }\n\n  async lastLoginsForUsers(userIds: string[]): Promise<Map<string, Date>> {\n    if (userIds.length === 0) return new Map();\n    const { rows } = await this.pool.query(\n      `SELECT user_id AS \"userId\", MAX(created_at) AS \"lastLogin\"\n         FROM login_events\n        WHERE user_id = ANY($1) AND outcome = 'success'\n        GROUP BY user_id`,\n      [userIds],\n    );\n    return new Map(rows.map((r: { userId: string; lastLogin: Date }) => [r.userId, r.lastLogin]));\n  }\n\n  async grantorEmail(userId: string): Promise<string | null> {\n    const { rows } = await this.pool.query(`SELECT email FROM users WHERE id = $1`, [userId]);\n    return rows[0]?.email ?? null;\n  }\n}\n"
+    },
+    {
+      "path": "src/accessReviewService.ts",
+      "content": "import { DirectoryRepository, RoleGrant } from \"./directoryRepository\";\n\nexport interface AccessReviewEntry {\n  email: string;\n  status: string;\n  mfaEnrolled: boolean;\n  lastLogin: Date | null;\n  stale: boolean;\n  roles: { role: string; grantedBy: string | null; grantedAt: Date }[];\n}\n\nconst STALE_AFTER_MS = 90 * 24 * 60 * 60 * 1000;\n\nexport class AccessReviewService {\n  constructor(\n    private readonly repo: DirectoryRepository,\n    private readonly now: () => Date = () => new Date(),\n  ) {}\n\n  async quarterlyReview(orgId: string): Promise<AccessReviewEntry[]> {\n    const members = await this.repo.membersOfOrg(orgId);\n    const ids = members.map((m) => m.userId);\n    const [grants, logins] = await Promise.all([\n      this.repo.grantsForUsers(orgId, ids),\n      this.repo.lastLoginsForUsers(ids),\n    ]);\n\n    const grantsByUser = new Map<string, RoleGrant[]>();\n    for (const g of grants) {\n      const list = grantsByUser.get(g.userId) ?? [];\n      list.push(g);\n      grantsByUser.set(g.userId, list);\n    }\n\n    const cutoff = this.now().getTime() - STALE_AFTER_MS;\n    const entries: AccessReviewEntry[] = [];\n    for (const member of members) {\n      const lastLogin = logins.get(member.userId) ?? null;\n      const roles = [];\n      for (const g of grantsByUser.get(member.userId) ?? []) {\n        roles.push({\n          role: g.roleName,\n          grantedBy: g.grantedBy ? await this.repo.grantorEmail(g.grantedBy) : null,\n          grantedAt: g.grantedAt,\n        });\n      }\n      entries.push({\n        email: member.email,\n        status: member.status,\n        mfaEnrolled: member.mfaEnrolled,\n        lastLogin,\n        stale: lastLogin === null || lastLogin.getTime() < cutoff,\n        roles,\n      });\n    }\n    return entries;\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/accessReviewService.ts",
+    "snippet": "          grantedBy: g.grantedBy ? await this.repo.grantorEmail(g.grantedBy) : null,"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code queries the database while building the review? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "Inside the nested loop over each member's grants, `await this.repo.grantorEmail(g.grantedBy)` issues one users query per role grant, one after another. Members, grants and logins are batched, but grantor emails are N+1: an org with 2,000 members and 5 grants each makes about 10,000 sequential queries, and the same few admins are looked up over and over. The distinct grantedBy ids should be collected and resolved with a single `id = ANY($1)` query."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A member has successful logins only from 120 days ago, plus a failed login yesterday. How is the entry marked?",
+      "choices": [
+        "stale: false, lastLogin is yesterday",
+        "stale: true, lastLogin is 120 days ago",
+        "stale: true, lastLogin is null",
+        "stale: false, lastLogin is 120 days ago"
+      ],
+      "answer": 1,
+      "explanation": "lastLoginsForUsers filters `outcome = 'success'`, so the failed login is ignored and lastLogin is 120 days ago. That is before the 90-day cutoff, so stale is true. lastLogin is not null because a successful login exists."
+    },
+    {
+      "prompt": "A user belongs to two orgs and holds an admin role only in the other org. Does that role show up in this org's review?",
+      "choices": [
+        "Yes, roles are global per user",
+        "Yes, but only if the user is active",
+        "No, but their last login from the other org's sessions is also excluded",
+        "No, grantsForUsers filters by org_id; last login is not org-scoped"
+      ],
+      "answer": 3,
+      "explanation": "grantsForUsers has `g.org_id = $1`, so only this org's grants appear. lastLoginsForUsers filters only by user_id, so logins are counted regardless of org. Roles are not global and status does not affect which grants load."
+    },
+    {
+      "prompt": "Why does quarterlyReview accept a `now` function in its constructor?",
+      "choices": [
+        "So tests can fix the current time and check the stale cutoff deterministically",
+        "To convert login timestamps to the org's time zone",
+        "To avoid creating Date objects inside the loop for performance",
+        "Because Postgres returns timestamps relative to server time"
+      ],
+      "answer": 0,
+      "explanation": "The injected clock is used only to compute the 90-day cutoff, which makes the stale logic testable with a fixed time. It does no time-zone conversion, it is called once rather than for performance, and it is unrelated to how Postgres returns timestamps."
+    }
+  ],
+  "concepts": [
+    "backend.data.n_plus_one_queries",
+    "backend.design.dependency_injection",
+    "backend.security.multi_tenant_isolation"
+  ]
+}

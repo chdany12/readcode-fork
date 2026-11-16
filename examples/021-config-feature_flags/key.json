@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/payrollRunner.ts",
+        "startLine": 40,
+        "endLine": 40
+      }
+    },
+    3,
+    0,
+    1
+  ],
+  "explanations": [
+    "computeSlip reads tax_engine_v2 once per employee. If the flag is flipped while a run is in progress (or the flag store returns different answers across calls), one payroll run produces a mix of v1 and v2 payslips, so employees in the same run are withheld under different rules. The flag should be read once at the start of execute() and passed to computeSlip (and ideally recorded on the run).",
+    "getBoolean is called with fallback false, so useV2 is false and withholdingV1 is used. The code does not remember previous runs, and an unreachable store returning the fallback does not throw.",
+    "The catch block calls markRunStatus(runId, \"failed\") and throws a new Error that includes runId. markRunStatus(\"done\") is after savePayslips and is skipped. Nothing is swallowed, and the code has no partial-save logic.",
+    "Gross is 52,000 / 26 = 2,000. taxableIncome is Math.max(0, 2,000 - 2,500) = 0, so it is clamped rather than negative. 2,000 is the gross and 2,500 is the deduction."
+  ]
+}

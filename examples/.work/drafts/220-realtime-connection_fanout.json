@@ -1,0 +1,65 @@
+{
+  "title": "Order status hub for customers and restaurant dashboards",
+  "name": "Order status hub",
+  "language": "TypeScript",
+  "durationMinutes": 11,
+  "files": [
+    {
+      "path": "src/orderStatusHub.ts",
+      "content": "import { WebSocket } from \"ws\";\n\nexport type OrderStatus = \"placed\" | \"accepted\" | \"preparing\" | \"ready\" | \"picked_up\" | \"delivered\" | \"cancelled\";\n\nexport interface OrderEvent {\n  orderId: string;\n  restaurantId: string;\n  customerId: string;\n  status: OrderStatus;\n  etaMinutes?: number;\n  version: number;\n}\n\nconst SLOW_CLIENT_BYTES = 512 * 1024;\n\nexport class OrderStatusHub {\n  private byCustomer = new Map<string, Set<WebSocket>>();\n  private byRestaurant = new Map<string, Set<WebSocket>>();\n  private evictions = 0;\n\n  attachCustomer(customerId: string, ws: WebSocket): void {\n    this.attach(this.byCustomer, customerId, ws);\n  }\n\n  attachRestaurant(restaurantId: string, ws: WebSocket): void {\n    this.attach(this.byRestaurant, restaurantId, ws);\n  }\n\n  private attach(index: Map<string, Set<WebSocket>>, key: string, ws: WebSocket): void {\n    let set = index.get(key);\n    if (!set) {\n      set = new Set();\n      index.set(key, set);\n    }\n    set.add(ws);\n    ws.once(\"close\", () => {\n      const current = index.get(key);\n      if (!current) return;\n      current.delete(ws);\n      if (current.size === 0) index.delete(key);\n    });\n  }\n\n  dispatch(event: OrderEvent): void {\n    const frame = JSON.stringify({ type: \"order_status\", ...event });\n    this.sendToCustomer(event.customerId, frame);\n    this.broadcastToRestaurant(event.restaurantId, frame);\n  }\n\n  private sendToCustomer(customerId: string, frame: string): void {\n    const sockets = this.byCustomer.get(customerId);\n    if (!sockets) return;\n    for (const ws of sockets) {\n      if (ws.readyState !== WebSocket.OPEN) continue;\n      if (ws.bufferedAmount > SLOW_CLIENT_BYTES) {\n        this.evict(ws);\n        continue;\n      }\n      ws.send(frame);\n    }\n  }\n\n  private broadcastToRestaurant(restaurantId: string, frame: string): void {\n    const sockets = this.byRestaurant.get(restaurantId);\n    if (!sockets) return;\n    for (const ws of sockets) {\n      if (ws.readyState !== WebSocket.OPEN) continue;\n      ws.send(frame);\n    }\n  }\n\n  private evict(ws: WebSocket): void {\n    this.evictions++;\n    ws.close(4008, \"too slow, please reconnect\");\n  }\n\n  metrics() {\n    let customerSockets = 0;\n    let restaurantSockets = 0;\n    for (const s of this.byCustomer.values()) customerSockets += s.size;\n    for (const s of this.byRestaurant.values()) restaurantSockets += s.size;\n    return { customerSockets, restaurantSockets, evictions: this.evictions };\n  }\n}\n"
+    },
+    {
+      "path": "src/wireOrderEvents.ts",
+      "content": "import { OrderStatusHub, OrderEvent } from \"./orderStatusHub\";\n\nexport interface EventSource {\n  subscribe(topic: string, handler: (payload: string) => void): void;\n}\n\nexport function wireOrderEvents(source: EventSource, hub: OrderStatusHub): void {\n  const lastVersion = new Map<string, number>();\n\n  source.subscribe(\"orders.status\", (payload) => {\n    let event: OrderEvent;\n    try {\n      event = JSON.parse(payload) as OrderEvent;\n    } catch {\n      return;\n    }\n    const seen = lastVersion.get(event.orderId) ?? -1;\n    if (event.version <= seen) return;\n    lastVersion.set(event.orderId, event.version);\n    hub.dispatch(event);\n    if (event.status === \"delivered\" || event.status === \"cancelled\") {\n      lastVersion.delete(event.orderId);\n    }\n  });\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/orderStatusHub.ts",
+    "snippet": "    for (const ws of sockets) {\n      if (ws.readyState !== WebSocket.OPEN) continue;\n      ws.send(frame);\n    }"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this hub fans order updates out to connected sockets? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "broadcastToRestaurant sends to every open restaurant socket without the bufferedAmount check used for customers. A restaurant tablet on a stalled connection (busy kitchens get every order for the restaurant, so it is the highest-volume stream) keeps accumulating frames in the server-side send buffer with no limit, growing process memory until it is closed. It should apply the same SLOW_CLIENT_BYTES check and evict."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A customer has the app open on both a phone and a tablet. How many frames does one dispatch send to that customer?",
+      "choices": [
+        "One, to the most recently attached socket",
+        "Zero until the customer subscribes to the order",
+        "One per open socket in the customer's set, so two",
+        "Two only if the restaurant is also connected"
+      ],
+      "answer": 2,
+      "explanation": "attachCustomer adds each socket to a Set keyed by customerId, and sendToCustomer loops over all of them, sending to each open one. There is no 'latest only' logic, no per-order subscription step, and restaurant connections are independent."
+    },
+    {
+      "prompt": "An older event (version 3) arrives after version 4 for the same order. What happens?",
+      "choices": [
+        "It is dropped by wireOrderEvents before reaching the hub",
+        "It is dispatched and clients reorder by version",
+        "It overwrites the stored version back to 3",
+        "It is dispatched only to the restaurant"
+      ],
+      "answer": 0,
+      "explanation": "wireOrderEvents keeps lastVersion per order and returns early when event.version <= seen, so version 3 never reaches dispatch. Clients don't reorder anything here, the map isn't updated on the early return, and there is no restaurant-only path."
+    },
+    {
+      "prompt": "When the hub evicts a slow customer socket, when is it removed from byCustomer?",
+      "choices": [
+        "Immediately inside evict",
+        "Never; it stays until the customer reconnects",
+        "On the next dispatch for that customer",
+        "When the socket's close event fires after the close handshake"
+      ],
+      "answer": 3,
+      "explanation": "evict only calls ws.close; removal happens in the once('close') listener registered in attach, which runs when the socket actually closes. evict doesn't touch the map, dispatch doesn't prune, and the listener ensures it isn't kept forever."
+    }
+  ],
+  "concepts": [
+    "backend.realtime.connection_fanout",
+    "backend.messaging.backpressure",
+    "backend.resources.unbounded_buffers",
+    "backend.messaging.message_ordering"
+  ]
+}

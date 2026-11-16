@@ -1,0 +1,50 @@
+{
+  "id": "d3ea9947-c68c-4149-9667-197681e8091c",
+  "title": "IAM schema migrations at service boot",
+  "name": "Identity schema migrator",
+  "createdAt": "2026-11-15T09:41:31.721Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code applies and records IAM schema migrations? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Migration 42 runs against a table that has two bindings with the same principal, role and scope, ids 10 and 17. What happens?",
+      "choices": [
+        "The constraint creation fails because of the duplicate",
+        "Both rows are deleted, then the constraint is added",
+        "Row 17 is deleted, row 10 is kept, and the constraint is added",
+        "Row 10 is deleted, row 17 is kept, and the constraint is added"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Three replicas of the identity service boot at once with migrations 41-43 pending. How do they interact?",
+      "choices": [
+        "All three run 41 at once and two fail on ALTER TABLE",
+        "One acquires the advisory lock and applies them; the others wait, then see max(version)=43 and apply nothing",
+        "The first to boot applies them; the others exit because the lock is held",
+        "Each replica applies one migration"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "While migration 41 runs on a large role_bindings table, what does it mean for authorization checks reading that table?",
+      "choices": [
+        "They are unaffected because ALTER TABLE ADD COLUMN takes no lock",
+        "They block until the migration's transaction commits, because ALTER TABLE holds an ACCESS EXCLUSIVE lock for the whole transaction including the full-table UPDATE",
+        "They see scope = NULL for some rows until the transaction commits",
+        "They fail immediately with a lock timeout"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.migrations",
+    "backend.data.transactions_and_isolation_levels",
+    "backend.concurrency.locking_and_lock_ordering"
+  ]
+}

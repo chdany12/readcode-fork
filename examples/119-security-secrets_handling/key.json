@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/smsClient.ts",
+        "startLine": 64,
+        "endLine": 64
+      }
+    },
+    3,
+    0,
+    2
+  ],
+  "explanations": [
+    "The error log for non-2xx responses includes request.headers, which contains the Authorization header with the base64-encoded accountSid:authToken. Base64 is trivially reversible, so every 4xx/5xx (including routine 400s for bad numbers) writes the provider auth token into the log pipeline, where anyone with log access can use it to send SMS as the company. Logging only url and status (or a redacted header set) fixes it.",
+    "AbortSignal.timeout aborts the fetch, which rejects; the catch logs the error name (TimeoutError) and throws SmsSendError with retryable=true. There is no Response, so the !res.ok branch is not reached and no sid is returned.",
+    "Each request carries Idempotency-Key: msg.notificationId, which stays the same across retries of the same notification, letting the provider deduplicate. Authorization identifies the account, not the message; maskPhone affects only logs.",
+    "The retryable flag is res.status >= 500 || res.status === 429. Other 4xx such as 400 or 401 are not retryable, so 'any non-2xx' and 'only 4xx' are wrong, and 'only 503' is too narrow."
+  ]
+}

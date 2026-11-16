@@ -1,0 +1,49 @@
+{
+  "id": "76b3259d-193c-41f1-987e-97d8fffac1fa",
+  "title": "Sync API request logging middleware",
+  "name": "Sync request logger",
+  "createdAt": "2026-11-15T09:44:42.025Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this middleware keeps credentials out of the logs? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A chunk upload to `/v1/files/:fileId/chunks/:index` fails with a 500. What does the error log contain for `body`?",
+      "choices": [
+        "The first 256 characters of the raw chunk bytes",
+        "The whole JSON body including `contents`",
+        "Nothing: `bodyPreview` returns undefined for application/octet-stream requests",
+        "A base64 encoding of the chunk"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What determines whether headers, query and body are written to a log line?",
+      "choices": [
+        "The LOG_LEVEL environment variable",
+        "Whether the response status is 500 or above",
+        "Whether the request carried an x-request-id header",
+        "They are always logged"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client calls `POST /v1/sync/cursor?Share_Key=abc` and the handler throws, producing a 500. How is the query parameter logged?",
+      "choices": [
+        "As \"[redacted]\", because the key is lowercased before the lookup",
+        "As \"abc\", because the set only contains lowercase names",
+        "It is dropped from the log entirely",
+        "The request is rejected before logging because of the unknown parameter"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.observability.logging_sensitive_data",
+    "backend.observability.structured_logging"
+  ]
+}

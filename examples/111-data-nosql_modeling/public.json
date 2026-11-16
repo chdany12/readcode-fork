@@ -1,0 +1,51 @@
+{
+  "id": "1ef0a9b2-5dc0-4401-9324-426d18e2258c",
+  "title": "Clinic appointment booking in a single DynamoDB table",
+  "name": "Clinic appointment booking",
+  "createdAt": "2026-11-15T09:41:31.653Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code models and writes appointment slots? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does book() write the appointment twice, once under the provider key and once under the patient key?",
+      "choices": [
+        "To keep a backup copy in case one item is deleted",
+        "Because DynamoDB requires every item to be reachable from two keys",
+        "Because a transaction must touch at least two items",
+        "So both access patterns (a provider's day, a patient's upcoming visits) are single-partition Queries without a scan or secondary index"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "How does providerDay('c1', 'p9', '2026-03-02') select the right appointments?",
+      "choices": [
+        "It scans the table filtering on slotStart",
+        "Slot sort keys are 'SLOT#' + ISO timestamp, so begins_with 'SLOT#2026-03-02' matches every slot that day",
+        "It reads a separate day-index item",
+        "It relies on a GSI keyed by date"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The booking transaction succeeds but recordAudit throws (e.g. a throttling error). What does the caller observe?",
+      "choices": [
+        "BookingService.book rejects with the error even though the appointment items were written",
+        "The appointment is rolled back because the audit is part of the transaction",
+        "book returns { ok: false, reason: 'slot_taken' }",
+        "book returns { ok: true } and the audit failure is ignored"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.nosql_modeling",
+    "backend.concurrency.race_conditions",
+    "backend.data.transactions_and_isolation_levels",
+    "backend.errors.error_propagation"
+  ]
+}

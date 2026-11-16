@@ -1,0 +1,67 @@
+{
+  "title": "Order placement against an inventory store interface",
+  "name": "Order reservation service",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/inventory.ts",
+      "content": "export type ReserveResult =\n  | { status: \"reserved\"; reservationId: string; sku: string; quantity: number }\n  | { status: \"insufficient\"; sku: string; available: number }\n  | { status: \"unknown_sku\"; sku: string };\n\nexport interface InventoryStore {\n  reserve(sku: string, quantity: number, orderRef: string): Promise<ReserveResult>;\n  release(reservationId: string): Promise<void>;\n}\n\nexport class InsufficientStockError extends Error {\n  constructor(public readonly sku: string, public readonly available: number) {\n    super(`insufficient stock for ${sku}: ${available} available`);\n    this.name = \"InsufficientStockError\";\n  }\n}\n"
+    },
+    {
+      "path": "src/orderPlacement.ts",
+      "content": "import { InventoryStore, InsufficientStockError, ReserveResult } from \"./inventory\";\n\nexport interface OrderLine {\n  sku: string;\n  quantity: number;\n  unitPriceCents: number;\n}\n\nexport interface OrderRepository {\n  insert(order: {\n    ref: string;\n    customerId: string;\n    lines: OrderLine[];\n    reservationIds: string[];\n    totalCents: number;\n  }): Promise<void>;\n}\n\nexport class OrderPlacementService {\n  constructor(\n    private readonly inventory: InventoryStore,\n    private readonly orders: OrderRepository,\n    private readonly newRef: () => string,\n  ) {}\n\n  async placeOrder(customerId: string, lines: OrderLine[]): Promise<string> {\n    if (lines.length === 0) {\n      throw new Error(\"order must contain at least one line\");\n    }\n    const ref = this.newRef();\n    const reservationIds: string[] = [];\n\n    try {\n      for (const line of lines) {\n        const res: ReserveResult = await this.inventory.reserve(line.sku, line.quantity, ref);\n        if (res.status === \"insufficient\") {\n          throw new InsufficientStockError(res.sku, res.available);\n        }\n        const reserved = res as Extract<ReserveResult, { status: \"reserved\" }>;\n        reservationIds.push(reserved.reservationId);\n      }\n\n      const totalCents = lines.reduce((sum, l) => sum + l.quantity * l.unitPriceCents, 0);\n      await this.orders.insert({ ref, customerId, lines, reservationIds, totalCents });\n      return ref;\n    } catch (err) {\n      await this.releaseAll(reservationIds);\n      throw err;\n    }\n  }\n\n  private async releaseAll(ids: string[]): Promise<void> {\n    for (const id of ids) {\n      try {\n        await this.inventory.release(id);\n      } catch (releaseErr) {\n        console.error(JSON.stringify({ msg: \"release failed\", reservationId: id, error: String(releaseErr) }));\n      }\n    }\n  }\n}\n"
+    },
+    {
+      "path": "src/pgInventoryStore.ts",
+      "content": "import { Pool } from \"pg\";\nimport { InventoryStore, ReserveResult } from \"./inventory\";\n\nexport class PgInventoryStore implements InventoryStore {\n  constructor(private readonly pool: Pool) {}\n\n  async reserve(sku: string, quantity: number, orderRef: string): Promise<ReserveResult> {\n    const client = await this.pool.connect();\n    try {\n      await client.query(\"BEGIN\");\n      const row = await client.query(\n        \"SELECT on_hand - reserved AS available FROM stock WHERE sku = $1 FOR UPDATE\",\n        [sku],\n      );\n      if (row.rowCount === 0) {\n        await client.query(\"ROLLBACK\");\n        return { status: \"unknown_sku\", sku };\n      }\n      const available = Number(row.rows[0].available);\n      if (available < quantity) {\n        await client.query(\"ROLLBACK\");\n        return { status: \"insufficient\", sku, available };\n      }\n      await client.query(\"UPDATE stock SET reserved = reserved + $2 WHERE sku = $1\", [sku, quantity]);\n      const ins = await client.query(\n        \"INSERT INTO reservations (sku, quantity, order_ref) VALUES ($1, $2, $3) RETURNING id\",\n        [sku, quantity, orderRef],\n      );\n      await client.query(\"COMMIT\");\n      return { status: \"reserved\", reservationId: String(ins.rows[0].id), sku, quantity };\n    } catch (err) {\n      await client.query(\"ROLLBACK\").catch(() => undefined);\n      throw err;\n    } finally {\n      client.release();\n    }\n  }\n\n  async release(reservationId: string): Promise<void> {\n    const client = await this.pool.connect();\n    try {\n      await client.query(\"BEGIN\");\n      const del = await client.query(\n        \"DELETE FROM reservations WHERE id = $1 RETURNING sku, quantity\",\n        [reservationId],\n      );\n      if (del.rowCount === 1) {\n        const { sku, quantity } = del.rows[0];\n        await client.query(\"UPDATE stock SET reserved = reserved - $2 WHERE sku = $1\", [sku, quantity]);\n      }\n      await client.query(\"COMMIT\");\n    } catch (err) {\n      await client.query(\"ROLLBACK\").catch(() => undefined);\n      throw err;\n    } finally {\n      client.release();\n    }\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/orderPlacement.ts",
+    "snippet": "        const reserved = res as Extract<ReserveResult, { status: \"reserved\" }>;"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how OrderPlacementService consumes the results returned by InventoryStore.reserve? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "ReserveResult has three variants, but placeOrder only handles \"insufficient\" and then casts everything else to the \"reserved\" variant. When PgInventoryStore returns { status: \"unknown_sku\" }, the cast silences the compiler, reserved.reservationId is undefined, undefined is pushed into reservationIds, and the order is inserted with a line for a SKU that does not exist and no stock reserved. A switch on res.status (or an explicit check for \"reserved\" with an exhaustive never default) would make the compiler force handling of every variant."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "The second of three order lines gets { status: \"insufficient\" } from reserve. What happens to the reservation made for the first line?",
+      "choices": [
+        "It stays reserved until a background job expires it",
+        "It is released in the catch block before the InsufficientStockError is rethrown",
+        "It is released only if the orders.insert call fails",
+        "It is converted into a backorder for the same order ref"
+      ],
+      "answer": 1,
+      "explanation": "The InsufficientStockError is thrown inside the try, so the catch calls releaseAll(reservationIds), which holds the first line's id, then rethrows. Nothing in the code expires reservations, releases only on insert failure, or creates backorders."
+    },
+    {
+      "prompt": "If inventory.release throws for one reservation id during cleanup, what does the caller of placeOrder observe?",
+      "choices": [
+        "The release error replaces the original error",
+        "placeOrder returns the order ref anyway",
+        "The original error that triggered cleanup, after the remaining releases are still attempted",
+        "An AggregateError combining both failures"
+      ],
+      "answer": 2,
+      "explanation": "releaseAll catches and logs each release failure and continues the loop, so the catch in placeOrder then rethrows the original err. The release error is never thrown, no ref is returned on the failure path, and no AggregateError is built."
+    },
+    {
+      "prompt": "Why does the InventoryStore interface return a ReserveResult union for insufficient stock instead of PgInventoryStore throwing InsufficientStockError itself?",
+      "choices": [
+        "Expected business outcomes become typed values the caller must inspect, while thrown errors are reserved for infrastructure failures",
+        "Throwing from inside a pg transaction would leave the row lock held forever",
+        "TypeScript cannot type-check thrown errors, so unions are faster at runtime",
+        "It lets PgInventoryStore avoid the ROLLBACK on that path"
+      ],
+      "answer": 0,
+      "explanation": "The union makes stock shortages and unknown SKUs part of the method's typed contract, separate from database exceptions which still propagate via throw. PgInventoryStore's catch would roll back and release the lock on a throw too; performance is not the reason; and the insufficient path does still ROLLBACK."
+    }
+  ],
+  "concepts": [
+    "backend.design.interface_design",
+    "backend.errors.cleanup_on_error_paths"
+  ]
+}

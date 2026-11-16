@@ -1,0 +1,52 @@
+{
+  "id": "2617ebd2-a697-4e84-8cdb-50abe2a51aa0",
+  "title": "Appointment reminder consumer with at-least-once delivery",
+  "name": "Appointment reminder consumer",
+  "createdAt": "2026-11-15T09:41:31.685Z",
+  "durationMinutes": 11,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this consumer handles redelivered or failed reminder messages? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The process crashes right after sms.send succeeds but before the UPDATE runs. What happens next?",
+      "choices": [
+        "The message is lost because it was already acked",
+        "The broker redelivers it; reminder_sent_at is still null, so send is called again with the same idempotency key and the provider does not send a second SMS",
+        "The patient receives two SMS messages",
+        "The message goes to a dead-letter queue immediately"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why is the idempotency key derived from appointmentId rather than from msg.messageId?",
+      "choices": [
+        "messageId is not unique",
+        "Provider keys must be numeric",
+        "If the producer publishes two different messages for the same appointment, both resolve to the same key, so the patient still gets one reminder",
+        "It makes the UPDATE statement faster"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What is the effect of `prefetch(10)` combined with manual acks here?",
+      "choices": [
+        "At most 10 unacked messages are in flight to this consumer, bounding concurrent handlers and the amount redelivered if it crashes",
+        "Each message is retried at most 10 times",
+        "Messages are processed strictly in order",
+        "The consumer acks in batches of 10"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.messaging.at_least_once_delivery",
+    "backend.messaging.queues_and_consumers",
+    "backend.api.idempotency",
+    "backend.messaging.backpressure",
+    "backend.messaging.deduplication"
+  ]
+}

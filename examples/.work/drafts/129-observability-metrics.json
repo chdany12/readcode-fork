@@ -1,0 +1,62 @@
+{
+  "title": "Food delivery leg metrics",
+  "name": "Delivery leg tracker",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/metrics.ts",
+      "content": "export type Labels = Record<string, string>;\n\nfunction key(name: string, labels: Labels): string {\n  const parts = Object.keys(labels).sort().map((k) => `${k}=\"${labels[k]}\"`);\n  return `${name}{${parts.join(\",\")}}`;\n}\n\nexport class Counter {\n  private values = new Map<string, number>();\n  constructor(readonly name: string) {}\n  inc(labels: Labels, by = 1): void {\n    const k = key(this.name, labels);\n    this.values.set(k, (this.values.get(k) ?? 0) + by);\n  }\n  snapshot(): Map<string, number> {\n    return new Map(this.values);\n  }\n}\n\nexport class Gauge {\n  private values = new Map<string, number>();\n  constructor(readonly name: string) {}\n  inc(labels: Labels): void {\n    const k = key(this.name, labels);\n    this.values.set(k, (this.values.get(k) ?? 0) + 1);\n  }\n  dec(labels: Labels): void {\n    const k = key(this.name, labels);\n    this.values.set(k, (this.values.get(k) ?? 0) - 1);\n  }\n  snapshot(): Map<string, number> {\n    return new Map(this.values);\n  }\n}\n\nexport class Histogram {\n  private series = new Map<string, { buckets: number[]; sum: number; count: number }>();\n  constructor(readonly name: string, readonly bounds: number[]) {}\n  observe(labels: Labels, value: number): void {\n    const k = key(this.name, labels);\n    let s = this.series.get(k);\n    if (!s) {\n      s = { buckets: this.bounds.map(() => 0), sum: 0, count: 0 };\n      this.series.set(k, s);\n    }\n    this.bounds.forEach((b, i) => {\n      if (value <= b) s!.buckets[i] += 1;\n    });\n    s.sum += value;\n    s.count += 1;\n  }\n  seriesCount(): number {\n    return this.series.size;\n  }\n}\n"
+    },
+    {
+      "path": "src/deliveryTracker.ts",
+      "content": "import { Counter, Histogram } from \"./metrics\";\n\nexport interface Courier {\n  id: string;\n  zone: string;\n  vehicle: \"bike\" | \"scooter\" | \"car\";\n}\n\nexport interface DeliveryLeg {\n  orderId: string;\n  courier: Courier;\n  pickedUpAt: number;\n  deliveredAt?: number;\n  failedReason?: \"customer_unreachable\" | \"address_invalid\" | \"courier_cancelled\";\n}\n\nexport interface LegRepository {\n  load(orderId: string): Promise<DeliveryLeg | null>;\n  save(leg: DeliveryLeg): Promise<void>;\n}\n\nconst deliveryDuration = new Histogram(\"delivery_leg_minutes\", [5, 10, 15, 20, 30, 45, 60, 90]);\nconst deliveryResults = new Counter(\"delivery_leg_results_total\");\n\nexport class DeliveryTracker {\n  constructor(private readonly repo: LegRepository, private readonly now: () => number = Date.now) {}\n\n  async markDelivered(orderId: string): Promise<void> {\n    const leg = await this.requireOpenLeg(orderId);\n    leg.deliveredAt = this.now();\n    await this.repo.save(leg);\n\n    const minutes = (leg.deliveredAt - leg.pickedUpAt) / 60_000;\n    deliveryDuration.observe(\n      { zone: leg.courier.zone, vehicle: leg.courier.vehicle, courier: leg.courier.id },\n      minutes,\n    );\n    deliveryResults.inc({ zone: leg.courier.zone, result: \"delivered\" });\n  }\n\n  async markFailed(orderId: string, reason: NonNullable<DeliveryLeg[\"failedReason\"]>): Promise<void> {\n    const leg = await this.requireOpenLeg(orderId);\n    leg.failedReason = reason;\n    await this.repo.save(leg);\n    deliveryResults.inc({ zone: leg.courier.zone, result: reason });\n  }\n\n  private async requireOpenLeg(orderId: string): Promise<DeliveryLeg> {\n    const leg = await this.repo.load(orderId);\n    if (!leg) {\n      throw new Error(`delivery leg not found for order ${orderId}`);\n    }\n    if (leg.deliveredAt !== undefined || leg.failedReason !== undefined) {\n      throw new Error(`delivery leg for order ${orderId} is already closed`);\n    }\n    return leg;\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/deliveryTracker.ts",
+    "snippet": "      { zone: leg.courier.zone, vehicle: leg.courier.vehicle, courier: leg.courier.id },"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how DeliveryTracker labels and records its delivery metrics? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The delivery_leg_minutes histogram is labeled with courier: leg.courier.id. Courier ids are unbounded, so every courier creates a new series per zone and vehicle, each holding a full set of buckets. As the fleet grows the in-process series map (and the metrics backend) grows without limit, causing memory growth, slow scrapes and high storage cost. Per-courier analysis belongs in logs or the database; the label should be dropped."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "repo.save throws while marking an order delivered. What happens to the metrics?",
+      "choices": [
+        "The duration is observed but the result counter is not incremented",
+        "Both metrics are recorded because they are computed before the save",
+        "Neither metric is recorded and the error propagates",
+        "The result is recorded as \"courier_cancelled\""
+      ],
+      "answer": 2,
+      "explanation": "Both observe and inc come after await this.repo.save(leg); a rejection propagates out before either runs. Nothing records a fallback result."
+    },
+    {
+      "prompt": "markDelivered is called twice for the same order, sequentially. What does the second call do?",
+      "choices": [
+        "Records a second duration observation with a later deliveredAt",
+        "Throws because the loaded leg already has deliveredAt set",
+        "Silently returns without recording anything",
+        "Overwrites deliveredAt and increments the counter only"
+      ],
+      "answer": 1,
+      "explanation": "requireOpenLeg throws \"already closed\" when deliveredAt is defined on the stored leg, so the second sequential call fails before any metric is touched."
+    },
+    {
+      "prompt": "How many series does deliveryResults have at most for a single zone?",
+      "choices": [
+        "One",
+        "Two: delivered and failed",
+        "Four: delivered plus the three failure reasons",
+        "One per order"
+      ],
+      "answer": 3,
+      "explanation": "deliveryResults uses labels zone and result, where result is \"delivered\" or one of the three failedReason values, giving four per zone. It never uses order ids."
+    }
+  ],
+  "concepts": [
+    "backend.observability.metrics"
+  ]
+}

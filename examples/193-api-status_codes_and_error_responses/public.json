@@ -1,0 +1,50 @@
+{
+  "id": "39ef8518-47a2-46e9-bcbd-7b197ef03661",
+  "title": "Ledger transfer API error mapping",
+  "name": "Ledger transfer endpoint",
+  "createdAt": "2026-11-15T09:44:42.011Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code maps failures to HTTP status codes? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends amountMinor as \"0\". What response does it get?",
+      "choices": [
+        "201 with status from the ledger",
+        "422 with error \"validation_failed\" and field \"amountMinor\"",
+        "409 with error \"insufficient_funds\"",
+        "400 because BigInt(\"0\") throws"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does the handler use 409 rather than 422 for InsufficientFundsError?",
+      "choices": [
+        "Because 422 is reserved for JSON parse errors",
+        "Because express rejects 422 for POST routes",
+        "Because the request is well formed but conflicts with the current state of the account, and could succeed later if the balance changes",
+        "Because 409 tells the client to retry immediately"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What does a successful POST /transfers response include besides the JSON body?",
+      "choices": [
+        "A Location header pointing to /transfers/<transferId> and status 201",
+        "A Retry-After header and status 202",
+        "Only status 200 with no headers set",
+        "An ETag header derived from the balance"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.status_codes_and_error_responses",
+    "backend.api.request_validation",
+    "backend.data.money_and_ledgers"
+  ]
+}

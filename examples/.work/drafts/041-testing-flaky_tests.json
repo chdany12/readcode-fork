@@ -1,0 +1,64 @@
+{
+  "title": "Ride dispatcher and its tests",
+  "name": "Ride dispatcher tests",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/dispatcher.ts",
+      "content": "import { EventEmitter } from \"events\";\n\nexport interface Driver {\n  id: string;\n  lat: number;\n  lng: number;\n  available: boolean;\n}\n\nexport interface DriverLocator {\n  nearby(lat: number, lng: number, radiusKm: number): Promise<Driver[]>;\n}\n\nexport interface RideRequest {\n  rideId: string;\n  riderId: string;\n  pickupLat: number;\n  pickupLng: number;\n}\n\nexport type Assignment = { rideId: string; driverId: string; distanceKm: number };\n\nfunction haversineKm(aLat: number, aLng: number, bLat: number, bLng: number): number {\n  const R = 6371;\n  const toRad = (d: number) => (d * Math.PI) / 180;\n  const dLat = toRad(bLat - aLat);\n  const dLng = toRad(bLng - aLng);\n  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;\n  return 2 * R * Math.asin(Math.sqrt(h));\n}\n\nexport class Dispatcher extends EventEmitter {\n  private readonly pending: RideRequest[] = [];\n  private draining = false;\n\n  constructor(private readonly locator: DriverLocator, private readonly radiusKm = 5) {\n    super();\n  }\n\n  submit(req: RideRequest): void {\n    this.pending.push(req);\n    if (!this.draining) {\n      this.draining = true;\n      setImmediate(() => void this.drain());\n    }\n  }\n\n  private async drain(): Promise<void> {\n    try {\n      while (this.pending.length > 0) {\n        const req = this.pending.shift()!;\n        const candidates = (await this.locator.nearby(req.pickupLat, req.pickupLng, this.radiusKm))\n          .filter((d) => d.available)\n          .map((d) => ({ d, km: haversineKm(req.pickupLat, req.pickupLng, d.lat, d.lng) }))\n          .sort((a, b) => a.km - b.km);\n        const best = candidates[0];\n        if (!best) {\n          this.emit(\"unassigned\", req.rideId);\n          continue;\n        }\n        best.d.available = false;\n        this.emit(\"assigned\", { rideId: req.rideId, driverId: best.d.id, distanceKm: best.km } as Assignment);\n      }\n    } finally {\n      this.draining = false;\n    }\n  }\n}\n"
+    },
+    {
+      "path": "test/dispatcher.test.ts",
+      "content": "import { describe, it, expect, beforeEach } from \"vitest\";\nimport { Dispatcher, Driver, DriverLocator, Assignment } from \"../src/dispatcher\";\n\nclass FakeLocator implements DriverLocator {\n  constructor(public drivers: Driver[], private readonly latencyMs = 0) {}\n  async nearby(): Promise<Driver[]> {\n    if (this.latencyMs > 0) await new Promise((r) => setTimeout(r, this.latencyMs));\n    return this.drivers;\n  }\n}\n\nfunction collect(dispatcher: Dispatcher) {\n  const assigned: Assignment[] = [];\n  const unassigned: string[] = [];\n  dispatcher.on(\"assigned\", (a: Assignment) => assigned.push(a));\n  dispatcher.on(\"unassigned\", (id: string) => unassigned.push(id));\n  return { assigned, unassigned };\n}\n\ndescribe(\"Dispatcher\", () => {\n  let drivers: Driver[];\n\n  beforeEach(() => {\n    drivers = [\n      { id: \"d-far\", lat: 37.80, lng: -122.41, available: true },\n      { id: \"d-near\", lat: 37.7751, lng: -122.4192, available: true },\n    ];\n  });\n\n  it(\"assigns the closest available driver\", async () => {\n    const dispatcher = new Dispatcher(new FakeLocator(drivers));\n    const { assigned } = collect(dispatcher);\n    const done = new Promise((r) => dispatcher.once(\"assigned\", r));\n\n    dispatcher.submit({ rideId: \"r1\", riderId: \"u1\", pickupLat: 37.775, pickupLng: -122.4194 });\n    await done;\n\n    expect(assigned[0].driverId).toBe(\"d-near\");\n  });\n\n  it(\"does not hand the same driver to two rides\", async () => {\n    const dispatcher = new Dispatcher(new FakeLocator(drivers, 5));\n    const { assigned } = collect(dispatcher);\n\n    dispatcher.submit({ rideId: \"r1\", riderId: \"u1\", pickupLat: 37.775, pickupLng: -122.4194 });\n    dispatcher.submit({ rideId: \"r2\", riderId: \"u2\", pickupLat: 37.775, pickupLng: -122.4194 });\n    await new Promise((r) => setTimeout(r, 15));\n\n    expect(assigned.map((a) => a.driverId)).toEqual([\"d-near\", \"d-far\"]);\n  });\n\n  it(\"reports a ride as unassigned when nobody is free\", async () => {\n    drivers.forEach((d) => (d.available = false));\n    const dispatcher = new Dispatcher(new FakeLocator(drivers));\n    const { unassigned } = collect(dispatcher);\n    const done = new Promise((r) => dispatcher.once(\"unassigned\", r));\n\n    dispatcher.submit({ rideId: \"r3\", riderId: \"u3\", pickupLat: 37.775, pickupLng: -122.4194 });\n    await done;\n\n    expect(unassigned).toEqual([\"r3\"]);\n  });\n});\n"
+    }
+  ],
+  "defect": {
+    "path": "test/dispatcher.test.ts",
+    "snippet": "    await new Promise((r) => setTimeout(r, 15));"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in these tests that would make them pass or fail nondeterministically? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The second test waits a fixed 15 ms of wall-clock time and then asserts on both assignments. Each locator call sleeps 5 ms via setTimeout and the two rides are processed sequentially after a setImmediate hop, so the work needs a little over 10 ms with almost no margin for timer granularity, GC pauses, or a loaded CI machine. When the event loop is slow the assertion runs with zero or one assignment and the test fails intermittently. It should await completion explicitly, e.g. resolve once two 'assigned' events have fired, or use fake timers."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "submit() is called twice in the same synchronous block. How many times does drain() start?",
+      "choices": [
+        "Twice, once per submit, running concurrently",
+        "Once; the second submit sees draining === true and only pushes onto pending",
+        "Zero times until a third submit arrives",
+        "Twice, but the second drain() waits for the first to finish"
+      ],
+      "answer": 1,
+      "explanation": "The first submit sets draining = true and schedules drain via setImmediate. The second submit pushes its request but skips scheduling because draining is already true. The single drain loop processes both items. Nothing chains a second drain."
+    },
+    {
+      "prompt": "In the first test, could the `dispatcher.once(\"assigned\", ...)` listener be registered on the line right after submit() instead of before it?",
+      "choices": [
+        "No, submit() emits 'assigned' synchronously, so a later listener would miss it",
+        "No, EventEmitter drops listeners added after a submit",
+        "Yes, because assignment is emitted on a later tick (after setImmediate and the awaited locator call)",
+        "Only if the locator has non-zero latency"
+      ],
+      "answer": 2,
+      "explanation": "submit() only schedules drain with setImmediate, and drain awaits the locator, so 'assigned' is emitted on a later tick; a listener added synchronously after submit() still catches it, even with zero latency. EventEmitter does not drop late listeners."
+    },
+    {
+      "prompt": "The 'drivers' array is rebuilt in beforeEach. What would go wrong if it were a single module-level array instead?",
+      "choices": [
+        "Nothing, because each Dispatcher copies the driver list",
+        "Only the unassigned test would be affected, because it is the only one that mutates drivers",
+        "The TypeScript compiler would reject the shared mutable array",
+        "Test results would depend on run order, since Dispatcher sets available = false on the shared Driver objects"
+      ],
+      "answer": 3,
+      "explanation": "Dispatcher mutates the returned objects (`best.d.available = false`), and FakeLocator returns the same array. With a shared array, drivers taken in one test would stay unavailable in later tests, so outcomes would depend on order. The dispatcher does not copy drivers, and the assign tests mutate availability too."
+    }
+  ],
+  "concepts": [
+    "backend.testing.flaky_tests",
+    "backend.testing.unit_test_design",
+    "backend.testing.mocking_and_fakes"
+  ]
+}

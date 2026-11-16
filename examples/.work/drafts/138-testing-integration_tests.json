@@ -1,0 +1,62 @@
+{
+  "title": "Integration tests for a transactional notification enqueue",
+  "name": "Notification enqueue tests",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/notificationService.ts",
+      "content": "import { Pool, PoolClient } from \"pg\";\n\nexport interface NotificationRequest {\n  userId: string;\n  channel: \"email\" | \"sms\" | \"push\";\n  templateId: string;\n  dedupeKey: string;\n  payload: Record<string, unknown>;\n}\n\nexport class NotificationPreferenceError extends Error {}\n\nexport class NotificationService {\n  constructor(private readonly pool: Pool) {}\n\n  async enqueue(req: NotificationRequest): Promise<{ id: string; created: boolean }> {\n    const client: PoolClient = await this.pool.connect();\n    try {\n      await client.query(\"BEGIN\");\n      const pref = await client.query(\n        \"SELECT opted_out FROM notification_preferences WHERE user_id = $1 AND channel = $2\",\n        [req.userId, req.channel],\n      );\n      if (pref.rows[0]?.opted_out) {\n        throw new NotificationPreferenceError(`user ${req.userId} opted out of ${req.channel}`);\n      }\n      const inserted = await client.query(\n        `INSERT INTO notifications (user_id, channel, template_id, dedupe_key, payload, status)\n         VALUES ($1, $2, $3, $4, $5, 'pending')\n         ON CONFLICT (dedupe_key) DO NOTHING\n         RETURNING id`,\n        [req.userId, req.channel, req.templateId, req.dedupeKey, req.payload],\n      );\n      if (inserted.rowCount === 0) {\n        const existing = await client.query(\"SELECT id FROM notifications WHERE dedupe_key = $1\", [req.dedupeKey]);\n        await client.query(\"COMMIT\");\n        return { id: existing.rows[0].id, created: false };\n      }\n      const id = inserted.rows[0].id;\n      await client.query(\n        \"INSERT INTO outbox (aggregate_id, topic, body) VALUES ($1, 'notification.created', $2)\",\n        [id, { id, channel: req.channel }],\n      );\n      await client.query(\"COMMIT\");\n      return { id, created: true };\n    } catch (err) {\n      await client.query(\"ROLLBACK\");\n      throw err;\n    } finally {\n      client.release();\n    }\n  }\n}\n"
+    },
+    {
+      "path": "test/notificationService.int.test.ts",
+      "content": "import { Pool } from \"pg\";\nimport { randomUUID } from \"node:crypto\";\nimport { afterAll, beforeAll, beforeEach, describe, expect, it } from \"vitest\";\nimport { NotificationPreferenceError, NotificationService } from \"../src/notificationService\";\n\nconst pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL, max: 4 });\nconst service = new NotificationService(pool);\n\nasync function countRows(table: \"notifications\" | \"outbox\", where: string, params: unknown[]) {\n  const res = await pool.query(`SELECT count(*)::int AS n FROM ${table} WHERE ${where}`, params);\n  return res.rows[0].n as number;\n}\n\ndescribe(\"NotificationService.enqueue (postgres)\", () => {\n  beforeAll(async () => {\n    await pool.query(\"SELECT 1\");\n  });\n\n  beforeEach(async () => {\n    await pool.query(\"TRUNCATE notifications, outbox, notification_preferences RESTART IDENTITY CASCADE\");\n  });\n\n  afterAll(async () => {\n    await pool.end();\n  });\n\n  it(\"writes the notification and its outbox event together\", async () => {\n    const userId = randomUUID();\n    const result = await service.enqueue({\n      userId, channel: \"email\", templateId: \"welcome\", dedupeKey: `welcome:${userId}`, payload: { name: \"Ada\" },\n    });\n\n    expect(result.created).toBe(true);\n    expect(await countRows(\"notifications\", \"id = $1\", [result.id])).toBe(1);\n    expect(await countRows(\"outbox\", \"aggregate_id = $1\", [result.id])).toBe(1);\n  });\n\n  it(\"returns the existing row for a repeated dedupe key\", async () => {\n    const userId = randomUUID();\n    const req = { userId, channel: \"sms\" as const, templateId: \"otp\", dedupeKey: `otp:${userId}:1`, payload: {} };\n\n    const [a, b] = await Promise.all([service.enqueue(req), service.enqueue(req)]);\n\n    expect(a.id).toBe(b.id);\n    expect([a.created, b.created].sort()).toEqual([false, true]);\n    expect(await countRows(\"outbox\", \"aggregate_id = $1\", [a.id])).toBe(1);\n  });\n\n  it(\"rolls back everything when the user has opted out\", async () => {\n    const userId = randomUUID();\n    await pool.query(\n      \"INSERT INTO notification_preferences (user_id, channel, opted_out) VALUES ($1, 'push', true)\",\n      [userId],\n    );\n\n    await expect(\n      service.enqueue({ userId, channel: \"push\", templateId: \"promo\", dedupeKey: `promo:${userId}`, payload: {} }),\n    ).rejects.toBeInstanceOf(NotificationPreferenceError);\n\n    expect(await countRows(\"notifications\", \"user_id = $1\", [userId])).toBe(0);\n    expect(await countRows(\"outbox\", \"body->>'channel' = 'push'\", [])).toBe(0);\n  });\n});\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how these integration tests set up, isolate, or assert against the database? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is no defect. Every test starts from a truncated schema in beforeEach, so no test depends on rows left by another. Every async assertion is awaited (including `await expect(...).rejects`), so failures cannot be silently skipped. The concurrent dedupe test is valid against a real database: the unique constraint on dedupe_key plus ON CONFLICT DO NOTHING means the second insert waits for the first transaction and then returns 0 rows, and its follow-up SELECT runs after the first commit, so both calls return the same id. The pool is closed in afterAll, so the runner does not hang."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "In the concurrent dedupe test, what makes `a.id` equal `b.id` even though both calls run at the same time?",
+      "choices": [
+        "Promise.all runs the two calls sequentially, so the second always sees the committed first row",
+        "The unique constraint on dedupe_key makes the second INSERT wait for the first transaction, then ON CONFLICT DO NOTHING returns no row and the service reads the committed id",
+        "The service holds a JavaScript-level lock per dedupe key",
+        "Each call gets its own TRUNCATE, so only one row can exist"
+      ],
+      "answer": 1,
+      "explanation": "Postgres blocks a conflicting insert on a unique index until the other transaction finishes; after the first commits, ON CONFLICT DO NOTHING yields rowCount 0 and the SELECT finds the committed row. Promise.all starts both calls concurrently, not sequentially. There is no in-process lock in NotificationService. TRUNCATE runs only in beforeEach, once per test."
+    },
+    {
+      "prompt": "Why does the opt-out test also assert that the outbox has no 'push' row, rather than only checking the thrown error?",
+      "choices": [
+        "To check that nothing was persisted on the error path, since the error is thrown inside the transaction that would have written both tables",
+        "Because the outbox is written before the preference check",
+        "Because vitest requires at least two assertions per test",
+        "To verify that TRUNCATE ran"
+      ],
+      "answer": 0,
+      "explanation": "An integration test should verify observable side effects in the database; the assertion confirms the ROLLBACK path leaves no partial state. In the code the preference check comes before any insert, so the outbox is not written first. Vitest has no minimum assertion count. TRUNCATE is not what this assertion is about; it filters on rows that would have been created by this call."
+    },
+    {
+      "prompt": "What would most likely happen if `afterAll(() => pool.end())` were removed?",
+      "choices": [
+        "Tests would start failing with unique constraint violations",
+        "Rows would leak between tests",
+        "The test process could stay alive or warn about open handles because idle pool connections keep the event loop busy",
+        "The TRUNCATE in beforeEach would deadlock"
+      ],
+      "answer": 2,
+      "explanation": "A pg Pool keeps idle client sockets open until they time out or pool.end() is called, which keeps the Node process alive after tests finish. Isolation between tests comes from TRUNCATE in beforeEach, not from closing the pool, so neither constraint violations nor leaked rows follow. Closing the pool has nothing to do with locks taken by TRUNCATE."
+    }
+  ],
+  "concepts": [
+    "backend.testing.integration_tests",
+    "backend.data.transactions_and_isolation_levels",
+    "backend.messaging.deduplication",
+    "backend.errors.cleanup_on_error_paths"
+  ]
+}

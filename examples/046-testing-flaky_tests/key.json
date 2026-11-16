@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/syncFolder.test.ts",
+        "startLine": 33,
+        "endLine": 33
+      }
+    },
+    2,
+    0,
+    3
+  ],
+  "explanations": [
+    "\"uploads every new file\" runs three workers concurrently against a store with random 0-5 ms latency, so the order in which workers push into result.uploaded depends on which put finishes first. The deepEqual against [\"a.txt\", \"b.txt\", \"c.txt\"] passes only when completions happen to land in input order. It should compare a sorted copy (or a set). The second test is fine because each of its lists has a single entry.",
+    "Both workers can call has(digest) before either put completes, so both can get false and both upload. Nothing serializes work per digest, and the result arrays hold paths, not digests. syncFolder doesn't detect duplicate puts, and \"always skipped\" assumes an ordering the code doesn't enforce.",
+    "The array length is Math.min(concurrency, files.length) = Math.min(4, 2) = 2. The default of 4 is capped by the file count, and Array.from starts all workers immediately rather than lazily.",
+    "The rejection propagates out of worker(), and Promise.all rejects on the first rejection without waiting for or cancelling the others, so they keep draining the queue unobserved. No catch records the file as skipped, nothing retries, and no partial result is returned."
+  ]
+}

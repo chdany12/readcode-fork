@@ -1,0 +1,62 @@
+{
+  "title": "Multi-currency seat invoicing for an identity platform",
+  "name": "Identity seat invoicing",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/currency.ts",
+      "content": "export const MINOR_UNITS: Record<string, number> = {\n  USD: 2,\n  EUR: 2,\n  GBP: 2,\n  JPY: 0,\n  KRW: 0,\n  BHD: 3,\n};\n\nexport function minorUnitsOf(currency: string): number {\n  const units = MINOR_UNITS[currency];\n  if (units === undefined) throw new Error(`unsupported currency ${currency}`);\n  return units;\n}\n\nexport function formatMinor(amountMinor: number, currency: string): string {\n  const units = minorUnitsOf(currency);\n  const major = amountMinor / 10 ** units;\n  return new Intl.NumberFormat(\"en-US\", {\n    style: \"currency\",\n    currency,\n    minimumFractionDigits: units,\n    maximumFractionDigits: units,\n  }).format(major);\n}\n\nexport function majorToMinor(major: string, currency: string): number {\n  const units = minorUnitsOf(currency);\n  const [intPart, fracPart = \"\"] = major.split(\".\");\n  if (fracPart.length > units) {\n    throw new Error(`${major} has more precision than ${currency} allows`);\n  }\n  const padded = fracPart.padEnd(units, \"0\");\n  return Number(intPart) * 10 ** units + (padded ? Number(padded) : 0);\n}\n"
+    },
+    {
+      "path": "src/seatInvoice.ts",
+      "content": "import { formatMinor, majorToMinor } from \"./currency\";\n\nexport interface SeatPlan {\n  planId: string;\n  currency: string;\n  pricePerSeatMajor: string;\n  taxRateBps: number;\n}\n\nexport interface TenantSeats {\n  tenantId: string;\n  activeSeats: number;\n  ssoEnabled: boolean;\n}\n\nexport interface InvoiceLine {\n  description: string;\n  amountMinor: number;\n}\n\nexport interface SeatInvoice {\n  tenantId: string;\n  currency: string;\n  lines: InvoiceLine[];\n  subtotalMinor: number;\n  taxMinor: number;\n  totalMinor: number;\n  display: string;\n}\n\nconst SSO_ADDON_PER_SEAT_USD_CENTS = 150;\n\nexport function convertAddon(usdCents: number, fxRateToTarget: number): number {\n  return Math.round((usdCents / 100) * fxRateToTarget * 100);\n}\n\nexport function buildSeatInvoice(\n  tenant: TenantSeats,\n  plan: SeatPlan,\n  fxRateFromUsd: number,\n): SeatInvoice {\n  if (!Number.isInteger(tenant.activeSeats) || tenant.activeSeats < 0) {\n    throw new Error(`invalid seat count for ${tenant.tenantId}`);\n  }\n  const perSeat = majorToMinor(plan.pricePerSeatMajor, plan.currency);\n  const lines: InvoiceLine[] = [\n    {\n      description: `${tenant.activeSeats} identity seats @ ${formatMinor(perSeat, plan.currency)}`,\n      amountMinor: perSeat * tenant.activeSeats,\n    },\n  ];\n\n  if (tenant.ssoEnabled) {\n    const addonPerSeat = convertAddon(SSO_ADDON_PER_SEAT_USD_CENTS, fxRateFromUsd);\n    lines.push({\n      description: `SSO add-on x ${tenant.activeSeats}`,\n      amountMinor: addonPerSeat * tenant.activeSeats,\n    });\n  }\n\n  const subtotalMinor = lines.reduce((s, l) => s + l.amountMinor, 0);\n  const taxMinor = Math.round((subtotalMinor * plan.taxRateBps) / 10_000);\n  const totalMinor = subtotalMinor + taxMinor;\n\n  return {\n    tenantId: tenant.tenantId,\n    currency: plan.currency,\n    lines,\n    subtotalMinor,\n    taxMinor,\n    totalMinor,\n    display: formatMinor(totalMinor, plan.currency),\n  };\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/seatInvoice.ts",
+    "snippet": "  return Math.round((usdCents / 100) * fxRateToTarget * 100);"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code computes amounts across currencies? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "convertAddon converts USD to a major-unit amount in the target currency, then multiplies by 100 assuming the target also has 2 minor units. For JPY or KRW (0 minor units) the SSO add-on is 100x too large; for BHD (3 units) it is 10x too small. It should scale by 10 ** minorUnitsOf(plan.currency), which requires passing the target currency in."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "What does majorToMinor(\"12.5\", \"BHD\") return?",
+      "choices": [
+        "1250",
+        "12500",
+        "An error, because the precision does not match",
+        "125"
+      ],
+      "answer": 1,
+      "explanation": "BHD has 3 minor units; fracPart \"5\" is padded to \"500\", so 12 * 1000 + 500 = 12500. 1250 would assume 2 units; the error only fires if there are more fractional digits than allowed; 125 ignores scaling."
+    },
+    {
+      "prompt": "Why is tax computed once on the subtotal rather than per line and summed?",
+      "choices": [
+        "It is required by Intl.NumberFormat",
+        "Rounding once avoids accumulating per-line rounding differences, so the tax matches the rate applied to the subtotal",
+        "It makes the tax always round up",
+        "Per-line tax would be impossible because lines have different currencies"
+      ],
+      "answer": 1,
+      "explanation": "Math.round on each line could drift by up to half a minor unit per line; rounding the subtotal once keeps tax consistent with subtotal * rate. Formatting is unrelated, Math.round rounds to nearest (not up), and all lines share plan.currency."
+    },
+    {
+      "prompt": "A tenant has 0 active seats and SSO enabled. What does buildSeatInvoice produce?",
+      "choices": [
+        "It throws for an invalid seat count",
+        "An invoice with two zero-amount lines and a total of 0",
+        "An invoice with only the seat line, since the add-on is skipped",
+        "An invoice whose total equals the SSO add-on for one seat"
+      ],
+      "answer": 1,
+      "explanation": "0 passes the validation (integer, not negative). The seat line is perSeat * 0 = 0, and because ssoEnabled is true an add-on line of addonPerSeat * 0 = 0 is pushed; tax on 0 is 0. Nothing bills a minimum seat."
+    }
+  ],
+  "concepts": [
+    "backend.data.money_and_ledgers"
+  ]
+}

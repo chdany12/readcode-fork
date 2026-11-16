@@ -1,0 +1,50 @@
+{
+  "id": "7e14b5ee-7ed0-4d6e-b14a-33c88bef2614",
+  "title": "Playback manifest fetch with origin timeout",
+  "name": "Playback manifest service",
+  "createdAt": "2026-11-15T09:41:31.717Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code bounds the time spent waiting on the origin? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The origin is completely unreachable and every fetch is aborted by the timer. A manifest for the asset was cached 2 minutes ago. What does a client receive?",
+      "choices": [
+        "A 504 with origin_timeout, because the cached entry is older than FRESH_MS",
+        "The cached manifest, filtered by maxBandwidth, after roughly the timeout elapses",
+        "The cached manifest immediately, without contacting the origin",
+        "A 502 with origin_unavailable"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The origin responds quickly with HTTP 503. A stale cached manifest exists. What happens?",
+      "choices": [
+        "The stale manifest is served, because any origin failure falls back to the cache",
+        "The request is retried until the timeout expires",
+        "The client receives 502 origin_unavailable",
+        "The client receives 504 origin_timeout"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A player requests maxBandwidth=500000 and every rendition in the manifest has a higher bandwidth. What does the response contain?",
+      "choices": [
+        "An empty renditions array",
+        "All renditions, unfiltered",
+        "The first rendition from the manifest only",
+        "A 400 error for an unsatisfiable bandwidth"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.resilience.timeouts",
+    "backend.resilience.graceful_degradation",
+    "backend.api.status_codes_and_error_responses"
+  ]
+}
