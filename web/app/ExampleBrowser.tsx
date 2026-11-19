@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ChevronRight, FileSearch, Search, X } from "lucide-react";
+import { ChevronDown, ChevronRight, FileSearch, Search, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { ExampleSummary } from "@/lib/examples";
 import { Button } from "@/components/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { areaName, topicName } from "@/lib/format";
 
-// Curriculum order (fundamentals first) and a one-line description per module.
+// A one-line description per module. Modules are listed alphabetically (no implied sequence).
 const MODULES: { area: string; blurb: string }[] = [
     { area: "design", blurb: "Interfaces, layering and coupling: whether code is shaped to change safely." },
     { area: "testing", blurb: "What a test proves, what it misses, and why it flakes." },
@@ -46,6 +47,16 @@ export default function ExampleBrowser({ examples, roles }: { examples: ExampleS
     const [moduleFilter, setModuleFilter] = useState("");
     const [roleId, setRoleId] = useState("");
     const [length, setLength] = useState("");
+    // modules start open and units start closed (open while filtering); a click flips that default
+    const [flippedModules, setFlippedModules] = useState<Set<string>>(new Set());
+    const [flippedUnits, setFlippedUnits] = useState<Set<string>>(new Set());
+    const flip = (set: (f: (s: Set<string>) => Set<string>) => void, key: string) =>
+        set((s) => {
+            const n = new Set(s);
+            if (n.has(key)) n.delete(key);
+            else n.add(key);
+            return n;
+        });
 
     const role = roles.find((r) => r.id === roleId);
     const roleWeight = new Map(role?.topics.map((t) => [t.label, t.weight]));
@@ -60,15 +71,18 @@ export default function ExampleBrowser({ examples, roles }: { examples: ExampleS
     const byArea = Map.groupBy(examples, (e) => areaOf(e.topic));
     const known = MODULES.filter((m) => byArea.has(m.area));
     const extra = [...byArea.keys()].filter((a) => !MODULES.some((m) => m.area === a)).map((area) => ({ area, blurb: "" }));
-    const modules = [...known, ...extra].map((m, i) => {
+    const modules = [...known, ...extra].sort((a, b) => areaName(`x.${a.area}`).localeCompare(areaName(`x.${b.area}`))).map((m) => {
         const all = byArea.get(m.area)!;
         // with a role, units follow the role's weights; otherwise the biggest units come first
         const units = [...Map.groupBy(all, (e) => e.topic).entries()]
-            .map(([topic, list], u) => ({ topic, list, shown: list.filter(matches), u }))
+            .map(([topic, list]) => ({ topic, list, shown: list.filter(matches) }))
             .sort((a, b) => (role ? (roleWeight.get(b.topic) ?? 0) - (roleWeight.get(a.topic) ?? 0) : 0) || b.list.length - a.list.length);
-        return { ...m, n: i + 1, all, units, shown: units.reduce((s, x) => s + x.shown.length, 0) };
+        return { ...m, all, units, shown: units.reduce((s, x) => s + x.shown.length, 0) };
     });
     const visible = modules.filter((m) => m.shown > 0);
+    const filtering = Boolean(q || moduleFilter || roleId || length);
+    const moduleOpen = (area: string) => !flippedModules.has(area);
+    const unitOpen = (topic: string) => filtering !== flippedUnits.has(topic);
     const total = visible.reduce((s, m) => s + m.shown, 0);
     const active = [
         q && { key: "q", label: `"${query.trim()}"`, clear: () => setQuery("") },
@@ -90,7 +104,7 @@ export default function ExampleBrowser({ examples, roles }: { examples: ExampleS
                     </InputGroup>
                     <NativeSelect aria-label="Module" value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)}>
                         <NativeSelectOption value="">All modules</NativeSelectOption>
-                        {modules.map((m) => <NativeSelectOption key={m.area} value={m.area}>{String(m.n).padStart(2, "0")} {areaName(`x.${m.area}`)}</NativeSelectOption>)}
+                        {modules.map((m) => <NativeSelectOption key={m.area} value={m.area}>{areaName(`x.${m.area}`)}</NativeSelectOption>)}
                     </NativeSelect>
                     <NativeSelect aria-label="Role" value={roleId} onChange={(e) => setRoleId(e.target.value)} className="max-w-60">
                         <NativeSelectOption value="">Any role</NativeSelectOption>
@@ -117,73 +131,100 @@ export default function ExampleBrowser({ examples, roles }: { examples: ExampleS
 
             {visible.length === 0 && <p className="mt-16 text-center text-muted-foreground">No exercises match these filters.</p>}
 
-            <ol className="mt-6 divide-y">
-                {visible.map((m) => {
-                    const filtered = m.shown < m.all.length;
-                    const units = m.units.filter((x) => x.shown.length > 0);
-                    const minutes = m.all.reduce((s, e) => s + e.durationMinutes, 0);
-                    return (
-                        <li key={m.area} id={`module-${m.area}`}>
-                            {/* module header */}
-                            <div className="flex w-full items-center gap-6 py-6">
-                                <span className="w-8 shrink-0 font-mono text-sm text-muted-foreground">{String(m.n).padStart(2, "0")}</span>
-                                <span className="min-w-0 flex-1">
-                                    <span className="block text-xl font-semibold tracking-tight">{areaName(`x.${m.area}`)}</span>
-                                    {m.blurb && <span className="mt-1 block text-sm text-muted-foreground">{m.blurb}</span>}
-                                </span>
-                                <span className="hidden shrink-0 text-right text-xs text-muted-foreground sm:block">
-                                    {filtered ? `${m.shown} of ${m.all.length} exercises` : `${m.units.length} ${m.units.length === 1 ? "unit" : "units"} · ${m.all.length} exercises`}
-                                    {!filtered && <span className="block">~{Math.max(1, Math.round(minutes / 60))} h</span>}
-                                </span>
-                            </div>
+            {visible.length > 0 && (
+                <div className="mt-6 overflow-hidden rounded-xl border" role="table" aria-label="Exercises">
+                    {/* column headers */}
+                    <div role="row" className={cn(ROW, "border-b bg-muted/30 py-2 text-xs font-medium text-muted-foreground")}>
+                        <span />
+                        <span role="columnheader">Topic</span>
+                        <span role="columnheader" className="text-right">{role ? "Match" : ""}</span>
+                        <span role="columnheader" className="text-right">Exercises</span>
+                        <span role="columnheader" className="text-right">Time</span>
+                        <span />
+                    </div>
+                    {visible.map((m) => {
+                        const units = m.units.filter((x) => x.shown.length > 0);
+                        const minutes = m.all.reduce((s, e) => s + e.durationMinutes, 0);
+                        const open = moduleOpen(m.area);
+                        return (
+                            <div key={m.area} role="rowgroup" id={`module-${m.area}`}>
+                                {/* module: a shaded group row */}
+                                <button
+                                    type="button"
+                                    role="row"
+                                    onClick={() => flip(setFlippedModules, m.area)}
+                                    aria-expanded={open}
+                                    className={cn(ROW, "group w-full border-b bg-muted/50 py-3 text-left hover:bg-muted/70")}
+                                >
+                                    <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-200 group-hover:text-foreground", !open && "-rotate-90")} />
+                                    <span className="min-w-0">
+                                        <span className="block font-semibold">{areaName(`x.${m.area}`)}</span>
+                                        {m.blurb && <span className="block truncate text-xs text-muted-foreground">{m.blurb}</span>}
+                                    </span>
+                                    <span />
+                                    <span className="text-right text-sm tabular-nums">{m.shown < m.all.length ? `${m.shown} / ${m.all.length}` : m.all.length}</span>
+                                    <span className="text-right text-sm text-muted-foreground tabular-nums">~{Math.max(1, Math.round(minutes / 60))} h</span>
+                                    <span />
+                                </button>
 
-                            {/* units */}
-                            <div className="space-y-3 pb-8 pl-14">
-                                {units.map(({ topic, list, shown, u }) => (
-                                    <section key={topic} className="rounded-xl border bg-muted/20 p-4">
-                                        <h3 className="flex items-baseline gap-3">
-                                            <span className="font-mono text-xs text-muted-foreground">{m.n}.{u + 1}</span>
-                                            <span className="flex-1 font-medium">{topicName(topic)}</span>
-                                            {role && roleWeight.has(topic) && (
-                                                <span className="text-xs text-muted-foreground">{Math.round(roleWeight.get(topic)! * 100)}% match</span>
-                                            )}
-                                            <span className="text-xs text-muted-foreground">{shown.length < list.length ? `${shown.length} of ${list.length}` : list.length}</span>
-                                        </h3>
-                                        <ul className="mt-2 -mx-2 grid gap-x-4 sm:grid-cols-2">
-                                            {shown.map((e) => <li key={e.name}><ExampleRow example={e} /></li>)}
-                                        </ul>
-                                    </section>
-                                ))}
+                                {open && units.map(({ topic, list, shown }) => {
+                                    const unitIsOpen = unitOpen(topic);
+                                    return (
+                                        <div key={topic} role="rowgroup">
+                                            {/* unit row */}
+                                            <button
+                                                type="button"
+                                                role="row"
+                                                onClick={() => flip(setFlippedUnits, topic)}
+                                                aria-expanded={unitIsOpen}
+                                                className={cn(ROW, "group w-full border-b py-2 text-left text-sm hover:bg-muted/30")}
+                                            >
+                                                <span />
+                                                <span className="flex min-w-0 items-center gap-2 pl-1">
+                                                    <ChevronDown className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform duration-200", !unitIsOpen && "-rotate-90")} />
+                                                    <span className="truncate">{topicName(topic)}</span>
+                                                </span>
+                                                <span className="text-right text-xs text-muted-foreground tabular-nums">
+                                                    {role && roleWeight.has(topic) ? `${Math.round(roleWeight.get(topic)! * 100)}%` : ""}
+                                                </span>
+                                                <span className="text-right tabular-nums">{shown.length < list.length ? `${shown.length} / ${list.length}` : list.length}</span>
+                                                <span className="text-right text-muted-foreground tabular-nums">{list.reduce((s, e) => s + e.durationMinutes, 0)} min</span>
+                                                <span />
+                                            </button>
+                                            {/* exercise rows */}
+                                            {unitIsOpen && shown.map((e) => <ExampleRow key={e.name} example={e} />)}
+                                        </div>
+                                    );
+                                })}
                             </div>
-                        </li>
-                    );
-                })}
-            </ol>
+                        );
+                    })}
+                </div>
+            )}
         </div>
     );
 }
+
+// Shared column layout for every row of the table: [toggle] [topic] [match] [exercises] [time] [action]
+const ROW = "grid grid-cols-[1rem_minmax(0,1fr)_3.5rem_4.5rem_4rem_2rem] items-center gap-x-3 px-4";
 
 function ExampleRow({ example: e }: { example: ExampleSummary }) {
     return (
         <Link
             href={`/examples/${encodeURIComponent(e.name)}`}
             title={e.title}
-            className="group/row flex items-center gap-3 rounded-md px-2 py-2 hover:bg-muted"
+            role="row"
+            className={cn(ROW, "group/row border-b bg-muted/10 py-1.5 text-sm last:border-b-0 hover:bg-muted/40")}
         >
-            <FileSearch className="size-5 shrink-0 text-muted-foreground group-hover/row:text-foreground" />
-            <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm">{e.shortName}</span>
-                <span className="block truncate text-xs text-muted-foreground">
-                    {e.questionCount} questions · {e.durationMinutes} min
-                </span>
+            <span />
+            <span className="flex min-w-0 items-center gap-2 pl-7">
+                <FileSearch className="size-4 shrink-0 text-muted-foreground group-hover/row:text-foreground" />
+                <span className="truncate">{e.shortName}</span>
             </span>
-            {/* a round chevron that widens into "Practice" on hover */}
-            <span className="flex h-7 shrink-0 items-center rounded-full border px-1.5 text-foreground transition-all duration-200 group-hover/row:border-foreground/40 group-hover/row:pl-3">
-                <span className="max-w-0 overflow-hidden text-xs font-medium whitespace-nowrap opacity-0 transition-all duration-200 group-hover/row:mr-1 group-hover/row:max-w-20 group-hover/row:opacity-100">
-                    Practice
-                </span>
-                <ChevronRight className="size-4" />
-            </span>
+            <span />
+            <span className="text-right text-xs text-muted-foreground tabular-nums">{e.questionCount} questions</span>
+            <span className="text-right text-xs text-muted-foreground tabular-nums">{e.durationMinutes} min</span>
+            <ChevronRight className="size-4 justify-self-end text-muted-foreground transition-transform group-hover/row:translate-x-0.5 group-hover/row:text-foreground" />
         </Link>
     );
 }
