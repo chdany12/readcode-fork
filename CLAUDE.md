@@ -22,7 +22,7 @@ Then regenerate the examples, or migrate the existing ones.
 
 ## Generating without the API
 There's no API key; Claude Code subagents act as the model.
-`generateBank.ts --mode prepare` writes the jobs to `examples/.work/jobs/`. Subagents follow `examples/.work/INSTRUCTIONS.md` and write drafts to `examples/.work/drafts/`. `--mode assemble` validates the drafts and writes the examples. `.work/` is gitignored.
+`generateBank.ts --mode prepare` writes the jobs to `examples/.work/jobs/`. Subagents follow `pipeline/DRAFTING.md` and write drafts to `examples/.work/drafts/`. `--mode assemble` validates the drafts and writes the examples. `.work/` is gitignored.
 
 ## Known gaps
 - No one has reviewed the examples for correctness, and some defect patterns repeat within topics.
