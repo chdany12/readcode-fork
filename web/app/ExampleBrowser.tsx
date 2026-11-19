@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { ExampleSummary } from "@/lib/examples";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 // Example list with filters: area (e.g. "concurrency"), topic within it, and a text search on names.
 export default function ExampleBrowser({ examples }: { examples: ExampleSummary[] }) {
@@ -29,66 +34,56 @@ export default function ExampleBrowser({ examples }: { examples: ExampleSummary[
     return (
         <div>
             <div className="mb-3 flex flex-wrap items-center gap-3">
-                <label>
-                    area{" "}
-                    <select className={input} value={area} onChange={(e) => { setArea(e.target.value); setTopic(""); }}>
-                        <option value="">all ({examples.length})</option>
-                        {areas.map(([a, n]) => (
-                            <option key={a} value={a}>{a} ({n})</option>
-                        ))}
-                    </select>
-                </label>
-                <label>
-                    topic{" "}
-                    <select className={input} value={topic} onChange={(e) => setTopic(e.target.value)}>
-                        <option value="">all</option>
-                        {topics.map(([t, n]) => (
-                            <option key={t} value={t}>{short(t)} ({n})</option>
-                        ))}
-                    </select>
-                </label>
-                <label>
-                    search <input className={input} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="name…" />
-                </label>
-                <label title="also match examples where this is a secondary concept">
-                    <input type="checkbox" checked={includeRelated} onChange={(e) => setIncludeRelated(e.target.checked)} /> include related
+                <NativeSelect aria-label="area" value={area} onChange={(e) => { setArea(e.target.value); setTopic(""); }}>
+                    <NativeSelectOption value="">all areas ({examples.length})</NativeSelectOption>
+                    {areas.map(([a, n]) => (
+                        <NativeSelectOption key={a} value={a}>{a} ({n})</NativeSelectOption>
+                    ))}
+                </NativeSelect>
+                <NativeSelect aria-label="topic" value={topic} onChange={(e) => setTopic(e.target.value)}>
+                    <NativeSelectOption value="">all topics</NativeSelectOption>
+                    {topics.map(([t, n]) => (
+                        <NativeSelectOption key={t} value={t}>{short(t)} ({n})</NativeSelectOption>
+                    ))}
+                </NativeSelect>
+                <Input className="w-48" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search names…" />
+                <label className="flex items-center gap-2" title="also match examples where this is a secondary concept">
+                    <Checkbox checked={includeRelated} onCheckedChange={(v) => setIncludeRelated(v === true)} /> include related
                 </label>
                 {(area || topic || query) && (
-                    <button className="underline" onClick={() => { setArea(""); setTopic(""); setQuery(""); }}>clear</button>
+                    <Button variant="ghost" size="sm" onClick={() => { setArea(""); setTopic(""); setQuery(""); }}>Clear</Button>
                 )}
             </div>
-            <p className="mb-2 text-neutral-500">{shown.length} of {examples.length} examples</p>
-            <table className="w-full border-collapse">
-                <thead>
-                    <tr className="border-b border-neutral-400 text-left text-neutral-500">
-                        <th className="py-1 pr-3">#</th>
-                        <th className="py-1 pr-3">name</th>
-                        <th className="py-1 pr-3">topic</th>
-                    </tr>
-                </thead>
-                <tbody>
+            <p className="mb-2 text-muted-foreground">{shown.length} of {examples.length} examples</p>
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>#</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Topic</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
                     {shown.map((e) => (
-                        <tr key={e.name} className="border-b border-neutral-300 align-top">
-                            <td className="py-1 pr-3 text-neutral-500">{numberOf(e.name)}</td>
-                            <td className="py-1 pr-3">
-                                <Link className="underline" href={`/examples/${encodeURIComponent(e.name)}`} title={e.title}>
+                        <TableRow key={e.name}>
+                            <TableCell className="text-muted-foreground">{numberOf(e.name)}</TableCell>
+                            <TableCell>
+                                <Link className="font-medium hover:underline" href={`/examples/${encodeURIComponent(e.name)}`} title={e.title}>
                                     {e.shortName}
                                 </Link>
-                            </td>
-                            <td className="py-1 pr-3">
-                                <button className="hover:underline" onClick={() => { setArea(areaOf(e.topic)); setTopic(e.topic); }}>
+                            </TableCell>
+                            <TableCell>
+                                <button className="text-muted-foreground hover:underline" onClick={() => { setArea(areaOf(e.topic)); setTopic(e.topic); }}>
                                     {short(e.topic)}
                                 </button>
-                            </td>
-                        </tr>
+                            </TableCell>
+                        </TableRow>
                     ))}
-                </tbody>
-            </table>
+                </TableBody>
+            </Table>
         </div>
     );
 }
-
-const input = "border border-neutral-400 bg-transparent px-1";
 
 // "backend.concurrency.race_conditions" -> area "concurrency", short "concurrency.race_conditions"
 function areaOf(label: string): string {

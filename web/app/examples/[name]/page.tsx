@@ -9,11 +9,11 @@ export default async function ExamplePage({ params }: PageProps<"/examples/[name
     if (!example) notFound();
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col font-mono text-sm">
-            <header className="flex items-baseline gap-3 border-b border-neutral-400 px-3 py-2">
-                <Link href="/" className="underline">← examples</Link>
-                <span className="font-bold">{example.public.title}</span>
-                <span className="text-neutral-500">
+        <div className="flex min-h-0 flex-1 flex-col text-sm">
+            <header className="flex items-baseline gap-3 border-b px-3 py-2">
+                <Link href="/examples" className="text-muted-foreground hover:underline">← examples</Link>
+                <span className="font-semibold">{example.public.title}</span>
+                <span className="text-muted-foreground">
                     {example.public.language} · ~{example.public.durationMinutes} min · {example.public.concepts.join(", ")}
                 </span>
             </header>

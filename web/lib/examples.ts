@@ -18,6 +18,7 @@ export type ExampleSummary = {
     topic: string;
     concepts: string[];
     questionCount: number;
+    durationMinutes: number;
 };
 
 // Direct child folders of EXAMPLES_ROOT (and EXAMPLES_ROOT/examples) that contain a non-empty public.json.
@@ -38,6 +39,7 @@ export async function listExamples(): Promise<ExampleSummary[]> {
                     topic: pub.concepts?.[0] ?? "(none)",
                     concepts: pub.concepts ?? [],
                     questionCount: pub.questions?.length ?? 0,
+                    durationMinutes: pub.durationMinutes ?? 0,
                 });
             }
         }

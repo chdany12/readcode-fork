@@ -3,6 +3,9 @@
 import Editor, { type OnMount } from "@monaco-editor/react";
 import { useEffect, useRef, useState } from "react";
 import type { LoadedExample } from "@/lib/examples";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import type { DefectLocation, LocateAnswer } from "../../../../shared/types";
 
 type MonacoEditor = Parameters<OnMount>[0];
@@ -80,8 +83,8 @@ export default function ExampleViewer({ example }: { example: LoadedExample }) {
     return (
         <div className="flex min-h-0 flex-1">
             {/* file explorer */}
-            <nav className="w-60 shrink-0 overflow-auto border-r border-neutral-400 p-2">
-                <div className="mb-1 text-neutral-500">explorer</div>
+            <nav className="w-60 shrink-0 overflow-auto border-r p-2 font-mono">
+                <div className="mb-1 text-muted-foreground">explorer</div>
                 <FileTree node={buildTree(example.files.map((f) => f.path))} current={current} onOpen={setCurrent} depth={0} />
             </nav>
 
@@ -98,29 +101,29 @@ export default function ExampleViewer({ example }: { example: LoadedExample }) {
             </section>
 
             {/* questions */}
-            <aside className="w-[28rem] shrink-0 overflow-auto border-l border-neutral-400 p-3">
+            <aside className="w-[28rem] shrink-0 overflow-auto border-l p-3">
                 {questions.map((q, qi) => {
                     const done = submitted[qi];
                     const answer = example.key.answers[qi];
                     const explanation = example.key.explanations?.[qi];
                     return (
-                        <fieldset key={qi} className="mb-4 border border-neutral-400 p-2">
-                            <legend className="px-1 font-bold">Q{qi + 1}</legend>
-                            <p className="mb-2 whitespace-pre-wrap">{q.prompt}</p>
+                        <Card key={qi} className="mb-4 gap-2 px-4">
+                            <div className="font-semibold">Question {qi + 1}</div>
+                            <p className="whitespace-pre-wrap">{q.prompt}</p>
 
                             {q.kind === "locate" ? (
                                 <div>
                                     {!done && (
                                         <div className="mb-1 flex flex-wrap gap-2">
-                                            <button className={btn} onClick={() => markSelection(qi)}>
-                                                mark selected lines
-                                            </button>
-                                            <button className={btn} onClick={() => setMarks((m) => m.map((v, i) => (i === qi ? "none" : v)))}>
-                                                no defect
-                                            </button>
+                                            <Button size="sm" onClick={() => markSelection(qi)}>
+                                                Mark selected lines
+                                            </Button>
+                                            <Button size="sm" variant="outline" onClick={() => setMarks((m) => m.map((v, i) => (i === qi ? "none" : v)))}>
+                                                No defect
+                                            </Button>
                                         </div>
                                     )}
-                                    <p className="text-neutral-500">
+                                    <p className="text-muted-foreground">
                                         {marks[qi] === null && "select the line(s) in the editor, then mark them"}
                                     </p>
                                     {marks[qi] === "none" && <p>your answer: no defect</p>}
@@ -140,7 +143,7 @@ export default function ExampleViewer({ example }: { example: LoadedExample }) {
                                     return (
                                         <label
                                             key={ci}
-                                            className={`flex gap-2 px-1 py-0.5 ${correct ? "bg-green-200 text-black" : ""} ${wrong ? "bg-red-200 text-black" : ""}`}
+                                            className={`flex gap-2 rounded-md px-2 py-1 ${correct ? "bg-green-500/15" : ""} ${wrong ? "bg-red-500/15" : ""}`}
                                         >
                                             <input
                                                 type="radio"
@@ -156,16 +159,16 @@ export default function ExampleViewer({ example }: { example: LoadedExample }) {
                             )}
 
                             {!done ? (
-                                <button
-                                    className={`mt-2 ${btn}`}
+                                <Button
+                                    className="w-fit"
                                     disabled={!canSubmit(qi)}
                                     onClick={() => setSubmitted((s) => s.map((v, i) => (i === qi ? true : v)))}
                                 >
-                                    submit
-                                </button>
+                                    Submit
+                                </Button>
                             ) : (
-                                <div className="mt-2 border-t border-neutral-400 pt-2">
-                                    <div className="font-bold">{isCorrect(qi) ? "correct" : "incorrect"}</div>
+                                <div className="border-t pt-2">
+                                    <Badge variant={isCorrect(qi) ? "default" : "destructive"}>{isCorrect(qi) ? "Correct" : "Incorrect"}</Badge>
                                     {typeof answer === "number" ? (
                                         !isCorrect(qi) && <p>the answer is {String.fromCharCode(65 + answer)}</p>
                                     ) : answer.defect ? (
@@ -181,30 +184,29 @@ export default function ExampleViewer({ example }: { example: LoadedExample }) {
                                     {explanation && <p className="mt-1 whitespace-pre-wrap">{explanation}</p>}
                                 </div>
                             )}
-                        </fieldset>
+                        </Card>
                     );
                 })}
                 <div className="flex items-center gap-3">
                     <span>score: {score}/{doneCount} submitted ({questions.length} total)</span>
                     {doneCount > 0 && (
-                        <button
-                            className={btn}
+                        <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => {
                                 setPicked(questions.map(() => null));
                                 setMarks(questions.map(() => null));
                                 setSubmitted(questions.map(() => false));
                             }}
                         >
-                            reset
-                        </button>
+                            Reset
+                        </Button>
                     )}
                 </div>
             </aside>
         </div>
     );
 }
-
-const btn = "border border-neutral-600 px-2 py-1 hover:bg-neutral-200 hover:text-black disabled:opacity-40";
 
 function locateCorrect(mark: LocateMark, answer: LocateAnswer): boolean {
     if (mark === null) return false;
@@ -263,7 +265,7 @@ function FileTree({ node, current, onOpen, depth }: {
                             onClick={() => onOpen(child.path)}
                             title={child.path}
                             style={{ paddingLeft: depth * 12 + 16 }}
-                            className={`block w-full truncate pr-1 text-left ${child.path === current ? "bg-yellow-200 text-black" : "hover:bg-neutral-200 hover:text-black"}`}
+                            className={`block w-full truncate pr-1 text-left rounded-sm ${child.path === current ? "bg-accent text-accent-foreground" : "hover:bg-muted"}`}
                         >
                             {child.name}
                         </button>
@@ -285,7 +287,7 @@ function Folder({ node, current, onOpen, depth }: {
             <button
                 onClick={() => setOpen((o) => !o)}
                 style={{ paddingLeft: depth * 12 }}
-                className="block w-full truncate pr-1 text-left hover:bg-neutral-200 hover:text-black"
+                className="block w-full truncate rounded-sm pr-1 text-left hover:bg-muted"
             >
                 {open ? "▾" : "▸"} {node.name}/
             </button>

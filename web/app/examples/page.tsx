@@ -4,9 +4,9 @@ import ExampleBrowser from "../ExampleBrowser";
 
 export default function ExamplesPage() {
     return (
-        <main className="p-6 font-mono text-sm">
-                        <p className="text-neutral-500">reading from {EXAMPLES_ROOT}</p>
-            <hr className="my-3 border-neutral-400" />
+        <main className="p-6 text-sm">
+                        <p className="text-muted-foreground">reading from {EXAMPLES_ROOT}</p>
+            <hr className="my-3" />
             <Suspense fallback={<p>loading…</p>}>
                 <ExampleList />
             </Suspense>
