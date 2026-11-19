@@ -1,0 +1,45 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.testing.flaky_tests",
+      "language": "Python",
+      "count": 5
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "language": "Python",
+      "count": 3
+    },
+    {
+      "label": "backend.testing.mocking_and_fakes",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.testing.integration_tests",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.caching.cache_invalidation",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.config.configuration_loading",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.config.environment_specific_behaviour",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.config.defaults_and_validation",
+      "language": "Python",
+      "count": 2
+    }
+  ]
+}

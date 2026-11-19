@@ -1,0 +1,45 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "language": "Java",
+      "count": 4
+    },
+    {
+      "label": "backend.messaging.at_least_once_delivery",
+      "language": "Java",
+      "count": 3
+    },
+    {
+      "label": "backend.messaging.deduplication",
+      "language": "Java",
+      "count": 3
+    },
+    {
+      "label": "backend.api.idempotency",
+      "language": "Java",
+      "count": 2
+    },
+    {
+      "label": "backend.messaging.message_ordering",
+      "language": "Java",
+      "count": 2
+    },
+    {
+      "label": "backend.data.money_and_ledgers",
+      "language": "Java",
+      "count": 2
+    },
+    {
+      "label": "backend.data.transactions_and_isolation_levels",
+      "language": "Java",
+      "count": 2
+    },
+    {
+      "label": "backend.distributed.cross_service_consistency",
+      "language": "Java",
+      "count": 2
+    }
+  ]
+}

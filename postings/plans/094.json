@@ -1,0 +1,50 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.design.interface_design",
+      "language": "TypeScript",
+      "count": 3
+    },
+    {
+      "label": "backend.design.coupling_and_cohesion",
+      "language": "TypeScript",
+      "count": 3
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.design.layering",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.data.n_plus_one_queries",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.design.dependency_injection",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.design.code_duplication",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.data.pagination",
+      "language": "TypeScript",
+      "count": 2
+    }
+  ]
+}

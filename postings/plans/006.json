@@ -1,0 +1,50 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.design.interface_design",
+      "language": "TypeScript",
+      "count": 4
+    },
+    {
+      "label": "backend.resilience.graceful_degradation",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.design.coupling_and_cohesion",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.api.request_validation",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "TypeScript",
+      "count": 2
+    }
+  ]
+}

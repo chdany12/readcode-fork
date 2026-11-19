@@ -1,0 +1,45 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "Java",
+      "count": 4
+    },
+    {
+      "label": "backend.concurrency.race_conditions",
+      "language": "Java",
+      "count": 3
+    },
+    {
+      "label": "backend.concurrency.thread_and_worker_pools",
+      "language": "Java",
+      "count": 3
+    },
+    {
+      "label": "backend.concurrency.locking_and_lock_ordering",
+      "language": "Java",
+      "count": 2
+    },
+    {
+      "label": "backend.resources.memory_leaks",
+      "language": "Java",
+      "count": 2
+    },
+    {
+      "label": "backend.design.interface_design",
+      "language": "Java",
+      "count": 2
+    },
+    {
+      "label": "backend.concurrency.atomic_operations",
+      "language": "Java",
+      "count": 2
+    },
+    {
+      "label": "backend.concurrency.deadlocks",
+      "language": "Java",
+      "count": 2
+    }
+  ]
+}

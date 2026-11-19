@@ -1,0 +1,105 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "language": "C",
+      "count": 1
+    },
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.distributed.replication_and_consensus",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.distributed.replication_and_consensus",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.distributed.replication_and_consensus",
+      "language": "C",
+      "count": 1
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "C",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.locking_and_lock_ordering",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.locking_and_lock_ordering",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.resources.streaming_large_payloads",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.resources.streaming_large_payloads",
+      "language": "C",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.race_conditions",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.race_conditions",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.atomic_operations",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.atomic_operations",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.data.transactions_and_isolation_levels",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.data.transactions_and_isolation_levels",
+      "language": "C++",
+      "count": 1
+    }
+  ]
+}

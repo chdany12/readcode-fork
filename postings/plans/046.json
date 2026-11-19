@@ -1,0 +1,105 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.concurrency.race_conditions",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.race_conditions",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.distributed.replication_and_consensus",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.distributed.replication_and_consensus",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.security.secrets_handling",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.security.secrets_handling",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.security.encryption_at_rest_and_in_transit",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.security.encryption_at_rest_and_in_transit",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.health_checks",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.health_checks",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.locking_and_lock_ordering",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.locking_and_lock_ordering",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.thread_and_worker_pools",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.thread_and_worker_pools",
+      "language": "Python",
+      "count": 1
+    }
+  ]
+}

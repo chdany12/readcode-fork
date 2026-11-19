@@ -27,7 +27,7 @@ const MAX_ATTEMPTS = 3; // api mode: generation can fail validation (e.g. a defe
 const { values } = parseArgs({
     options: {
         mode: { type: "string", default: "api" },
-        plan: { type: "string", default: path.join(ROOT, "golden_list", "plans", "master.json") },
+        plan: { type: "string", default: path.join(ROOT, "postings", "plans", "master.json") },
         out: { type: "string", default: path.join(ROOT, "examples") },
         limit: { type: "string" },
         concurrency: { type: "string", default: "4" },

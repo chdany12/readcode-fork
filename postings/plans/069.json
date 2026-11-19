@@ -1,0 +1,50 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.api.rest_design",
+      "language": "TypeScript",
+      "count": 4
+    },
+    {
+      "label": "backend.design.coupling_and_cohesion",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.design.layering",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.distributed.cross_service_consistency",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "TypeScript",
+      "count": 2
+    }
+  ]
+}

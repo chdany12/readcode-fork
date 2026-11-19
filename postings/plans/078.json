@@ -1,0 +1,105 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.config.feature_flags",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.config.feature_flags",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.config.feature_flags",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.graceful_degradation",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.graceful_degradation",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.data.pagination",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.data.pagination",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.caching.cache_invalidation",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.caching.cache_invalidation",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.caching.cache_aside_vs_write_through",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.caching.cache_aside_vs_write_through",
+      "language": "Kotlin",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Kotlin",
+      "count": 1
+    },
+    {
+      "label": "backend.caching.ttls_and_expiry",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.caching.ttls_and_expiry",
+      "language": "Kotlin",
+      "count": 1
+    }
+  ]
+}

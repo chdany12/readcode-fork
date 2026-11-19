@@ -1,0 +1,100 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "language": "C#",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "language": "Rust",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.rate_limiting",
+      "language": "C#",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.rate_limiting",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.rate_limiting",
+      "language": "Rust",
+      "count": 1
+    },
+    {
+      "label": "backend.realtime.connection_fanout",
+      "language": "C#",
+      "count": 1
+    },
+    {
+      "label": "backend.realtime.connection_fanout",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "C#",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.integrations.third_party_adapters",
+      "language": "C#",
+      "count": 1
+    },
+    {
+      "label": "backend.integrations.third_party_adapters",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "C#",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.at_least_once_delivery",
+      "language": "C#",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.at_least_once_delivery",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.backpressure",
+      "language": "C#",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.backpressure",
+      "language": "Rust",
+      "count": 1
+    },
+    {
+      "label": "backend.security.multi_tenant_isolation",
+      "language": "C#",
+      "count": 2
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.tracing",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.tracing",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.rate_limiting",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.rate_limiting",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.at_least_once_delivery",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.at_least_once_delivery",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.resources.context_cancellation",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.resources.context_cancellation",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.testing.integration_tests",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.testing.integration_tests",
+      "language": "Python",
+      "count": 1
+    }
+  ]
+}

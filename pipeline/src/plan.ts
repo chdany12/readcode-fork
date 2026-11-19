@@ -2,7 +2,7 @@
 // (format: {"weights": [{"label": "...", "weight": 0.0-1.0}, ...], "languages": {"Java": 1.0, ...}},
 // same as the classifier's output; "languages" is optional for files written before it existed).
 //
-// Usage: node pipeline/src/plan.ts [plansDir]   (default: golden_list/plans)
+// Usage: node pipeline/src/plan.ts [plansDir]   (default: postings/plans)
 
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -14,7 +14,7 @@ import { planFromClassification } from "./pipeline.ts";
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const TAXONOMY_VERSION = "0.1.0";
 
-const plansDir = path.resolve(process.argv[2] ?? path.join(ROOT, "golden_list", "plans"));
+const plansDir = path.resolve(process.argv[2] ?? path.join(ROOT, "postings", "plans"));
 const taxonomy = Taxonomy.parse(JSON.parse(readFileSync(path.join(ROOT, "pipeline", "taxonomy", `v${TAXONOMY_VERSION}.json`), "utf8")));
 
 let n = 0;

@@ -7,8 +7,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {                                   // bundle the data files read at runtime
     "/**": [
       "../examples/**/*",
-      "../twilio_example/**/*",
-      "../golden_list/**/*.json",
+      "../postings/**/*.json",
       "../pipeline/taxonomy/**/*.json",
     ],
   },

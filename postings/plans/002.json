@@ -1,0 +1,95 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.config.feature_flags",
+      "language": "Java",
+      "count": 2
+    },
+    {
+      "label": "backend.config.feature_flags",
+      "language": "Kotlin",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "Java",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "Kotlin",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.deduplication",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.deduplication",
+      "language": "Kotlin",
+      "count": 1
+    },
+    {
+      "label": "backend.design.interface_design",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.design.interface_design",
+      "language": "Kotlin",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "Kotlin",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "language": "Kotlin",
+      "count": 1
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "language": "Kotlin",
+      "count": 1
+    },
+    {
+      "label": "backend.api.idempotency",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.api.idempotency",
+      "language": "Kotlin",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.at_least_once_delivery",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.at_least_once_delivery",
+      "language": "Kotlin",
+      "count": 1
+    }
+  ]
+}

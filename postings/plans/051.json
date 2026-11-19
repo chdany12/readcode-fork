@@ -1,0 +1,105 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.config.configuration_loading",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.config.configuration_loading",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.config.configuration_loading",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.structured_logging",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.structured_logging",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.health_checks",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.health_checks",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.security.secrets_handling",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.security.secrets_handling",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.config.defaults_and_validation",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.config.defaults_and_validation",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.testing.integration_tests",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.testing.integration_tests",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Rust",
+      "count": 1
+    }
+  ]
+}

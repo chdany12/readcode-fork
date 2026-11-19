@@ -1,0 +1,45 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.messaging.deduplication",
+      "language": "TypeScript",
+      "count": 3
+    },
+    {
+      "label": "backend.integrations.third_party_adapters",
+      "language": "TypeScript",
+      "count": 3
+    },
+    {
+      "label": "backend.api.request_validation",
+      "language": "TypeScript",
+      "count": 3
+    },
+    {
+      "label": "backend.api.idempotency",
+      "language": "TypeScript",
+      "count": 3
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.messaging.at_least_once_delivery",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "TypeScript",
+      "count": 2
+    }
+  ]
+}

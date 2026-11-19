@@ -3,10 +3,10 @@
 Code-reading practice for backend interviews: job postings → topic plans → example bank → web viewer.
 
 ## Flow
-1. `golden_list/backend_jobs.json`: 94 postings (`scripts/collect_jobs.py` scraped them; descriptions were partly pasted by hand, so rerunning loses them).
-2. Classify each posting against the taxonomy (`pipeline/taxonomy/v0.1.0.json`, prompt in `pipeline/src/classifier.ts`) → `golden_list/plans/weights/NNN.json` → `plan.ts` → `plans/NNN.json` (NNN = 1-based posting index). `plans/master.json` = 75th percentile of each topic's count across the plans (224 examples).
+1. `postings/jobs.json`: 94 postings, scraped once from public job boards; descriptions were partly pasted by hand, so treat it as the source of truth.
+2. Classify each posting against the taxonomy (`pipeline/taxonomy/v0.1.0.json`, prompt in `pipeline/src/classifier.ts`) → `postings/plans/weights/NNN.json` → `plan.ts` → `plans/NNN.json` (NNN = 1-based posting index). `plans/master.json` = 75th percentile of each topic's count across the plans (224 examples).
 3. `pipeline/src/generateBank.ts` turns the master plan into `examples/NNN-<topic>/` (`public.json`, `key.json`, `src/**`).
-4. `web/` (Next.js) reads `examples/` and `golden_list/` from disk. Run: `cd web && npm run dev`.
+4. `web/` (Next.js) reads `examples/` and `postings/` from disk. Run: `cd web && npm run dev`.
 
 ## Example format
 - Schema: `shared/types.ts` (zod). `ExamplePublic` is shown to the candidate; `ExampleKey` holds the answers and explanations.

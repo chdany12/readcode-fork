@@ -1,0 +1,50 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.api.rest_design",
+      "language": "Python",
+      "count": 3
+    },
+    {
+      "label": "backend.api.request_validation",
+      "language": "Python",
+      "count": 3
+    },
+    {
+      "label": "backend.api.versioning",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.api.status_codes_and_error_responses",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.security.authentication",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.security.authorization_checks",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.api.idempotency",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.rate_limiting",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.data.pagination",
+      "language": "Python",
+      "count": 2
+    }
+  ]
+}

@@ -1,0 +1,95 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.integrations.third_party_adapters",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.integrations.third_party_adapters",
+      "language": "JavaScript",
+      "count": 1
+    },
+    {
+      "label": "backend.config.feature_flags",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.config.feature_flags",
+      "language": "JavaScript",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.async_await_pitfalls",
+      "language": "TypeScript",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.async_await_pitfalls",
+      "language": "JavaScript",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "TypeScript",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "JavaScript",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.graceful_degradation",
+      "language": "TypeScript",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.graceful_degradation",
+      "language": "JavaScript",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "TypeScript",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "JavaScript",
+      "count": 1
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "language": "TypeScript",
+      "count": 1
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "language": "JavaScript",
+      "count": 1
+    },
+    {
+      "label": "backend.security.authorization_checks",
+      "language": "TypeScript",
+      "count": 1
+    },
+    {
+      "label": "backend.security.authorization_checks",
+      "language": "JavaScript",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "TypeScript",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "JavaScript",
+      "count": 1
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.api.idempotency",
+      "language": "TypeScript",
+      "count": 3
+    },
+    {
+      "label": "backend.data.money_and_ledgers",
+      "language": "TypeScript",
+      "count": 3
+    },
+    {
+      "label": "backend.data.transactions_and_isolation_levels",
+      "language": "TypeScript",
+      "count": 3
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "TypeScript",
+      "count": 3
+    },
+    {
+      "label": "backend.distributed.cross_service_consistency",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.api.request_validation",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.api.versioning",
+      "language": "TypeScript",
+      "count": 2
+    }
+  ]
+}

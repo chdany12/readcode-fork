@@ -1,0 +1,95 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "C++",
+      "count": 2
+    },
+    {
+      "label": "backend.data.transactions_and_isolation_levels",
+      "language": "Java",
+      "count": 2
+    },
+    {
+      "label": "backend.data.transactions_and_isolation_levels",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.race_conditions",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.race_conditions",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.locking_and_lock_ordering",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.locking_and_lock_ordering",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.thread_and_worker_pools",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.thread_and_worker_pools",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.atomic_operations",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.atomic_operations",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.resources.memory_leaks",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.resources.memory_leaks",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.distributed.replication_and_consensus",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.distributed.replication_and_consensus",
+      "language": "C++",
+      "count": 1
+    }
+  ]
+}

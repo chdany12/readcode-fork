@@ -1,0 +1,45 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "language": "Ruby",
+      "count": 3
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Ruby",
+      "count": 3
+    },
+    {
+      "label": "backend.api.idempotency",
+      "language": "Ruby",
+      "count": 3
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "Ruby",
+      "count": 3
+    },
+    {
+      "label": "backend.messaging.at_least_once_delivery",
+      "language": "Ruby",
+      "count": 2
+    },
+    {
+      "label": "backend.design.interface_design",
+      "language": "Ruby",
+      "count": 2
+    },
+    {
+      "label": "backend.api.request_validation",
+      "language": "Ruby",
+      "count": 2
+    },
+    {
+      "label": "backend.design.layering",
+      "language": "Ruby",
+      "count": 2
+    }
+  ]
+}

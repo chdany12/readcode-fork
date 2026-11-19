@@ -1,0 +1,75 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.config.feature_flags",
+      "language": "TypeScript",
+      "count": 4
+    },
+    {
+      "label": "backend.config.feature_flags",
+      "language": "JavaScript",
+      "count": 1
+    },
+    {
+      "label": "backend.security.authentication",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.security.authentication",
+      "language": "JavaScript",
+      "count": 1
+    },
+    {
+      "label": "backend.security.session_and_token_handling",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.security.session_and_token_handling",
+      "language": "JavaScript",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "JavaScript",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "TypeScript",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "JavaScript",
+      "count": 1
+    },
+    {
+      "label": "backend.api.request_validation",
+      "language": "TypeScript",
+      "count": 1
+    },
+    {
+      "label": "backend.api.request_validation",
+      "language": "JavaScript",
+      "count": 1
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "language": "TypeScript",
+      "count": 1
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "language": "JavaScript",
+      "count": 1
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "language": "Scala",
+      "count": 1
+    },
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "language": "Scala",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.at_least_once_delivery",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.at_least_once_delivery",
+      "language": "Scala",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.backpressure",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.backpressure",
+      "language": "Scala",
+      "count": 1
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "Scala",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.deduplication",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.deduplication",
+      "language": "Scala",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.message_ordering",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.message_ordering",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.resources.streaming_large_payloads",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.resources.streaming_large_payloads",
+      "language": "Python",
+      "count": 1
+    }
+  ]
+}

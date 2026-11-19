@@ -1,4 +1,4 @@
-// Server-only: job postings (golden_list/backend_jobs.json) with their plans (golden_list/plans/NNN.json,
+// Server-only: job postings (postings/jobs.json) with their plans (postings/plans/NNN.json,
 // NNN = 1-based position in the postings list), matched against the example bank.
 import { readFile } from "node:fs/promises";
 import { cache } from "react";
@@ -6,7 +6,7 @@ import path from "node:path";
 import type { Plan } from "../../shared/types";
 import { EXAMPLES_ROOT, listExamples, type ExampleSummary } from "./examples";
 
-const GOLDEN = path.join(/*turbopackIgnore: true*/ EXAMPLES_ROOT, "golden_list");
+const GOLDEN = path.join(/*turbopackIgnore: true*/ EXAMPLES_ROOT, "postings");
 
 type Posting = { company: string; title: string; location?: string | null; url: string; level_signal?: string };
 
@@ -29,7 +29,7 @@ export const listJobMatches = cache(loadJobMatches);
 
 async function loadJobMatches(): Promise<JobMatch[]> {
     const [postingsRaw, taxonomyRaw, examples] = await Promise.all([
-        readFile(path.join(GOLDEN, "backend_jobs.json"), "utf8"),
+        readFile(path.join(GOLDEN, "jobs.json"), "utf8"),
         readFile(path.join(/*turbopackIgnore: true*/ EXAMPLES_ROOT, "pipeline", "taxonomy", "v0.1.0.json"), "utf8"),
         listExamples(),
     ]);

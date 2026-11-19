@@ -1,0 +1,45 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.data.n_plus_one_queries",
+      "language": "Ruby",
+      "count": 4
+    },
+    {
+      "label": "backend.data.orm_pitfalls",
+      "language": "Ruby",
+      "count": 4
+    },
+    {
+      "label": "backend.data.migrations",
+      "language": "Ruby",
+      "count": 2
+    },
+    {
+      "label": "backend.security.authorization_checks",
+      "language": "Ruby",
+      "count": 2
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "Ruby",
+      "count": 2
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "language": "Ruby",
+      "count": 2
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "Ruby",
+      "count": 2
+    },
+    {
+      "label": "backend.api.request_validation",
+      "language": "Ruby",
+      "count": 2
+    }
+  ]
+}

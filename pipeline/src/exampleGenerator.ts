@@ -43,7 +43,6 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 
 import { Example, type DefectLocation, type LabelId, type Taxonomy } from "../../shared/types.ts";
-import { logUsage } from "./usage.ts";
 
 const MODEL = "claude-opus-5-5";
 const CHOICE_QUESTION_COUNT = 3;   // plus one locate question = 4
@@ -162,8 +161,6 @@ export async function generateExample(
         messages: [{ role: "user", content: userContent }],
     });
     const response = await stream.finalMessage(); // includes parsed_output, like messages.parse
-
-    logUsage("generateExample", response.usage);
 
     if (response.stop_reason === "refusal") {
         throw new Error(`Example generation refused (${response.stop_details?.category ?? "unknown"})`);

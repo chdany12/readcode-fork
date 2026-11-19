@@ -1,0 +1,105 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.graceful_degradation",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.graceful_degradation",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.caching.cache_invalidation",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.caching.cache_invalidation",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.caching.stale_reads",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.caching.stale_reads",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "C#",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "C#",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.tracing",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.tracing",
+      "language": "C#",
+      "count": 1
+    }
+  ]
+}

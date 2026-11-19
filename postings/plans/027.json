@@ -1,0 +1,45 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.observability.structured_logging",
+      "language": "TypeScript",
+      "count": 3
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "TypeScript",
+      "count": 3
+    },
+    {
+      "label": "backend.observability.tracing",
+      "language": "TypeScript",
+      "count": 3
+    },
+    {
+      "label": "backend.observability.health_checks",
+      "language": "TypeScript",
+      "count": 3
+    },
+    {
+      "label": "backend.messaging.backpressure",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.rate_limiting",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.resources.streaming_large_payloads",
+      "language": "TypeScript",
+      "count": 2
+    }
+  ]
+}

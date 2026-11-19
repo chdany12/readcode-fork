@@ -1,0 +1,45 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.caching.cache_invalidation",
+      "language": "Java",
+      "count": 3
+    },
+    {
+      "label": "backend.caching.ttls_and_expiry",
+      "language": "Java",
+      "count": 3
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "language": "Java",
+      "count": 3
+    },
+    {
+      "label": "backend.data.nosql_modeling",
+      "language": "Java",
+      "count": 3
+    },
+    {
+      "label": "backend.messaging.at_least_once_delivery",
+      "language": "Java",
+      "count": 2
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "Java",
+      "count": 2
+    },
+    {
+      "label": "backend.messaging.message_ordering",
+      "language": "Java",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Java",
+      "count": 2
+    }
+  ]
+}

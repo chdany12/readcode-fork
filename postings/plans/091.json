@@ -1,0 +1,100 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.data.n_plus_one_queries",
+      "language": "Ruby",
+      "count": 1
+    },
+    {
+      "label": "backend.data.n_plus_one_queries",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.data.migrations",
+      "language": "Ruby",
+      "count": 1
+    },
+    {
+      "label": "backend.data.migrations",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.data.orm_pitfalls",
+      "language": "Ruby",
+      "count": 1
+    },
+    {
+      "label": "backend.data.orm_pitfalls",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.security.authorization_checks",
+      "language": "Ruby",
+      "count": 1
+    },
+    {
+      "label": "backend.security.authorization_checks",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.config.feature_flags",
+      "language": "Ruby",
+      "count": 1
+    },
+    {
+      "label": "backend.config.feature_flags",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.integrations.third_party_adapters",
+      "language": "Ruby",
+      "count": 1
+    },
+    {
+      "label": "backend.integrations.third_party_adapters",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Ruby",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "Ruby",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.api.request_validation",
+      "language": "Ruby",
+      "count": 1
+    },
+    {
+      "label": "backend.api.request_validation",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Ruby",
+      "count": 2
+    }
+  ]
+}

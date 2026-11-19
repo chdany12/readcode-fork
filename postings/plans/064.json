@@ -1,0 +1,45 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.data.transactions_and_isolation_levels",
+      "language": "Python",
+      "count": 4
+    },
+    {
+      "label": "backend.security.audit_logging",
+      "language": "Python",
+      "count": 3
+    },
+    {
+      "label": "backend.data.money_and_ledgers",
+      "language": "Python",
+      "count": 3
+    },
+    {
+      "label": "backend.concurrency.async_await_pitfalls",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.api.idempotency",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.concurrency.race_conditions",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.api.request_validation",
+      "language": "Python",
+      "count": 2
+    }
+  ]
+}

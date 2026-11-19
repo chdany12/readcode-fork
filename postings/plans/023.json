@@ -1,0 +1,105 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "C",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.resources.context_cancellation",
+      "language": "C",
+      "count": 1
+    },
+    {
+      "label": "backend.resources.context_cancellation",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.resources.context_cancellation",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.race_conditions",
+      "language": "C",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.race_conditions",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "C",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.health_checks",
+      "language": "C",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.health_checks",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.graceful_shutdown",
+      "language": "C",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.graceful_shutdown",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.api.versioning",
+      "language": "C",
+      "count": 1
+    },
+    {
+      "label": "backend.api.versioning",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "language": "C",
+      "count": 1
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.resources.file_and_socket_handle_leaks",
+      "language": "C",
+      "count": 1
+    },
+    {
+      "label": "backend.resources.file_and_socket_handle_leaks",
+      "language": "Go",
+      "count": 1
+    }
+  ]
+}

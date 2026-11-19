@@ -1,0 +1,105 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.testing.unit_test_design",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.structured_logging",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.structured_logging",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.testing.integration_tests",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.testing.integration_tests",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.api.request_validation",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.api.request_validation",
+      "language": "Java",
+      "count": 1
+    }
+  ]
+}

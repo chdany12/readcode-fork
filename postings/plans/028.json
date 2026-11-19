@@ -1,0 +1,85 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.messaging.deduplication",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.messaging.deduplication",
+      "language": "Rust",
+      "count": 1
+    },
+    {
+      "label": "backend.resources.streaming_large_payloads",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.resources.streaming_large_payloads",
+      "language": "Rust",
+      "count": 1
+    },
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "language": "Rust",
+      "count": 1
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "Rust",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Rust",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.thread_and_worker_pools",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.thread_and_worker_pools",
+      "language": "Rust",
+      "count": 1
+    },
+    {
+      "label": "backend.api.idempotency",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.api.idempotency",
+      "language": "Rust",
+      "count": 1
+    },
+    {
+      "label": "backend.resources.memory_leaks",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.resources.memory_leaks",
+      "language": "Rust",
+      "count": 1
+    }
+  ]
+}

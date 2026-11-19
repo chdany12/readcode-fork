@@ -1,0 +1,45 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.security.audit_logging",
+      "language": "TypeScript",
+      "count": 4
+    },
+    {
+      "label": "backend.observability.structured_logging",
+      "language": "TypeScript",
+      "count": 3
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "language": "TypeScript",
+      "count": 3
+    },
+    {
+      "label": "backend.observability.logging_sensitive_data",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.security.secrets_handling",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.messaging.deduplication",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.security.authorization_checks",
+      "language": "TypeScript",
+      "count": 2
+    }
+  ]
+}

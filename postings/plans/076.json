@@ -1,0 +1,105 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "Scala",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Scala",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.graceful_degradation",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.graceful_degradation",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "Python",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.messaging.queues_and_consumers",
+      "language": "Scala",
+      "count": 1
+    },
+    {
+      "label": "backend.security.authorization_checks",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.security.authorization_checks",
+      "language": "Scala",
+      "count": 1
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Java",
+      "count": 1
+    }
+  ]
+}

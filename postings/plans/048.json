@@ -1,0 +1,85 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.data.money_and_ledgers",
+      "language": "Go",
+      "count": 2
+    },
+    {
+      "label": "backend.data.money_and_ledgers",
+      "language": "Java",
+      "count": 2
+    },
+    {
+      "label": "backend.api.idempotency",
+      "language": "Go",
+      "count": 3
+    },
+    {
+      "label": "backend.api.idempotency",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.data.transactions_and_isolation_levels",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.data.transactions_and_isolation_levels",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.distributed.cross_service_consistency",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.distributed.cross_service_consistency",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.race_conditions",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.race_conditions",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.api.request_validation",
+      "language": "Go",
+      "count": 1
+    },
+    {
+      "label": "backend.api.request_validation",
+      "language": "Java",
+      "count": 1
+    }
+  ]
+}

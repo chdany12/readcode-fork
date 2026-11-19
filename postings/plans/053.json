@@ -1,0 +1,105 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "language": "Rust",
+      "count": 1
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "language": "TypeScript",
+      "count": 1
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "language": "JavaScript",
+      "count": 1
+    },
+    {
+      "label": "backend.api.request_validation",
+      "language": "Rust",
+      "count": 1
+    },
+    {
+      "label": "backend.api.request_validation",
+      "language": "TypeScript",
+      "count": 1
+    },
+    {
+      "label": "backend.api.request_validation",
+      "language": "JavaScript",
+      "count": 1
+    },
+    {
+      "label": "backend.security.input_sanitization",
+      "language": "Rust",
+      "count": 1
+    },
+    {
+      "label": "backend.security.input_sanitization",
+      "language": "TypeScript",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.async_await_pitfalls",
+      "language": "Rust",
+      "count": 1
+    },
+    {
+      "label": "backend.concurrency.async_await_pitfalls",
+      "language": "TypeScript",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.rate_limiting",
+      "language": "Rust",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.rate_limiting",
+      "language": "TypeScript",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "Rust",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "TypeScript",
+      "count": 1
+    },
+    {
+      "label": "backend.security.authorization_checks",
+      "language": "Rust",
+      "count": 1
+    },
+    {
+      "label": "backend.security.authorization_checks",
+      "language": "TypeScript",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Rust",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "JavaScript",
+      "count": 1
+    },
+    {
+      "label": "backend.caching.cache_invalidation",
+      "language": "Rust",
+      "count": 1
+    },
+    {
+      "label": "backend.caching.cache_invalidation",
+      "language": "JavaScript",
+      "count": 1
+    }
+  ]
+}

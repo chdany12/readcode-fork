@@ -22,12 +22,12 @@ export type ExampleSummary = {
     durationMinutes: number;
 };
 
-// Direct child folders of EXAMPLES_ROOT (and EXAMPLES_ROOT/examples) that contain a non-empty public.json.
+// Folders under EXAMPLES_ROOT/examples that contain a non-empty public.json.
 // Cached per request (several pages and listJobMatches read it); folders are read in parallel.
 export const listExamples = cache(async (): Promise<ExampleSummary[]> => {
     const names = (
         await Promise.all(
-            ["", "examples"].map(async (base) => {
+            ["examples"].map(async (base) => {
                 const entries = await readdir(path.join(/*turbopackIgnore: true*/ EXAMPLES_ROOT, base), { withFileTypes: true }).catch(() => []);
                 return entries
                     .filter((e) => e.isDirectory() && !e.name.startsWith(".") && e.name !== "node_modules")

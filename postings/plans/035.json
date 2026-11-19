@@ -1,0 +1,105 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.resources.streaming_large_payloads",
+      "language": "Scala",
+      "count": 1
+    },
+    {
+      "label": "backend.resources.streaming_large_payloads",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.resources.streaming_large_payloads",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Scala",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Scala",
+      "count": 1
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "Scala",
+      "count": 1
+    },
+    {
+      "label": "backend.observability.metrics",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "language": "Scala",
+      "count": 1
+    },
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "language": "Scala",
+      "count": 1
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.design.interface_design",
+      "language": "Scala",
+      "count": 1
+    },
+    {
+      "label": "backend.design.interface_design",
+      "language": "Java",
+      "count": 1
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "Scala",
+      "count": 1
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "language": "C++",
+      "count": 1
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "language": "Scala",
+      "count": 1
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "language": "C++",
+      "count": 1
+    }
+  ]
+}

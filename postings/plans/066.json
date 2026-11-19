@@ -1,0 +1,45 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.integrations.third_party_adapters",
+      "language": "TypeScript",
+      "count": 4
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "TypeScript",
+      "count": 3
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "language": "TypeScript",
+      "count": 3
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.security.authentication",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.testing.integration_tests",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
+      "label": "backend.api.request_validation",
+      "language": "TypeScript",
+      "count": 2
+    }
+  ]
+}

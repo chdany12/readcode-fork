@@ -1,0 +1,35 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.testing.flaky_tests",
+      "language": "Python",
+      "count": 5
+    },
+    {
+      "label": "backend.testing.integration_tests",
+      "language": "Python",
+      "count": 5
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "language": "Python",
+      "count": 4
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.errors.cleanup_on_error_paths",
+      "language": "Python",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.structured_logging",
+      "language": "Python",
+      "count": 2
+    }
+  ]
+}
