@@ -21,7 +21,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
-import { Plan, Taxonomy, type Classification } from "../../shared/types.ts";
+import { LanguageList, Plan, Taxonomy, type Classification } from "../../shared/types.ts";
 import { readFileSync } from "node:fs";
 import { classify } from "./classifier.ts";
 import { generateExample, writeExample } from "./exampleGenerator.ts";
@@ -34,64 +34,93 @@ const TAXONOMY_VERSION = "0.1.0";
 const EXAMPLES_PER_POSTING = 20;
 const MIN_PER_TOPIC = 2;
 const SHARE_POWER = 2;
+const DEFAULT_LANGUAGE = "TypeScript"; // when a posting names no language
 
 
 // use a job description file to create a plan file
 async function plan(jobDescription: string): Promise<Plan> {
     const taxonomy: Taxonomy = JSON.parse(readFileSync(path.join(TAXONOMY_DIR, `v${TAXONOMY_VERSION}.json`), "utf8"));
+    const languages = LanguageList.parse(JSON.parse(readFileSync(path.join(TAXONOMY_DIR, "languages.json"), "utf8")));
 
     // 1. classify
-    const classification = await classify(jobDescription, taxonomy);
+    const classification = await classify(jobDescription, taxonomy, languages);
     return planFromClassification(classification, taxonomy);
 }
 
 // steps 2-6: turn a classification (weights per label) into example counts
 export function planFromClassification(classification: Classification, taxonomy: Taxonomy): Plan {
-    // 2. rank concepts
+    // 1. rank concepts
     const ranked = taxonomy.labels
         .map((label, i) => ({ label, weight: classification.weights[i], i }))
         .filter((r) => r.weight > 0)
         .sort((a, b) => b.weight - a.weight || a.i - b.i);
 
-    
-    // 3. Keep only the topics that will get examples.
+    // 2. Keep only the topics that will get examples, and split the examples across them by squared weight
+    //    (0.6 is worth four times 0.3, not twice). If any topic would get fewer than MIN_PER_TOPIC, drop the
+    //    weakest and split again (like an electoral threshold).
+    const shares = (rs: typeof ranked) => normalize(rs.map((r) => r.weight ** SHARE_POWER));
     let chosen = ranked.slice(0, Math.floor(EXAMPLES_PER_POSTING / MIN_PER_TOPIC));
-    let counts = apportion(chosen.map((r) => r.weight));
-    //    If any topic would get fewer than MIN_PER_TOPIC, drop the weakest and apportion again.
+    let counts = largestRemainder(EXAMPLES_PER_POSTING, shares(chosen));
     while (chosen.length > 1 && Math.min(...counts) < MIN_PER_TOPIC) {
         chosen = chosen.slice(0, -1);
-        counts = apportion(chosen.map((r) => r.weight));
+        counts = largestRemainder(EXAMPLES_PER_POSTING, shares(chosen));
     }
+
+    // 3. Split the plan's examples across the posting's languages by their weights, then hand each secondary
+    //    language's examples to topics strongest-first, one per topic per pass, never taking a topic's last
+    //    example of the primary language. The primary language gets the rest. No languages named -> DEFAULT_LANGUAGE.
+    const langs = Object.entries(classification.languages)
+        .filter(([, w]) => w > 0)
+        .sort((a, b) => b[1] - a[1]);
+    const languages = langs.length ? langs.map(([l]) => l) : [DEFAULT_LANGUAGE];
+    const langTotals = langs.length ? largestRemainder(EXAMPLES_PER_POSTING, normalize(langs.map(([, w]) => w))) : [EXAMPLES_PER_POSTING];
+
+    const primary = [...counts]; // per topic, examples still in the primary language
+    const byLanguage: number[][] = languages.map(() => chosen.map(() => 0)); // [language][topic]
+    for (let k = 1; k < languages.length; k++) {
+        let left = langTotals[k];
+        while (left > 0) {
+            let given = 0;
+            for (let j = 0; j < chosen.length && left > 0; j++) {
+                if (primary[j] > 1) {
+                    primary[j]--;
+                    byLanguage[k][j]++;
+                    left--;
+                    given++;
+                }
+            }
+            if (given === 0) break; // every topic is down to one primary example; the rest stays primary
+        }
+    }
+    byLanguage[0] = primary;
 
     return {
         taxonomyVersion: taxonomy.version,
-        targets: chosen.map((r, j) => ({ label: r.label, count: counts[j] })),
+        targets: chosen.flatMap((r, j) =>
+            languages
+                .map((language, k) => ({ label: r.label, language, count: byLanguage[k][j] }))
+                .filter((t) => t.count > 0),
+        ),
     };
 }
 
-function apportion(weights: number[]): number[] {
-    // 4. expontentialize the  weights - 0.6 is worth more than double 0.3, (0.6)^2 vs (0.3)^2 is a more accurate difference. '2' is a parameter
-    const powered = weights.map((w) => w ** SHARE_POWER);
+function normalize(values: number[]): number[] {
+    const total = values.reduce((s, x) => s + x, 0);
+    return values.map((x) => x / total); // sums to 1
+}
 
-    // 5. calculate shares, the fraction each concept represents
-    const total = powered.reduce((s, x) => s + x, 0);
-    const shares = powered.map((x) => x / total);   // sums to 1
-
-    // 6. apportion 20 examples to the concepts based on share. apportion is required because the true share fraction is not a discrete number of examples.
-    // e.g. ideal    = 2.8,  3.7,  3.5
-    //      counts   = 2,    3,    3
-    //      leftover = 0.8 + 0.7 + 0.5 = 2
-    //      final    = 3,    4,    3
-    const ideal = shares.map((s) => s * EXAMPLES_PER_POSTING);   // e.g. 3.6
-    const counts = ideal.map(Math.floor);                         // 3
-    const leftover = EXAMPLES_PER_POSTING - counts.reduce((s, c) => s + c, 0);
-
+// Split `total` items by `shares` (summing to 1) into whole numbers: round each ideal amount down, then
+// give the leftover items to the largest fractional parts (largest remainder / Hamilton method).
+// e.g. ideal = 2.8, 3.7, 3.5 -> floors 2, 3, 3 -> leftover 2 -> 3, 4, 3
+function largestRemainder(total: number, shares: number[]): number[] {
+    const ideal = shares.map((s) => s * total);
+    const counts = ideal.map(Math.floor);
+    const leftover = total - counts.reduce((s, c) => s + c, 0);
     ideal
         .map((q, i) => ({ i, remainder: q - Math.floor(q) }))
-        .sort((a, b) => b.remainder - a.remainder || a.i - b.i) // sort by highest remainder
+        .sort((a, b) => b.remainder - a.remainder || a.i - b.i)
         .slice(0, leftover)
         .forEach(({ i }) => counts[i]++);
-
     return counts;
 }
 

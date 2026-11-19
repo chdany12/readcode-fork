@@ -1,7 +1,8 @@
 // Build plans/NNN.json from externally produced classifications in plans/weights/NNN.json
-// (format: {"weights": [{"label": "...", "weight": 0.0-1.0}, ...]}, same as the classifier's output schema).
+// (format: {"weights": [{"label": "...", "weight": 0.0-1.0}, ...], "languages": {"Java": 1.0, ...}},
+// same as the classifier's output; "languages" is optional for files written before it existed).
 //
-// Usage: node pipeline/src/plansFromWeights.ts [plansDir]   (default: golden_list/plans)
+// Usage: node pipeline/src/plan.ts [plansDir]   (default: golden_list/plans)
 
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -18,7 +19,7 @@ const taxonomy = Taxonomy.parse(JSON.parse(readFileSync(path.join(ROOT, "pipelin
 
 let n = 0;
 for (const file of readdirSync(path.join(plansDir, "weights")).filter((f) => f.endsWith(".json")).sort()) {
-    const raw = JSON.parse(readFileSync(path.join(plansDir, "weights", file), "utf8")) as { weights: { label: string; weight: number }[] };
+    const raw = JSON.parse(readFileSync(path.join(plansDir, "weights", file), "utf8")) as { weights: { label: string; weight: number }[]; languages?: Record<string, number> };
     const byLabel = new Map<string, number>();
     for (const { label, weight } of raw.weights) {
         if (!taxonomy.labels.includes(label)) throw new Error(`${file}: unknown label ${label}`);
@@ -27,6 +28,7 @@ for (const file of readdirSync(path.join(plansDir, "weights")).filter((f) => f.e
     const classification: Classification = {
         taxonomyVersion: taxonomy.version,
         weights: taxonomy.labels.map((l) => byLabel.get(l) ?? 0),
+        languages: raw.languages ?? {},
     };
     const plan = planFromClassification(classification, taxonomy);
     writeFileSync(path.join(plansDir, file), JSON.stringify(plan, null, 2) + "\n");

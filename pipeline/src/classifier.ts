@@ -29,7 +29,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
-import type { Classification, LabelId, Taxonomy } from "../../shared/types.ts";
+import type { Classification, LabelId, LanguageList, Taxonomy } from "../../shared/types.ts";
 import { logUsage } from "./usage.ts";
 
 const MODEL = "claude-opus-5-5";
@@ -46,11 +46,17 @@ For EVERY label, estimate how relevant that concept is to the day-to-day work im
 Most backend concepts touch most backend roles at least a little, so expect few zeros. Use the full range and distinguish between labels (e.g. 0.7 vs 0.5 vs 0.35), rather than only the anchor values.
 
 Infer from the domain, stack, and scale, not only from literal mentions. For example, payments work implies idempotency and transactions even if those words never appear.
+Also return the programming languages the role calls for, each scored 0 to 1 the same way (not shares; they need not sum to 1):
+- 1.0: required or the main language of the role
+- 0.3-0.7: listed as acceptable, a plus, or used alongside the main one
+- omit languages the posting gives no reason to expect
+Only use names from the <languages> list. If the posting names no language, infer from the stack if it is clear; otherwise return none.
+
 Ignore company boilerplate, benefits, and EEO text.`;
 
 const client = new Anthropic(); // ANTHROPIC_API_KEY, or an `ant auth login` profile
 
-export async function classify(jobDescription: string, taxonomy: Taxonomy): Promise<Classification> {
+export async function classify(jobDescription: string, taxonomy: Taxonomy, languages: LanguageList): Promise<Classification> {
   if (jobDescription.trim().length === 0) throw new Error("Job description is empty");
   if (taxonomy.labels.length === 0) throw new Error(`Taxonomy ${taxonomy.version} has no labels`);
 
@@ -61,6 +67,7 @@ export async function classify(jobDescription: string, taxonomy: Taxonomy): Prom
         weight: z.number(),
       }),
     ),
+    languages: z.array(z.object({ language: z.enum(languages.languages as [string, ...string[]]), weight: z.number() })),
   });
 
   const response = await client.beta.messages.parse({
@@ -73,7 +80,7 @@ export async function classify(jobDescription: string, taxonomy: Taxonomy): Prom
     messages: [
       {
         role: "user",
-        content: `<labels>\n${taxonomy.labels.join("\n")}\n</labels>\n\n<posting>\n${jobDescription}\n</posting>`,
+        content: `<labels>\n${taxonomy.labels.join("\n")}\n</labels>\n\n<languages>\n${languages.languages.join("\n")}\n</languages>\n\n<posting>\n${jobDescription}\n</posting>`,
       },
     ],
   });
@@ -97,5 +104,6 @@ export async function classify(jobDescription: string, taxonomy: Taxonomy): Prom
   return {
     taxonomyVersion: taxonomy.version,
     weights: taxonomy.labels.map((label) => byLabel.get(label) ?? 0),
+    languages: Object.fromEntries(parsed.languages.map((l) => [l.language, Math.min(1, Math.max(0, l.weight))])),
   };
 }

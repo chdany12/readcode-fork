@@ -19,9 +19,23 @@ export type Taxonomy = z.infer<typeof Taxonomy>;
 export type WeightVector = number[];              // dense, in taxonomy.labels order
 export type LabelWeights = Record<LabelId, number>; // robust to version changes in taxonomy
 
+// The programming languages the classifier may name (pipeline/taxonomy/languages.json), like the taxonomy for concepts.
+export const LanguageList = z.object({
+  version: z.string(),
+  createdAt: z.string(),
+  languages: z.array(z.string()),
+});
+export type LanguageList = z.infer<typeof LanguageList>;
+
+// Programming languages a posting calls for, each scored 0-1 like topic weights (not shares):
+// { Java: 1.0, Kotlin: 0.4 } = Java required, Kotlin a plus. Normalize where shares are needed.
+export const LanguageWeights = z.record(z.string(), z.number().min(0).max(1));
+export type LanguageWeights = z.infer<typeof LanguageWeights>;
+
 export interface Classification {
   taxonomyVersion: string;
   weights: WeightVector;
+  languages: LanguageWeights;
 }
 
 ///////////
@@ -113,7 +127,9 @@ export const Plan = z.object({
   taxonomyVersion: z.string(),
   targets: z.array(z.object({
     label: LabelId,
-    count: z.number().int().positive(),      // examples to make for this topic
+    // language of the examples; plans written before languages existed were all TypeScript
+    language: z.string().default("TypeScript"),
+    count: z.number().int().positive(),      // examples to make for this topic in this language
   })),
 });
 export type Plan = z.infer<typeof Plan>;
