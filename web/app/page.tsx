@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { ChevronRight } from "lucide-react";
-import { listJobMatches, type JobMatch } from "@/lib/jobs";
+import { listJobMatches } from "@/lib/jobs";
 import { jobTitle } from "@/lib/format";
 import OwnPosting from "./OwnPosting";
 import { COMPANIES } from "@/lib/companies";
 import RoleCard from "./RoleCard";
+import CodeSweep from "./CodeSweep";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const PER_COMPANY = 2;
 
@@ -16,10 +18,22 @@ export default function Home() {
             <section className="relative py-16 text-center">
                 {/* soft glow behind the hero */}
                 <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 mx-auto h-72 max-w-3xl rounded-full bg-gradient-to-r from-hero-1/20 via-hero-2/20 to-hero-3/20 blur-3xl" />
-                <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">Practice reading code for the role you want</h1>
-                <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
-                    Paste a job posting. We weigh the concepts the role depends on and build a code-reading practice plan in that mix.
-                </p>
+                <CodeSweep
+                    as="h1"
+                    className="text-4xl font-semibold tracking-tight sm:text-5xl"
+                    text="Practice reading code for the role you want"
+                    markup="h1"
+                    delay={300}
+                />
+                <CodeSweep
+                    as="p"
+                    className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground"
+                    text="Paste a job posting. We weigh the concepts the role depends on and build a code-reading practice plan in that mix."
+                    markup="p"
+                    inline={{ phrase: "job posting", tag: "b" }}
+                    delay={700}
+                    restore={1000}
+                />
                 <div className="mt-8">
                     <OwnPosting />
                 </div>
@@ -27,25 +41,17 @@ export default function Home() {
 
             <h2 className="mt-6 text-lg font-semibold">Or start with a big tech role</h2>
             <p className="text-sm text-muted-foreground">Practice plans built from real Google, Amazon, Meta and Apple postings.</p>
-            <Suspense fallback={<p className="mt-8 text-muted-foreground">loading…</p>}>
-                <Companies />
-            </Suspense>
+            {/* the four tiles render right away; each fills in its roles when the data arrives */}
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                {COMPANIES.map((c, i) => (
+                    <CompanyTile key={c.name} name={c.name} logo={c.logo} index={i} />
+                ))}
+            </div>
         </main>
     );
 }
 
-async function Companies() {
-    const jobs = await listJobMatches();
-    return (
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            {COMPANIES.map((c) => (
-                <CompanyTile key={c.name} name={c.name} logo={c.logo} jobs={jobs.filter((j) => j.company === c.name)} />
-            ))}
-        </div>
-    );
-}
-
-function CompanyTile({ name, logo, jobs }: { name: string; logo: string; jobs: JobMatch[] }) {
+function CompanyTile({ name, logo, index }: { name: string; logo: string; index: number }) {
     return (
         <Card>
             <CardHeader>
@@ -56,6 +62,23 @@ function CompanyTile({ name, logo, jobs }: { name: string; logo: string; jobs: J
                 </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+                <Suspense fallback={<RolesSkeleton />}>
+                    <CompanyRoles name={name} index={index} />
+                </Suspense>
+            </CardContent>
+        </Card>
+    );
+}
+
+// The company's first roles and a "+N more" row; streams in after the tile itself and fades in,
+// staggered by the tile's position so the four tiles fill in as a cascade.
+async function CompanyRoles({ name, index }: { name: string; index: number }) {
+    const jobs = (await listJobMatches()).filter((j) => j.company === name);
+    return (
+        <div
+            className="space-y-3 animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-500 ease-out"
+            style={{ animationDelay: `${index * 90}ms` }}
+        >
                 {jobs.slice(0, PER_COMPANY).map((j) => (
                     <RoleCard key={j.id} job={j} />
                 ))}
@@ -72,8 +95,27 @@ function CompanyTile({ name, logo, jobs }: { name: string; logo: string; jobs: J
                         <ChevronRight className="size-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
                     </Link>
                 )}
-            </CardContent>
-        </Card>
+        </div>
+    );
+}
+
+// Placeholder shaped like two role cards and the "+N more" row.
+function RolesSkeleton() {
+    return (
+        <>
+            {[0, 1].map((i) => (
+                <div key={i} className="space-y-3 rounded-lg border p-3">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-1/3" />
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-2 w-full" />
+                    <div className="space-y-2 pt-1">
+                        {[0, 1, 2].map((r) => <Skeleton key={r} className="h-9 w-full" />)}
+                    </div>
+                </div>
+            ))}
+            <Skeleton className="h-9 w-full" />
+        </>
     );
 }
 

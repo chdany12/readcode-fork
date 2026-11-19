@@ -1,6 +1,7 @@
 // Server-only: job postings (golden_list/backend_jobs.json) with their plans (golden_list/plans/NNN.json,
 // NNN = 1-based position in the postings list), matched against the example bank.
 import { readFile } from "node:fs/promises";
+import { cache } from "react";
 import path from "node:path";
 import type { Plan } from "../../shared/types";
 import { EXAMPLES_ROOT, listExamples, type ExampleSummary } from "./examples";
@@ -23,7 +24,10 @@ export type JobMatch = {
     profile: { label: string; weight: number }[]; // every taxonomy label in taxonomy order, 0 if unweighted
 };
 
-export async function listJobMatches(): Promise<JobMatch[]> {
+// cached per request: the home page tiles each ask for it
+export const listJobMatches = cache(loadJobMatches);
+
+async function loadJobMatches(): Promise<JobMatch[]> {
     const postings = JSON.parse(await readFile(path.join(GOLDEN, "backend_jobs.json"), "utf8")) as Posting[];
     const taxonomy = JSON.parse(await readFile(path.join(/*turbopackIgnore: true*/ EXAMPLES_ROOT, "pipeline", "taxonomy", "v0.1.0.json"), "utf8")) as { labels: string[] };
     const byTopic = new Map<string, ExampleSummary[]>();
