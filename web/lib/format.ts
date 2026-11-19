@@ -12,11 +12,25 @@ export function topicName(label: string): string {
     return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+// "backend.concurrency.race_conditions" -> "concurrency"
+export function areaOf(label: string): string {
+    return label.split(".")[1] ?? label;
+}
+
+// "concurrency" -> "Concurrency", "api" -> "API"
+export function areaTitle(area: string): string {
+    if (WORDS[area] && WORDS[area] === WORDS[area].toUpperCase()) return WORDS[area]; // acronyms
+    return area.charAt(0).toUpperCase() + area.slice(1);
+}
+
 // "backend.concurrency.race_conditions" -> "Concurrency"
 export function areaName(label: string): string {
-    const a = label.split(".")[1] ?? label;
-    if (WORDS[a] && WORDS[a] === WORDS[a].toUpperCase()) return WORDS[a]; // acronyms: "api" -> "API"
-    return a.charAt(0).toUpperCase() + a.slice(1);
+    return areaTitle(areaOf(label));
+}
+
+// 0.8 -> "80%"
+export function pct(fraction: number): string {
+    return `${Math.round(fraction * 100)}%`;
 }
 
 const SMALL = new Set(["and", "or", "of", "in", "for", "the", "to", "a", "at"]);

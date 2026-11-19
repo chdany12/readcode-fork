@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { listExamples } from "@/lib/examples";
 import { listJobMatches } from "@/lib/jobs";
-import { jobTitle } from "@/lib/format";
+import { areaOf, jobTitle } from "@/lib/format";
 import ExampleBrowser, { type RoleOption } from "../ExampleBrowser";
 
 export default function ExamplesPage() {
@@ -18,7 +18,7 @@ async function ExampleList() {
     const [examples, jobs] = await Promise.all([listExamples(), listJobMatches()]);
     if (examples.length === 0) return <p className="text-muted-foreground">No examples found (folders with a public.json).</p>;
     const topics = new Set(examples.map((e) => e.topic)).size;
-    const areas = new Set(examples.map((e) => e.topic.split(".")[1])).size;
+    const areas = new Set(examples.map((e) => areaOf(e.topic))).size;
     const roles: RoleOption[] = jobs.map((j) => ({
         id: j.id,
         label: `${j.company} · ${jobTitle(j.title)}`,

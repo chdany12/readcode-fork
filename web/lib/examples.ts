@@ -2,6 +2,7 @@
 // An example folder looks like:  <name>/public.json, <name>/key.json, <name>/src/**
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { cache } from "react";
 import type { ExampleKey, ExamplePublic, SourceFile } from "../../shared/types";
 
 // Where example folders live. Defaults to the repo root (one level above web/).
@@ -22,30 +23,34 @@ export type ExampleSummary = {
 };
 
 // Direct child folders of EXAMPLES_ROOT (and EXAMPLES_ROOT/examples) that contain a non-empty public.json.
-export async function listExamples(): Promise<ExampleSummary[]> {
-    const found: ExampleSummary[] = [];
-    for (const base of ["", "examples"]) {
-        const dir = path.join(/*turbopackIgnore: true*/ EXAMPLES_ROOT, base);
-        const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
-        for (const e of entries) {
-            if (!e.isDirectory() || e.name.startsWith(".") || e.name === "node_modules") continue;
-            const name = base ? `${base}/${e.name}` : e.name;
+// Cached per request (several pages and listJobMatches read it); folders are read in parallel.
+export const listExamples = cache(async (): Promise<ExampleSummary[]> => {
+    const names = (
+        await Promise.all(
+            ["", "examples"].map(async (base) => {
+                const entries = await readdir(path.join(/*turbopackIgnore: true*/ EXAMPLES_ROOT, base), { withFileTypes: true }).catch(() => []);
+                return entries
+                    .filter((e) => e.isDirectory() && !e.name.startsWith(".") && e.name !== "node_modules")
+                    .map((e) => (base ? `${base}/${e.name}` : e.name));
+            }),
+        )
+    ).flat();
+    const found = await Promise.all(
+        names.map(async (name): Promise<ExampleSummary | null> => {
             const pub = await readJson<ExamplePublic>(path.join(/*turbopackIgnore: true*/ EXAMPLES_ROOT, name, "public.json"));
-            if (pub) {
-                found.push({
-                    name,
-                    title: pub.title,
-                    shortName: pub.name ?? pub.title,
-                    topic: pub.concepts?.[0] ?? "(none)",
-                    concepts: pub.concepts ?? [],
-                    questionCount: pub.questions?.length ?? 0,
-                    durationMinutes: pub.durationMinutes ?? 0,
-                });
-            }
-        }
-    }
-    return found.sort((a, b) => a.name.localeCompare(b.name));
-}
+            return pub && {
+                name,
+                title: pub.title,
+                shortName: pub.name ?? pub.title,
+                topic: pub.concepts?.[0] ?? "(none)",
+                concepts: pub.concepts ?? [],
+                questionCount: pub.questions?.length ?? 0,
+                durationMinutes: pub.durationMinutes ?? 0,
+            };
+        }),
+    );
+    return found.filter((e) => e !== null).sort((a, b) => a.name.localeCompare(b.name));
+});
 
 export async function loadExample(name: string): Promise<LoadedExample | null> {
     const dir = resolveInside(EXAMPLES_ROOT, name);

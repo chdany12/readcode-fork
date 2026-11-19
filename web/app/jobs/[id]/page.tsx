@@ -22,6 +22,7 @@ async function Role({ params }: { params: PageProps<"/jobs/[id]">["params"] }) {
     const { id } = await params;
     const job = (await listJobMatches()).find((j) => j.id === id);
     if (!job) notFound();
+    const logo = logoFor(job.company);
     const topics = job.topics.filter((t) => t.examples.length > 0);
     const examples = topics.flatMap((t) => t.examples);
     const minutes = examples.reduce((s, e) => s + e.durationMinutes, 0);
@@ -31,10 +32,10 @@ async function Role({ params }: { params: PageProps<"/jobs/[id]">["params"] }) {
             <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">← Home</Link>
             {/* header: company logo tile beside company name and title */}
             <div className="mt-6 flex items-center gap-4">
-                {logoFor(job.company) && (
+                {logo && (
                     <span className="flex size-14 shrink-0 items-center justify-center rounded-xl border bg-muted/40 p-3">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={logoFor(job.company)} alt="" className="max-h-full max-w-full object-contain" />
+                        <img src={logo} alt="" className="max-h-full max-w-full object-contain" />
                     </span>
                 )}
                 <div className="min-w-0">

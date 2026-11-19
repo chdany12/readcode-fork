@@ -3,16 +3,18 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ElementType } from "react";
 import { codeFont } from "@/lib/fonts";
 
-// Text that briefly shows as its own markup, then renders, once, after `delay` ms:
-//   1. the text switches to monospace with its HTML tags showing, e.g. <h1>Practice <code>code</code></h1>,
-//   2. holds for `hold` ms,
-//   3. over `restore` ms the tag pairs disappear (inner, then outer), and at the end the whole text
-//      returns to the normal font at once, as if the page finished rendering.
-// `markup` names the element tag shown around the whole text; `inline` wraps one phrase in another tag.
-// Skipped when the viewer prefers reduced motion; screen readers always get the plain text.
-const MONO_SIZE = 0.88;
-const MIN_SIZE = 0.8;
+const MONO_SIZE = 0.88; // em; optically matches the UI font (mono glyphs are wider)
+const MIN_SIZE = 0.6;
 
+// Phases of the reveal: the text as markup (both tag pairs), then without the inline pair, then without any
+// tags, then the plain rendered text.
+type Phase = "markup" | "outer" | "bare" | "done";
+
+// Text that briefly shows as its own markup, then renders, once, after `delay` ms:
+//   <p>Paste a <b>job posting</b>…</p>  ->  <p>Paste a job posting…</p>  ->  Paste a job posting…  (mono)  ->  normal font
+// `markup` is the tag shown around the whole text; `inline` wraps one phrase in another tag.
+// The tag pairs drop at slightly random moments so it feels like rendering, not a slideshow.
+// Skipped when the viewer prefers reduced motion; screen readers always get the plain text.
 export default function CodeSweep({
     text,
     as: Tag = "span",
@@ -27,123 +29,80 @@ export default function CodeSweep({
     as?: ElementType;
     className?: string;
     markup?: string;                          // e.g. "h1" -> <h1>…</h1>
-    inline?: { phrase: string; tag: string }; // e.g. { phrase: "code", tag: "code" } -> <code>code</code>
+    inline?: { phrase: string; tag: string }; // e.g. { phrase: "job posting", tag: "b" } -> <b>job posting</b>
     delay?: number;
-    hold?: number;
-    restore?: number;
+    hold?: number;                            // ms showing the full markup
+    restore?: number;                         // ms from the first tag dropping to the plain text
 }) {
-    // ms since the restore began (negative while holding); null = idle (plain text)
-    const [elapsed, setElapsed] = useState<number | null>(null);
-    // when each character, and each of the four tags (outer open/close, inline open/close), goes back to normal
-    const [settle, setSettle] = useState<{ chars: number[]; tags: number[] }>({ chars: [], tags: [] });
-    // Mono size in em: ~0.88 optically matches the UI font (mono glyphs are wider); shrunk only a little if needed.
-    const [monoSize, setMonoSize] = useState(MONO_SIZE);
-    const [oneLine, setOneLine] = useState(false); // a single-line text stays on one line (tags may extend past its edges)
+    const [phase, setPhase] = useState<Phase>("done");
+    const [oneLine, setOneLine] = useState(false);
     const overlayRef = useRef<HTMLSpanElement>(null);
-    const animating = elapsed !== null;
-
-    // When the effect starts: keep a one-line text on one line; for multi-line text, shrink the mono font
-    // a little (never below MIN_SIZE) so it fits the plain text's box.
-    useLayoutEffect(() => {
-        if (!animating || !overlayRef.current) return;
-        const overlay = overlayRef.current; // absolutely positioned over the plain text, so clientHeight = the plain text's height
-        const lineHeight = parseFloat(getComputedStyle(overlay).lineHeight) || 0;
-        if (lineHeight && overlay.clientHeight < lineHeight * 1.5) {
-            // one line: stay on one line, shrinking only if it would be wider than the element's full width
-            const available = overlay.parentElement?.clientWidth ?? Infinity;
-            overlay.style.whiteSpace = "nowrap";
-            let size = MONO_SIZE;
-            overlay.style.setProperty("--mono-size", `${size}em`);
-            while (overlay.scrollWidth > available && size > 0.6) {
-                size -= 0.02;
-                overlay.style.setProperty("--mono-size", `${size}em`);
-            }
-            setMonoSize(size);
-            setOneLine(true);
-            return;
-        }
-        let size = MONO_SIZE;
-        overlay.style.setProperty("--mono-size", `${size}em`);
-        while (overlay.scrollHeight > overlay.clientHeight + 1 && size > MIN_SIZE) {
-            size -= 0.02;
-            overlay.style.setProperty("--mono-size", `${size}em`);
-        }
-        setMonoSize(size);
-    }, [animating]);
 
     useEffect(() => {
         if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-        let holdTimer: ReturnType<typeof setTimeout>;
-        let ticker: ReturnType<typeof setInterval>;
-        const startTimer = setTimeout(() => {
-            setSettle({
-                chars: [...text].map(() => restore), // all at once, when the restore ends
-                // tags go a little early, so the text is briefly bare mono before it finishes rendering
-                // each tag pair (outer, inline) disappears together, so a tag is never left without its partner
-                tags: (() => {
-                    const outer = restore * (0.25 + Math.random() * 0.35);
-                    const inner = restore * (0.1 + Math.random() * 0.35);
-                    return [outer, outer, inner, inner];
-                })(),
-            });
-            setElapsed(-1);
-            holdTimer = setTimeout(() => {
-                const start = Date.now();
-                ticker = setInterval(() => {
-                    const t = Date.now() - start;
-                    if (t < restore) setElapsed(t);
-                    else {
-                        clearInterval(ticker);
-                        setElapsed(null);
-                    }
-                }, 30);
-            }, hold);
-        }, delay);
-        return () => {
-            clearTimeout(startTimer);
-            clearTimeout(holdTimer);
-            clearInterval(ticker);
-        };
+        const start = delay + hold;
+        const innerOff = start + restore * (0.1 + Math.random() * 0.3);
+        const outerOff = innerOff + restore * (0.15 + Math.random() * 0.25);
+        const timers = [
+            setTimeout(() => setPhase("markup"), delay),
+            setTimeout(() => setPhase("outer"), innerOff),
+            setTimeout(() => setPhase("bare"), outerOff),
+            setTimeout(() => setPhase("done"), start + restore),
+        ];
+        return () => timers.forEach(clearTimeout);
     }, [text, delay, hold, restore]);
 
-    if (elapsed === null) return <Tag className={className}>{text}</Tag>;
+    // When the markup appears, size the mono copy to fit: a one-line text stays on one line within its
+    // element's width; a multi-line text stays within the plain text's box.
+    const showing = phase !== "done";
+    useLayoutEffect(() => {
+        const overlay = overlayRef.current;
+        if (!showing || !overlay) return;
+        const lineHeight = parseFloat(getComputedStyle(overlay).lineHeight) || 0;
+        const single = lineHeight > 0 && overlay.clientHeight < lineHeight * 1.5;
+        overlay.style.whiteSpace = single ? "nowrap" : "";
+        const fits = single
+            ? () => overlay.scrollWidth <= (overlay.parentElement?.clientWidth ?? Infinity)
+            : () => overlay.scrollHeight <= overlay.clientHeight + 1;
+        let size = MONO_SIZE;
+        overlay.style.fontSize = `${size}em`;
+        while (!fits() && size > MIN_SIZE) {
+            size -= 0.02;
+            overlay.style.fontSize = `${size}em`;
+        }
+        setOneLine(single);
+    }, [showing]);
 
-    const monoStyle = { fontSize: "var(--mono-size)" };
-    const tag = (k: number, s: string) =>
-        elapsed < (settle.tags[k] ?? 0) ? (
-            <span key={`t${k}`} className={`${codeFont.className} text-muted-foreground/70`} style={monoStyle}>{s}</span>
-        ) : null;
-    const char = (ch: string, i: number) =>
-        elapsed < (settle.chars[i] ?? 0) ? <span key={i} className={codeFont.className} style={monoStyle}>{ch}</span> : ch;
+    if (!showing) return <Tag className={className}>{text}</Tag>;
 
-    // split around the inline phrase (first occurrence), keeping character indexes for the settle times
-    const chars = [...text];
+    const tag = (s: string) => <span className="text-muted-foreground/70">{s}</span>;
     const at = inline ? text.indexOf(inline.phrase) : -1;
-    const run = (from: number, to: number) => chars.slice(from, to).map((ch, j) => char(ch, from + j));
+    const body =
+        inline && at >= 0 && phase === "markup" ? (
+            <>
+                {text.slice(0, at)}
+                {tag(`<${inline.tag}>`)}
+                {inline.phrase}
+                {tag(`</${inline.tag}>`)}
+                {text.slice(at + inline.phrase.length)}
+            </>
+        ) : (
+            text
+        );
+    const withOuter = markup && phase !== "bare";
 
-    // The plain text stays in the layout (invisible) so the page doesn't move; the animated copy is drawn on top.
+    // The plain text stays in the layout (invisible) so the page doesn't move; the mono copy is drawn on top.
     return (
         <Tag className={`relative ${className ?? ""}`} aria-label={text}>
             <span aria-hidden className="invisible">{text}</span>
             <span
                 ref={overlayRef}
                 aria-hidden
-                className={oneLine ? "absolute top-0 left-1/2 -translate-x-1/2 whitespace-nowrap" : "absolute inset-0"}
-                style={{ ["--mono-size" as string]: `${monoSize}em` }}
+                className={`${codeFont.className} ${oneLine ? "absolute top-0 left-1/2 -translate-x-1/2" : "absolute inset-0"}`}
             >
-                {markup && tag(0, `<${markup}>`)}
-                {at < 0 || !inline ? (
-                    run(0, chars.length)
-                ) : (
-                    <>
-                        {run(0, at)}
-                        {tag(2, `<${inline.tag}>`)}
-                        {run(at, at + inline.phrase.length)}
-                        {tag(3, `</${inline.tag}>`)}
-                        {run(at + inline.phrase.length, chars.length)}
-                    </>
-                )}
-                {markup && tag(1, `</${markup}>`)}
+                {withOuter && tag(`<${markup}>`)}
+                {body}
+                {withOuter && tag(`</${markup}>`)}
             </span>
         </Tag>
     );

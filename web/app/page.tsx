@@ -40,7 +40,7 @@ export default function Home() {
             </section>
 
             <h2 className="mt-6 text-lg font-semibold">Or start with a big tech role</h2>
-            <p className="text-sm text-muted-foreground">Practice plans built from real Google, Amazon, Meta and Apple postings.</p>
+            <p className="text-sm text-muted-foreground">Practice plans built from real {new Intl.ListFormat("en").format(COMPANIES.map((c) => c.name))} postings.</p>
             {/* the four tiles render right away; each fills in its roles when the data arrives */}
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 {COMPANIES.map((c, i) => (

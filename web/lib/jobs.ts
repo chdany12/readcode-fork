@@ -24,20 +24,27 @@ export type JobMatch = {
     profile: { label: string; weight: number }[]; // every taxonomy label in taxonomy order, 0 if unweighted
 };
 
-// cached per request: the home page tiles each ask for it
+// cached per request: the home page tiles, role pages and the exercises page all use it
 export const listJobMatches = cache(loadJobMatches);
 
 async function loadJobMatches(): Promise<JobMatch[]> {
-    const postings = JSON.parse(await readFile(path.join(GOLDEN, "backend_jobs.json"), "utf8")) as Posting[];
-    const taxonomy = JSON.parse(await readFile(path.join(/*turbopackIgnore: true*/ EXAMPLES_ROOT, "pipeline", "taxonomy", "v0.1.0.json"), "utf8")) as { labels: string[] };
-    const byTopic = new Map<string, ExampleSummary[]>();
-    for (const e of await listExamples()) byTopic.set(e.topic, [...(byTopic.get(e.topic) ?? []), e]);
+    const [postingsRaw, taxonomyRaw, examples] = await Promise.all([
+        readFile(path.join(GOLDEN, "backend_jobs.json"), "utf8"),
+        readFile(path.join(/*turbopackIgnore: true*/ EXAMPLES_ROOT, "pipeline", "taxonomy", "v0.1.0.json"), "utf8"),
+        listExamples(),
+    ]);
+    const postings = JSON.parse(postingsRaw) as Posting[];
+    const taxonomy = JSON.parse(taxonomyRaw) as { labels: string[] };
+    const byTopic = Map.groupBy(examples, (e) => e.topic);
 
     return Promise.all(
         postings.map(async (p, i) => {
             const id = String(i + 1).padStart(3, "0");
-            const plan = JSON.parse(await readFile(path.join(GOLDEN, "plans", `${id}.json`), "utf8").catch(() => '{"targets":[]}')) as Plan;
-            const raw = await readFile(path.join(GOLDEN, "plans", "weights", `${id}.json`), "utf8").catch(() => '{"weights":[]}');
+            const [planRaw, raw] = await Promise.all([
+                readFile(path.join(GOLDEN, "plans", `${id}.json`), "utf8").catch(() => '{"targets":[]}'),
+                readFile(path.join(GOLDEN, "plans", "weights", `${id}.json`), "utf8").catch(() => '{"weights":[]}'),
+            ]);
+            const plan = JSON.parse(planRaw) as Plan;
             const weights = new Map((JSON.parse(raw).weights as { label: string; weight: number }[]).map((w) => [w.label, w.weight]));
             const topics = plan.targets.map((t) => ({
                 label: t.label,
