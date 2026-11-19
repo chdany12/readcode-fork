@@ -3,37 +3,37 @@
   "targets": [
     {
       "label": "backend.security.secrets_handling",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 4
     },
     {
       "label": "backend.security.audit_logging",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 4
     },
     {
       "label": "backend.security.authentication",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 3
     },
     {
       "label": "backend.security.authorization_checks",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 3
     },
     {
       "label": "backend.observability.logging_sensitive_data",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.security.session_and_token_handling",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.config.configuration_loading",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     }
   ]

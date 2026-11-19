@@ -3,47 +3,47 @@
   "targets": [
     {
       "label": "backend.api.rest_design",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 4
     },
     {
       "label": "backend.design.coupling_and_cohesion",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.messaging.queues_and_consumers",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.testing.unit_test_design",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.design.layering",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.distributed.cross_service_consistency",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.performance.profiling_and_hot_paths",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.resilience.timeouts",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.resilience.retries_and_backoff",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     }
   ]

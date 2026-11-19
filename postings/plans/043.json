@@ -3,47 +3,47 @@
   "targets": [
     {
       "label": "backend.observability.metrics",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 4
     },
     {
       "label": "backend.resilience.timeouts",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.messaging.queues_and_consumers",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.observability.health_checks",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.distributed.sharding_and_partitioning",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.performance.profiling_and_hot_paths",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.resilience.retries_and_backoff",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.data.connection_pooling",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.resilience.rate_limiting",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     }
   ]

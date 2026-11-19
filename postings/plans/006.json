@@ -3,47 +3,47 @@
   "targets": [
     {
       "label": "backend.design.interface_design",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 4
     },
     {
       "label": "backend.resilience.graceful_degradation",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.api.serialization_and_deserialization",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.testing.unit_test_design",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.design.coupling_and_cohesion",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.resilience.timeouts",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.api.rest_design",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.api.request_validation",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.observability.metrics",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     }
   ]

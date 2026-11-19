@@ -28,7 +28,7 @@ import { generateExample, writeExample } from "./exampleGenerator.ts";
 const EXAMPLES_PER_POSTING = 20;
 const MIN_PER_TOPIC = 2;
 const SHARE_POWER = 2;
-const DEFAULT_LANGUAGE = "TypeScript"; // when a posting names no language
+const DEFAULT_LANGUAGE = "Python"; // when a posting names no language: the most common interview language
 
 
 // use a job description file to create a plan file

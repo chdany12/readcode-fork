@@ -3,42 +3,42 @@
   "targets": [
     {
       "label": "backend.data.transactions_and_isolation_levels",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 3
     },
     {
       "label": "backend.api.idempotency",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 3
     },
     {
       "label": "backend.testing.unit_test_design",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 3
     },
     {
       "label": "backend.data.money_and_ledgers",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 3
     },
     {
       "label": "backend.api.rest_design",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.testing.integration_tests",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.api.request_validation",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.errors.error_propagation",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     }
   ]

@@ -3,37 +3,37 @@
   "targets": [
     {
       "label": "backend.integrations.third_party_adapters",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 5
     },
     {
       "label": "backend.config.feature_flags",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 3
     },
     {
       "label": "backend.resilience.retries_and_backoff",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 3
     },
     {
       "label": "backend.messaging.queues_and_consumers",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 3
     },
     {
       "label": "backend.api.serialization_and_deserialization",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.resilience.timeouts",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.observability.metrics",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     }
   ]

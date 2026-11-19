@@ -3,47 +3,47 @@
   "targets": [
     {
       "label": "backend.distributed.sharding_and_partitioning",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 3
     },
     {
       "label": "backend.messaging.queues_and_consumers",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 3
     },
     {
       "label": "backend.messaging.at_least_once_delivery",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.messaging.deduplication",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.messaging.backpressure",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.messaging.message_ordering",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.resources.streaming_large_payloads",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.distributed.replication_and_consensus",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.distributed.cross_service_consistency",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     }
   ]

@@ -29,7 +29,7 @@
     {
       "label": "backend.api.idempotency",
       "language": "Python",
-      "count": 2
+      "count": 3
     },
     {
       "label": "backend.api.idempotency",
@@ -44,7 +44,7 @@
     {
       "label": "backend.api.idempotency",
       "language": "TypeScript",
-      "count": 3
+      "count": 1
     },
     {
       "label": "backend.api.request_validation",
@@ -99,7 +99,7 @@
     {
       "label": "backend.api.request_validation",
       "language": "TypeScript",
-      "count": 3
+      "count": 2
     },
     {
       "label": "backend.api.rest_design",
@@ -139,29 +139,29 @@
     {
       "label": "backend.api.rest_design",
       "language": "Python",
-      "count": 3
-    },
-    {
-      "label": "backend.api.rest_design",
-      "language": "Ruby",
-      "count": 3
-    },
-    {
-      "label": "backend.api.rest_design",
-      "language": "Rust",
-      "count": 1
-    },
-    {
-      "label": "backend.api.rest_design",
-      "language": "Scala",
-      "count": 1
-    },
-    {
-      "label": "backend.api.rest_design",
-      "language": "TypeScript",
       "count": 4
     },
     {
+      "label": "backend.api.rest_design",
+      "language": "Ruby",
+      "count": 3
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "Rust",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "Scala",
+      "count": 1
+    },
+    {
+      "label": "backend.api.rest_design",
+      "language": "TypeScript",
+      "count": 2
+    },
+    {
       "label": "backend.api.serialization_and_deserialization",
       "language": "C",
       "count": 1
@@ -189,7 +189,7 @@
     {
       "label": "backend.api.serialization_and_deserialization",
       "language": "Python",
-      "count": 1
+      "count": 2
     },
     {
       "label": "backend.api.serialization_and_deserialization",
@@ -204,7 +204,7 @@
     {
       "label": "backend.api.serialization_and_deserialization",
       "language": "TypeScript",
-      "count": 2
+      "count": 1
     },
     {
       "label": "backend.api.status_codes_and_error_responses",
@@ -239,7 +239,7 @@
     {
       "label": "backend.api.status_codes_and_error_responses",
       "language": "TypeScript",
-      "count": 2
+      "count": 1
     },
     {
       "label": "backend.api.versioning",
@@ -254,7 +254,7 @@
     {
       "label": "backend.api.versioning",
       "language": "TypeScript",
-      "count": 2
+      "count": 1
     },
     {
       "label": "backend.caching.cache_aside_vs_write_through",
@@ -379,7 +379,7 @@
     {
       "label": "backend.concurrency.async_await_pitfalls",
       "language": "TypeScript",
-      "count": 2
+      "count": 1
     },
     {
       "label": "backend.concurrency.atomic_operations",
@@ -504,7 +504,7 @@
     {
       "label": "backend.concurrency.thread_and_worker_pools",
       "language": "Python",
-      "count": 1
+      "count": 2
     },
     {
       "label": "backend.concurrency.thread_and_worker_pools",
@@ -519,7 +519,7 @@
     {
       "label": "backend.concurrency.thread_and_worker_pools",
       "language": "TypeScript",
-      "count": 2
+      "count": 1
     },
     {
       "label": "backend.config.configuration_loading",
@@ -539,11 +539,6 @@
     {
       "label": "backend.config.configuration_loading",
       "language": "Python",
-      "count": 2
-    },
-    {
-      "label": "backend.config.configuration_loading",
-      "language": "TypeScript",
       "count": 2
     },
     {
@@ -614,7 +609,7 @@
     {
       "label": "backend.config.feature_flags",
       "language": "Python",
-      "count": 1
+      "count": 3
     },
     {
       "label": "backend.config.feature_flags",
@@ -638,7 +633,7 @@
     },
     {
       "label": "backend.data.connection_pooling",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
@@ -679,7 +674,7 @@
     {
       "label": "backend.data.money_and_ledgers",
       "language": "Python",
-      "count": 3
+      "count": 4
     },
     {
       "label": "backend.data.money_and_ledgers",
@@ -699,7 +694,7 @@
     {
       "label": "backend.data.money_and_ledgers",
       "language": "TypeScript",
-      "count": 4
+      "count": 1
     },
     {
       "label": "backend.data.n_plus_one_queries",
@@ -759,7 +754,7 @@
     {
       "label": "backend.data.nosql_modeling",
       "language": "Python",
-      "count": 1
+      "count": 2
     },
     {
       "label": "backend.data.nosql_modeling",
@@ -844,7 +839,7 @@
     {
       "label": "backend.data.transactions_and_isolation_levels",
       "language": "TypeScript",
-      "count": 3
+      "count": 1
     },
     {
       "label": "backend.design.code_duplication",
@@ -869,7 +864,7 @@
     {
       "label": "backend.design.coupling_and_cohesion",
       "language": "Python",
-      "count": 1
+      "count": 2
     },
     {
       "label": "backend.design.coupling_and_cohesion",
@@ -934,7 +929,7 @@
     {
       "label": "backend.design.interface_design",
       "language": "Python",
-      "count": 1
+      "count": 4
     },
     {
       "label": "backend.design.interface_design",
@@ -954,7 +949,7 @@
     {
       "label": "backend.design.interface_design",
       "language": "TypeScript",
-      "count": 4
+      "count": 3
     },
     {
       "label": "backend.design.layering",
@@ -984,7 +979,7 @@
     {
       "label": "backend.design.layering",
       "language": "Python",
-      "count": 1
+      "count": 2
     },
     {
       "label": "backend.design.layering",
@@ -1008,8 +1003,13 @@
     },
     {
       "label": "backend.distributed.cross_service_consistency",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
+    },
+    {
+      "label": "backend.distributed.cross_service_consistency",
+      "language": "TypeScript",
+      "count": 1
     },
     {
       "label": "backend.distributed.replication_and_consensus",
@@ -1039,7 +1039,7 @@
     {
       "label": "backend.distributed.replication_and_consensus",
       "language": "Python",
-      "count": 1
+      "count": 2
     },
     {
       "label": "backend.distributed.replication_and_consensus",
@@ -1047,11 +1047,6 @@
       "count": 1
     },
     {
-      "label": "backend.distributed.replication_and_consensus",
-      "language": "TypeScript",
-      "count": 2
-    },
-    {
       "label": "backend.distributed.sharding_and_partitioning",
       "language": "C",
       "count": 1
@@ -1079,7 +1074,7 @@
     {
       "label": "backend.distributed.sharding_and_partitioning",
       "language": "Python",
-      "count": 2
+      "count": 3
     },
     {
       "label": "backend.distributed.sharding_and_partitioning",
@@ -1090,11 +1085,6 @@
       "label": "backend.distributed.sharding_and_partitioning",
       "language": "Scala",
       "count": 1
-    },
-    {
-      "label": "backend.distributed.sharding_and_partitioning",
-      "language": "TypeScript",
-      "count": 3
     },
     {
       "label": "backend.errors.cleanup_on_error_paths",
@@ -1124,7 +1114,7 @@
     {
       "label": "backend.errors.error_propagation",
       "language": "Python",
-      "count": 1
+      "count": 2
     },
     {
       "label": "backend.errors.error_propagation",
@@ -1174,7 +1164,7 @@
     {
       "label": "backend.integrations.third_party_adapters",
       "language": "Python",
-      "count": 2
+      "count": 5
     },
     {
       "label": "backend.integrations.third_party_adapters",
@@ -1184,7 +1174,7 @@
     {
       "label": "backend.integrations.third_party_adapters",
       "language": "TypeScript",
-      "count": 5
+      "count": 2
     },
     {
       "label": "backend.messaging.at_least_once_delivery",
@@ -1214,7 +1204,7 @@
     {
       "label": "backend.messaging.at_least_once_delivery",
       "language": "Python",
-      "count": 1
+      "count": 2
     },
     {
       "label": "backend.messaging.at_least_once_delivery",
@@ -1234,7 +1224,7 @@
     {
       "label": "backend.messaging.at_least_once_delivery",
       "language": "TypeScript",
-      "count": 2
+      "count": 1
     },
     {
       "label": "backend.messaging.backpressure",
@@ -1254,7 +1244,7 @@
     {
       "label": "backend.messaging.backpressure",
       "language": "Python",
-      "count": 1
+      "count": 2
     },
     {
       "label": "backend.messaging.backpressure",
@@ -1265,11 +1255,6 @@
       "label": "backend.messaging.backpressure",
       "language": "Scala",
       "count": 1
-    },
-    {
-      "label": "backend.messaging.backpressure",
-      "language": "TypeScript",
-      "count": 2
     },
     {
       "label": "backend.messaging.deduplication",
@@ -1289,7 +1274,7 @@
     {
       "label": "backend.messaging.deduplication",
       "language": "Python",
-      "count": 2
+      "count": 3
     },
     {
       "label": "backend.messaging.deduplication",
@@ -1300,11 +1285,6 @@
       "label": "backend.messaging.deduplication",
       "language": "Scala",
       "count": 1
-    },
-    {
-      "label": "backend.messaging.deduplication",
-      "language": "TypeScript",
-      "count": 3
     },
     {
       "label": "backend.messaging.message_ordering",
@@ -1319,11 +1299,6 @@
     {
       "label": "backend.messaging.message_ordering",
       "language": "Python",
-      "count": 1
-    },
-    {
-      "label": "backend.messaging.message_ordering",
-      "language": "TypeScript",
       "count": 2
     },
     {
@@ -1354,7 +1329,7 @@
     {
       "label": "backend.messaging.queues_and_consumers",
       "language": "Python",
-      "count": 1
+      "count": 3
     },
     {
       "label": "backend.messaging.queues_and_consumers",
@@ -1374,7 +1349,7 @@
     {
       "label": "backend.messaging.queues_and_consumers",
       "language": "TypeScript",
-      "count": 3
+      "count": 1
     },
     {
       "label": "backend.observability.health_checks",
@@ -1409,11 +1384,6 @@
     {
       "label": "backend.observability.health_checks",
       "language": "Python",
-      "count": 1
-    },
-    {
-      "label": "backend.observability.health_checks",
-      "language": "TypeScript",
       "count": 3
     },
     {
@@ -1423,8 +1393,13 @@
     },
     {
       "label": "backend.observability.logging_sensitive_data",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
+    },
+    {
+      "label": "backend.observability.logging_sensitive_data",
+      "language": "TypeScript",
+      "count": 1
     },
     {
       "label": "backend.observability.metrics",
@@ -1464,7 +1439,7 @@
     {
       "label": "backend.observability.metrics",
       "language": "Python",
-      "count": 2
+      "count": 4
     },
     {
       "label": "backend.observability.metrics",
@@ -1484,7 +1459,7 @@
     {
       "label": "backend.observability.metrics",
       "language": "TypeScript",
-      "count": 4
+      "count": 2
     },
     {
       "label": "backend.observability.structured_logging",
@@ -1499,7 +1474,7 @@
     {
       "label": "backend.observability.structured_logging",
       "language": "Python",
-      "count": 2
+      "count": 4
     },
     {
       "label": "backend.observability.structured_logging",
@@ -1514,7 +1489,7 @@
     {
       "label": "backend.observability.structured_logging",
       "language": "TypeScript",
-      "count": 4
+      "count": 1
     },
     {
       "label": "backend.observability.tracing",
@@ -1538,8 +1513,13 @@
     },
     {
       "label": "backend.observability.tracing",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 3
+    },
+    {
+      "label": "backend.observability.tracing",
+      "language": "TypeScript",
+      "count": 1
     },
     {
       "label": "backend.performance.profiling_and_hot_paths",
@@ -1649,12 +1629,12 @@
     {
       "label": "backend.resilience.graceful_degradation",
       "language": "Python",
-      "count": 1
+      "count": 2
     },
     {
       "label": "backend.resilience.graceful_degradation",
       "language": "TypeScript",
-      "count": 2
+      "count": 1
     },
     {
       "label": "backend.resilience.graceful_shutdown",
@@ -1714,7 +1694,7 @@
     {
       "label": "backend.resilience.rate_limiting",
       "language": "TypeScript",
-      "count": 2
+      "count": 1
     },
     {
       "label": "backend.resilience.retries_and_backoff",
@@ -1749,7 +1729,7 @@
     {
       "label": "backend.resilience.retries_and_backoff",
       "language": "Python",
-      "count": 1
+      "count": 3
     },
     {
       "label": "backend.resilience.retries_and_backoff",
@@ -1769,7 +1749,7 @@
     {
       "label": "backend.resilience.retries_and_backoff",
       "language": "TypeScript",
-      "count": 3
+      "count": 1
     },
     {
       "label": "backend.resilience.timeouts",
@@ -1829,7 +1809,7 @@
     {
       "label": "backend.resilience.timeouts",
       "language": "TypeScript",
-      "count": 2
+      "count": 1
     },
     {
       "label": "backend.resources.context_cancellation",
@@ -1912,11 +1892,6 @@
       "count": 1
     },
     {
-      "label": "backend.resources.streaming_large_payloads",
-      "language": "TypeScript",
-      "count": 2
-    },
-    {
       "label": "backend.security.audit_logging",
       "language": "Go",
       "count": 1
@@ -1924,14 +1899,14 @@
     {
       "label": "backend.security.audit_logging",
       "language": "Python",
-      "count": 3
-    },
-    {
-      "label": "backend.security.audit_logging",
-      "language": "TypeScript",
       "count": 4
     },
     {
+      "label": "backend.security.audit_logging",
+      "language": "TypeScript",
+      "count": 1
+    },
+    {
       "label": "backend.security.authentication",
       "language": "Go",
       "count": 1
@@ -1949,7 +1924,7 @@
     {
       "label": "backend.security.authentication",
       "language": "Python",
-      "count": 2
+      "count": 3
     },
     {
       "label": "backend.security.authentication",
@@ -1959,7 +1934,7 @@
     {
       "label": "backend.security.authentication",
       "language": "TypeScript",
-      "count": 3
+      "count": 2
     },
     {
       "label": "backend.security.authorization_checks",
@@ -1989,7 +1964,7 @@
     {
       "label": "backend.security.authorization_checks",
       "language": "Python",
-      "count": 2
+      "count": 3
     },
     {
       "label": "backend.security.authorization_checks",
@@ -2033,13 +2008,18 @@
     },
     {
       "label": "backend.security.input_sanitization",
+      "language": "Python",
+      "count": 3
+    },
+    {
+      "label": "backend.security.input_sanitization",
       "language": "Rust",
       "count": 1
     },
     {
       "label": "backend.security.input_sanitization",
       "language": "TypeScript",
-      "count": 3
+      "count": 1
     },
     {
       "label": "backend.security.multi_tenant_isolation",
@@ -2064,7 +2044,7 @@
     {
       "label": "backend.security.multi_tenant_isolation",
       "language": "Python",
-      "count": 1
+      "count": 2
     },
     {
       "label": "backend.security.multi_tenant_isolation",
@@ -2089,11 +2069,6 @@
     {
       "label": "backend.security.secrets_handling",
       "language": "Python",
-      "count": 1
-    },
-    {
-      "label": "backend.security.secrets_handling",
-      "language": "TypeScript",
       "count": 4
     },
     {
@@ -2105,6 +2080,11 @@
       "label": "backend.security.session_and_token_handling",
       "language": "JavaScript",
       "count": 1
+    },
+    {
+      "label": "backend.security.session_and_token_handling",
+      "language": "Python",
+      "count": 2
     },
     {
       "label": "backend.security.session_and_token_handling",
@@ -2179,7 +2159,7 @@
     {
       "label": "backend.testing.integration_tests",
       "language": "TypeScript",
-      "count": 2
+      "count": 1
     },
     {
       "label": "backend.testing.mocking_and_fakes",
@@ -2279,7 +2259,7 @@
     {
       "label": "backend.testing.unit_test_design",
       "language": "TypeScript",
-      "count": 3
+      "count": 2
     }
   ]
 }

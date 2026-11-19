@@ -3,42 +3,42 @@
   "targets": [
     {
       "label": "backend.security.audit_logging",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 4
     },
     {
       "label": "backend.observability.structured_logging",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 3
     },
     {
       "label": "backend.messaging.queues_and_consumers",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 3
     },
     {
       "label": "backend.observability.logging_sensitive_data",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.security.secrets_handling",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.api.serialization_and_deserialization",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.messaging.deduplication",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     },
     {
       "label": "backend.security.authorization_checks",
-      "language": "TypeScript",
+      "language": "Python",
       "count": 2
     }
   ]
