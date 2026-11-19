@@ -3,26 +3,30 @@
   "targets": [
     {
       "label": "backend.config.feature_flags",
-      "count": 7
+      "count": 5
     },
     {
       "label": "backend.security.authentication",
-      "count": 4
+      "count": 3
+    },
+    {
+      "label": "backend.security.session_and_token_handling",
+      "count": 3
     },
     {
       "label": "backend.observability.metrics",
       "count": 3
     },
     {
-      "label": "backend.security.session_and_token_handling",
-      "count": 2
-    },
-    {
-      "label": "backend.data.migrations",
-      "count": 2
-    },
-    {
       "label": "backend.api.rest_design",
+      "count": 2
+    },
+    {
+      "label": "backend.api.request_validation",
+      "count": 2
+    },
+    {
+      "label": "backend.testing.unit_test_design",
       "count": 2
     }
   ]

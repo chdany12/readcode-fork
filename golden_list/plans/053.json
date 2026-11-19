@@ -6,11 +6,19 @@
       "count": 3
     },
     {
-      "label": "backend.caching.cache_invalidation",
+      "label": "backend.api.request_validation",
       "count": 3
     },
     {
-      "label": "backend.caching.ttls_and_expiry",
+      "label": "backend.security.input_sanitization",
+      "count": 2
+    },
+    {
+      "label": "backend.concurrency.async_await_pitfalls",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.rate_limiting",
       "count": 2
     },
     {
@@ -22,19 +30,11 @@
       "count": 2
     },
     {
-      "label": "backend.resilience.rate_limiting",
+      "label": "backend.resilience.timeouts",
       "count": 2
     },
     {
-      "label": "backend.api.request_validation",
-      "count": 2
-    },
-    {
-      "label": "backend.observability.metrics",
-      "count": 2
-    },
-    {
-      "label": "backend.performance.profiling_and_hot_paths",
+      "label": "backend.caching.cache_invalidation",
       "count": 2
     }
   ]

@@ -3,23 +3,23 @@
   "targets": [
     {
       "label": "backend.performance.profiling_and_hot_paths",
-      "count": 9
+      "count": 7
     },
     {
       "label": "backend.concurrency.thread_and_worker_pools",
-      "count": 5
-    },
-    {
-      "label": "backend.concurrency.race_conditions",
-      "count": 2
-    },
-    {
-      "label": "backend.resources.memory_leaks",
-      "count": 2
+      "count": 4
     },
     {
       "label": "backend.concurrency.atomic_operations",
-      "count": 2
+      "count": 3
+    },
+    {
+      "label": "backend.concurrency.race_conditions",
+      "count": 3
+    },
+    {
+      "label": "backend.resources.memory_leaks",
+      "count": 3
     }
   ]
 }

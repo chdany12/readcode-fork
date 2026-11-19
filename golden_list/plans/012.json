@@ -3,18 +3,6 @@
   "targets": [
     {
       "label": "backend.config.feature_flags",
-      "count": 9
-    },
-    {
-      "label": "backend.data.pagination",
-      "count": 3
-    },
-    {
-      "label": "backend.security.authorization_checks",
-      "count": 2
-    },
-    {
-      "label": "backend.observability.metrics",
       "count": 2
     },
     {
@@ -23,6 +11,34 @@
     },
     {
       "label": "backend.performance.profiling_and_hot_paths",
+      "count": 2
+    },
+    {
+      "label": "backend.data.n_plus_one_queries",
+      "count": 2
+    },
+    {
+      "label": "backend.api.rest_design",
+      "count": 2
+    },
+    {
+      "label": "backend.api.request_validation",
+      "count": 2
+    },
+    {
+      "label": "backend.security.authorization_checks",
+      "count": 2
+    },
+    {
+      "label": "backend.design.interface_design",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
       "count": 2
     }
   ]

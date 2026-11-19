@@ -3,26 +3,34 @@
   "targets": [
     {
       "label": "backend.design.interface_design",
-      "count": 6
+      "count": 4
     },
     {
       "label": "backend.resilience.graceful_degradation",
-      "count": 3
+      "count": 2
     },
     {
       "label": "backend.api.serialization_and_deserialization",
-      "count": 3
+      "count": 2
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "count": 2
+    },
+    {
+      "label": "backend.design.coupling_and_cohesion",
+      "count": 2
     },
     {
       "label": "backend.resilience.timeouts",
       "count": 2
     },
     {
-      "label": "backend.api.versioning",
+      "label": "backend.api.rest_design",
       "count": 2
     },
     {
-      "label": "backend.security.input_sanitization",
+      "label": "backend.api.request_validation",
       "count": 2
     },
     {

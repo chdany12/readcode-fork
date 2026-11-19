@@ -2,22 +2,6 @@
   "taxonomyVersion": "0.1.0",
   "targets": [
     {
-      "label": "backend.integrations.third_party_adapters",
-      "count": 4
-    },
-    {
-      "label": "backend.api.rest_design",
-      "count": 3
-    },
-    {
-      "label": "backend.resilience.timeouts",
-      "count": 3
-    },
-    {
-      "label": "backend.resilience.retries_and_backoff",
-      "count": 2
-    },
-    {
       "label": "backend.data.n_plus_one_queries",
       "count": 2
     },
@@ -30,7 +14,31 @@
       "count": 2
     },
     {
-      "label": "backend.messaging.queues_and_consumers",
+      "label": "backend.security.authorization_checks",
+      "count": 2
+    },
+    {
+      "label": "backend.config.feature_flags",
+      "count": 2
+    },
+    {
+      "label": "backend.integrations.third_party_adapters",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "count": 2
+    },
+    {
+      "label": "backend.api.rest_design",
+      "count": 2
+    },
+    {
+      "label": "backend.api.request_validation",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.timeouts",
       "count": 2
     }
   ]

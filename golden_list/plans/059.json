@@ -3,14 +3,10 @@
   "targets": [
     {
       "label": "backend.testing.flaky_tests",
-      "count": 7
+      "count": 4
     },
     {
       "label": "backend.caching.cache_invalidation",
-      "count": 3
-    },
-    {
-      "label": "backend.testing.integration_tests",
       "count": 3
     },
     {
@@ -22,7 +18,19 @@
       "count": 2
     },
     {
+      "label": "backend.resilience.retries_and_backoff",
+      "count": 2
+    },
+    {
       "label": "backend.observability.metrics",
+      "count": 2
+    },
+    {
+      "label": "backend.testing.integration_tests",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.timeouts",
       "count": 2
     }
   ]

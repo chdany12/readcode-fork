@@ -2,11 +2,27 @@
   "taxonomyVersion": "0.1.0",
   "targets": [
     {
-      "label": "backend.config.feature_flags",
-      "count": 8
+      "label": "backend.performance.profiling_and_hot_paths",
+      "count": 4
     },
     {
-      "label": "backend.data.pagination",
+      "label": "backend.config.feature_flags",
+      "count": 3
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "count": 3
+    },
+    {
+      "label": "backend.data.n_plus_one_queries",
+      "count": 2
+    },
+    {
+      "label": "backend.api.rest_design",
+      "count": 2
+    },
+    {
+      "label": "backend.api.request_validation",
       "count": 2
     },
     {
@@ -14,19 +30,7 @@
       "count": 2
     },
     {
-      "label": "backend.observability.metrics",
-      "count": 2
-    },
-    {
-      "label": "backend.testing.unit_test_design",
-      "count": 2
-    },
-    {
       "label": "backend.design.interface_design",
-      "count": 2
-    },
-    {
-      "label": "backend.design.coupling_and_cohesion",
       "count": 2
     }
   ]

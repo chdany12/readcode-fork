@@ -3,26 +3,38 @@
   "targets": [
     {
       "label": "backend.distributed.sharding_and_partitioning",
-      "count": 5
+      "count": 3
     },
     {
       "label": "backend.messaging.queues_and_consumers",
-      "count": 4
+      "count": 3
     },
     {
       "label": "backend.messaging.at_least_once_delivery",
-      "count": 3
+      "count": 2
     },
     {
       "label": "backend.messaging.backpressure",
-      "count": 3
+      "count": 2
     },
     {
       "label": "backend.performance.profiling_and_hot_paths",
-      "count": 3
+      "count": 2
+    },
+    {
+      "label": "backend.messaging.deduplication",
+      "count": 2
+    },
+    {
+      "label": "backend.messaging.message_ordering",
+      "count": 2
     },
     {
       "label": "backend.observability.metrics",
+      "count": 2
+    },
+    {
+      "label": "backend.resources.streaming_large_payloads",
       "count": 2
     }
   ]

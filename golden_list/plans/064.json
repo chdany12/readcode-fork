@@ -3,18 +3,34 @@
   "targets": [
     {
       "label": "backend.data.transactions_and_isolation_levels",
-      "count": 6
-    },
-    {
-      "label": "backend.data.money_and_ledgers",
-      "count": 6
+      "count": 4
     },
     {
       "label": "backend.security.audit_logging",
-      "count": 6
+      "count": 3
+    },
+    {
+      "label": "backend.data.money_and_ledgers",
+      "count": 3
+    },
+    {
+      "label": "backend.concurrency.async_await_pitfalls",
+      "count": 2
+    },
+    {
+      "label": "backend.api.idempotency",
+      "count": 2
     },
     {
       "label": "backend.concurrency.race_conditions",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.metrics",
+      "count": 2
+    },
+    {
+      "label": "backend.api.request_validation",
       "count": 2
     }
   ]

@@ -3,23 +3,15 @@
   "targets": [
     {
       "label": "backend.testing.unit_test_design",
-      "count": 7
+      "count": 4
     },
     {
-      "label": "backend.api.rest_design",
+      "label": "backend.testing.mocking_and_fakes",
       "count": 3
     },
     {
-      "label": "backend.errors.error_propagation",
-      "count": 2
-    },
-    {
-      "label": "backend.observability.metrics",
-      "count": 2
-    },
-    {
       "label": "backend.testing.integration_tests",
-      "count": 2
+      "count": 3
     },
     {
       "label": "backend.design.interface_design",
@@ -27,6 +19,18 @@
     },
     {
       "label": "backend.design.coupling_and_cohesion",
+      "count": 2
+    },
+    {
+      "label": "backend.errors.error_propagation",
+      "count": 2
+    },
+    {
+      "label": "backend.design.layering",
+      "count": 2
+    },
+    {
+      "label": "backend.api.rest_design",
       "count": 2
     }
   ]

@@ -3,23 +3,23 @@
   "targets": [
     {
       "label": "backend.testing.unit_test_design",
-      "count": 8
+      "count": 10
+    },
+    {
+      "label": "backend.design.interface_design",
+      "count": 4
     },
     {
       "label": "backend.data.n_plus_one_queries",
-      "count": 3
+      "count": 2
     },
     {
-      "label": "backend.api.rest_design",
-      "count": 3
+      "label": "backend.api.request_validation",
+      "count": 2
     },
     {
-      "label": "backend.errors.error_propagation",
-      "count": 3
-    },
-    {
-      "label": "backend.testing.mocking_and_fakes",
-      "count": 3
+      "label": "backend.data.transactions_and_isolation_levels",
+      "count": 2
     }
   ]
 }
