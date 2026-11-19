@@ -3,7 +3,7 @@
   "targets": [
     {
       "label": "backend.security.authorization_checks",
-      "count": 5
+      "count": 4
     },
     {
       "label": "backend.resilience.rate_limiting",
@@ -11,10 +11,10 @@
     },
     {
       "label": "backend.data.n_plus_one_queries",
-      "count": 2
+      "count": 3
     },
     {
-      "label": "backend.caching.cache_invalidation",
+      "label": "backend.data.orm_pitfalls",
       "count": 2
     },
     {
@@ -22,15 +22,15 @@
       "count": 2
     },
     {
-      "label": "backend.data.orm_pitfalls",
-      "count": 2
-    },
-    {
-      "label": "backend.messaging.queues_and_consumers",
+      "label": "backend.caching.cache_invalidation",
       "count": 2
     },
     {
       "label": "backend.observability.metrics",
+      "count": 2
+    },
+    {
+      "label": "backend.data.migrations",
       "count": 2
     }
   ]

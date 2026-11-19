@@ -3,7 +3,19 @@
   "targets": [
     {
       "label": "backend.performance.profiling_and_hot_paths",
-      "count": 8
+      "count": 5
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "count": 3
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.metrics",
+      "count": 2
     },
     {
       "label": "backend.concurrency.race_conditions",
@@ -14,19 +26,11 @@
       "count": 2
     },
     {
-      "label": "backend.resilience.timeouts",
+      "label": "backend.distributed.sharding_and_partitioning",
       "count": 2
     },
     {
-      "label": "backend.resilience.retries_and_backoff",
-      "count": 2
-    },
-    {
-      "label": "backend.caching.cache_invalidation",
-      "count": 2
-    },
-    {
-      "label": "backend.observability.metrics",
+      "label": "backend.resilience.graceful_degradation",
       "count": 2
     }
   ]

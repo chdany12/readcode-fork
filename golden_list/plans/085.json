@@ -7,30 +7,30 @@
     },
     {
       "label": "backend.data.orm_pitfalls",
-      "count": 3
-    },
-    {
-      "label": "backend.performance.profiling_and_hot_paths",
-      "count": 3
-    },
-    {
-      "label": "backend.security.authorization_checks",
-      "count": 2
-    },
-    {
-      "label": "backend.security.multi_tenant_isolation",
-      "count": 2
+      "count": 4
     },
     {
       "label": "backend.data.migrations",
       "count": 2
     },
     {
-      "label": "backend.caching.cache_invalidation",
+      "label": "backend.security.authorization_checks",
       "count": 2
     },
     {
-      "label": "backend.messaging.queues_and_consumers",
+      "label": "backend.performance.profiling_and_hot_paths",
+      "count": 2
+    },
+    {
+      "label": "backend.api.rest_design",
+      "count": 2
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "count": 2
+    },
+    {
+      "label": "backend.api.request_validation",
       "count": 2
     }
   ]

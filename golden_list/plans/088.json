@@ -2,11 +2,11 @@
   "taxonomyVersion": "0.1.0",
   "targets": [
     {
-      "label": "backend.config.feature_flags",
+      "label": "backend.testing.flaky_tests",
       "count": 3
     },
     {
-      "label": "backend.testing.flaky_tests",
+      "label": "backend.testing.integration_tests",
       "count": 3
     },
     {
@@ -14,15 +14,19 @@
       "count": 2
     },
     {
+      "label": "backend.config.configuration_loading",
+      "count": 2
+    },
+    {
+      "label": "backend.config.feature_flags",
+      "count": 2
+    },
+    {
       "label": "backend.config.environment_specific_behaviour",
       "count": 2
     },
     {
-      "label": "backend.testing.integration_tests",
-      "count": 2
-    },
-    {
-      "label": "backend.resilience.retries_and_backoff",
+      "label": "backend.testing.unit_test_design",
       "count": 2
     },
     {
@@ -30,11 +34,7 @@
       "count": 2
     },
     {
-      "label": "backend.data.migrations",
-      "count": 2
-    },
-    {
-      "label": "backend.observability.metrics",
+      "label": "backend.testing.mocking_and_fakes",
       "count": 2
     }
   ]

@@ -3,15 +3,23 @@
   "targets": [
     {
       "label": "backend.testing.flaky_tests",
-      "count": 6
+      "count": 5
     },
     {
-      "label": "backend.observability.metrics",
+      "label": "backend.testing.unit_test_design",
       "count": 3
+    },
+    {
+      "label": "backend.testing.mocking_and_fakes",
+      "count": 2
     },
     {
       "label": "backend.testing.integration_tests",
-      "count": 3
+      "count": 2
+    },
+    {
+      "label": "backend.caching.cache_invalidation",
+      "count": 2
     },
     {
       "label": "backend.config.configuration_loading",
@@ -22,11 +30,7 @@
       "count": 2
     },
     {
-      "label": "backend.concurrency.async_await_pitfalls",
-      "count": 2
-    },
-    {
-      "label": "backend.api.rest_design",
+      "label": "backend.config.defaults_and_validation",
       "count": 2
     }
   ]

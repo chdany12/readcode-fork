@@ -3,18 +3,38 @@
   "targets": [
     {
       "label": "backend.api.rest_design",
-      "count": 6
+      "count": 3
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "count": 3
     },
     {
       "label": "backend.performance.profiling_and_hot_paths",
-      "count": 6
+      "count": 2
     },
     {
-      "label": "backend.data.nosql_modeling",
-      "count": 6
+      "label": "backend.api.request_validation",
+      "count": 2
     },
     {
-      "label": "backend.concurrency.race_conditions",
+      "label": "backend.api.status_codes_and_error_responses",
+      "count": 2
+    },
+    {
+      "label": "backend.testing.mocking_and_fakes",
+      "count": 2
+    },
+    {
+      "label": "backend.design.dependency_injection",
+      "count": 2
+    },
+    {
+      "label": "backend.design.layering",
+      "count": 2
+    },
+    {
+      "label": "backend.design.interface_design",
       "count": 2
     }
   ]

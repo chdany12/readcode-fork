@@ -3,18 +3,10 @@
   "targets": [
     {
       "label": "backend.testing.unit_test_design",
-      "count": 7
-    },
-    {
-      "label": "backend.design.interface_design",
       "count": 4
     },
     {
-      "label": "backend.concurrency.race_conditions",
-      "count": 3
-    },
-    {
-      "label": "backend.concurrency.thread_and_worker_pools",
+      "label": "backend.testing.mocking_and_fakes",
       "count": 2
     },
     {
@@ -22,7 +14,27 @@
       "count": 2
     },
     {
-      "label": "backend.distributed.sharding_and_partitioning",
+      "label": "backend.design.dependency_injection",
+      "count": 2
+    },
+    {
+      "label": "backend.design.layering",
+      "count": 2
+    },
+    {
+      "label": "backend.design.interface_design",
+      "count": 2
+    },
+    {
+      "label": "backend.design.coupling_and_cohesion",
+      "count": 2
+    },
+    {
+      "label": "backend.errors.error_propagation",
+      "count": 2
+    },
+    {
+      "label": "backend.errors.error_wrapping_and_context",
       "count": 2
     }
   ]

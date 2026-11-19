@@ -2,12 +2,16 @@
   "taxonomyVersion": "0.1.0",
   "targets": [
     {
-      "label": "backend.testing.unit_test_design",
-      "count": 5
+      "label": "backend.integrations.third_party_adapters",
+      "count": 3
     },
     {
-      "label": "backend.integrations.third_party_adapters",
-      "count": 5
+      "label": "backend.api.rest_design",
+      "count": 3
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "count": 2
     },
     {
       "label": "backend.resilience.timeouts",
@@ -18,15 +22,19 @@
       "count": 2
     },
     {
-      "label": "backend.api.rest_design",
+      "label": "backend.api.request_validation",
       "count": 2
     },
     {
-      "label": "backend.observability.structured_logging",
+      "label": "backend.testing.integration_tests",
       "count": 2
     },
     {
-      "label": "backend.observability.metrics",
+      "label": "backend.testing.mocking_and_fakes",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.graceful_degradation",
       "count": 2
     }
   ]

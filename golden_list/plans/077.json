@@ -2,16 +2,32 @@
   "taxonomyVersion": "0.1.0",
   "targets": [
     {
+      "label": "backend.messaging.deduplication",
+      "count": 3
+    },
+    {
+      "label": "backend.integrations.third_party_adapters",
+      "count": 3
+    },
+    {
       "label": "backend.api.request_validation",
-      "count": 6
+      "count": 3
+    },
+    {
+      "label": "backend.api.idempotency",
+      "count": 3
     },
     {
       "label": "backend.messaging.queues_and_consumers",
-      "count": 6
+      "count": 2
     },
     {
-      "label": "backend.messaging.deduplication",
-      "count": 6
+      "label": "backend.messaging.at_least_once_delivery",
+      "count": 2
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "count": 2
     },
     {
       "label": "backend.resilience.retries_and_backoff",

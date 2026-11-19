@@ -2,15 +2,7 @@
   "taxonomyVersion": "0.1.0",
   "targets": [
     {
-      "label": "backend.concurrency.race_conditions",
-      "count": 2
-    },
-    {
       "label": "backend.resilience.timeouts",
-      "count": 2
-    },
-    {
-      "label": "backend.resilience.retries_and_backoff",
       "count": 2
     },
     {
@@ -18,11 +10,11 @@
       "count": 2
     },
     {
-      "label": "backend.messaging.queues_and_consumers",
+      "label": "backend.testing.integration_tests",
       "count": 2
     },
     {
-      "label": "backend.messaging.message_ordering",
+      "label": "backend.concurrency.race_conditions",
       "count": 2
     },
     {
@@ -30,15 +22,23 @@
       "count": 2
     },
     {
-      "label": "backend.testing.integration_tests",
+      "label": "backend.resilience.retries_and_backoff",
       "count": 2
     },
     {
-      "label": "backend.performance.profiling_and_hot_paths",
+      "label": "backend.api.rest_design",
       "count": 2
     },
     {
-      "label": "backend.realtime.connection_fanout",
+      "label": "backend.observability.metrics",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.health_checks",
+      "count": 2
+    },
+    {
+      "label": "backend.testing.mocking_and_fakes",
       "count": 2
     }
   ]

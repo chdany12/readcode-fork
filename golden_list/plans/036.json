@@ -2,15 +2,15 @@
   "taxonomyVersion": "0.1.0",
   "targets": [
     {
-      "label": "backend.distributed.sharding_and_partitioning",
-      "count": 6
-    },
-    {
       "label": "backend.performance.profiling_and_hot_paths",
-      "count": 6
+      "count": 3
     },
     {
-      "label": "backend.concurrency.race_conditions",
+      "label": "backend.distributed.sharding_and_partitioning",
+      "count": 3
+    },
+    {
+      "label": "backend.data.transactions_and_isolation_levels",
       "count": 2
     },
     {
@@ -18,11 +18,23 @@
       "count": 2
     },
     {
-      "label": "backend.concurrency.thread_and_worker_pools",
+      "label": "backend.security.encryption_at_rest_and_in_transit",
       "count": 2
     },
     {
-      "label": "backend.caching.cache_invalidation",
+      "label": "backend.concurrency.race_conditions",
+      "count": 2
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "count": 2
+    },
+    {
+      "label": "backend.resources.memory_leaks",
+      "count": 2
+    },
+    {
+      "label": "backend.resources.streaming_large_payloads",
       "count": 2
     }
   ]

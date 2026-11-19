@@ -3,18 +3,42 @@
   "targets": [
     {
       "label": "backend.concurrency.race_conditions",
-      "count": 6
+      "count": 2
     },
     {
-      "label": "backend.observability.metrics",
-      "count": 6
+      "label": "backend.resilience.timeouts",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "count": 2
     },
     {
       "label": "backend.distributed.replication_and_consensus",
-      "count": 6
+      "count": 2
+    },
+    {
+      "label": "backend.security.secrets_handling",
+      "count": 2
+    },
+    {
+      "label": "backend.security.encryption_at_rest_and_in_transit",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.metrics",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.health_checks",
+      "count": 2
     },
     {
       "label": "backend.concurrency.locking_and_lock_ordering",
+      "count": 2
+    },
+    {
+      "label": "backend.concurrency.thread_and_worker_pools",
       "count": 2
     }
   ]

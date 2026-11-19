@@ -2,8 +2,20 @@
   "taxonomyVersion": "0.1.0",
   "targets": [
     {
+      "label": "backend.config.feature_flags",
+      "count": 3
+    },
+    {
       "label": "backend.api.rest_design",
-      "count": 8
+      "count": 3
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.graceful_degradation",
+      "count": 2
     },
     {
       "label": "backend.data.pagination",
@@ -14,19 +26,15 @@
       "count": 2
     },
     {
+      "label": "backend.caching.cache_aside_vs_write_through",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "count": 2
+    },
+    {
       "label": "backend.caching.ttls_and_expiry",
-      "count": 2
-    },
-    {
-      "label": "backend.security.authentication",
-      "count": 2
-    },
-    {
-      "label": "backend.observability.metrics",
-      "count": 2
-    },
-    {
-      "label": "backend.config.feature_flags",
       "count": 2
     }
   ]

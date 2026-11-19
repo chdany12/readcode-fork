@@ -3,26 +3,26 @@
   "targets": [
     {
       "label": "backend.integrations.third_party_adapters",
-      "count": 8
+      "count": 5
+    },
+    {
+      "label": "backend.config.feature_flags",
+      "count": 3
     },
     {
       "label": "backend.resilience.retries_and_backoff",
-      "count": 2
-    },
-    {
-      "label": "backend.resilience.rate_limiting",
-      "count": 2
-    },
-    {
-      "label": "backend.api.idempotency",
-      "count": 2
+      "count": 3
     },
     {
       "label": "backend.messaging.queues_and_consumers",
+      "count": 3
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
       "count": 2
     },
     {
-      "label": "backend.messaging.deduplication",
+      "label": "backend.resilience.timeouts",
       "count": 2
     },
     {
