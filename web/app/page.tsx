@@ -22,7 +22,7 @@ export default function Home() {
             <section className="relative py-16 text-center">
                 {/* soft glow behind the hero */}
                 <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 mx-auto h-72 max-w-3xl rounded-full bg-gradient-to-r from-sky-500/20 via-violet-500/20 to-emerald-500/20 blur-3xl" />
-                <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">Practice reading code for the role you want</h1>
+                <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">Practice reading code the way your interview will test it</h1>
                 <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
                     Paste a job posting. We weigh the concepts the role depends on and build a code-reading practice plan in that mix.
                 </p>
@@ -32,7 +32,7 @@ export default function Home() {
             </section>
 
             <h2 className="mt-6 text-lg font-semibold">Or start with a big tech role</h2>
-            <p className="text-sm text-muted-foreground">Practice plans built from real Google, Amazon, Meta and Apple postings. Each bar shows what the role tests, by share of practice.</p>
+            <p className="text-sm text-muted-foreground">Practice plans built from real Google, Amazon, Meta and Apple postings.</p>
             <Suspense fallback={<p className="mt-8 text-muted-foreground">loading…</p>}>
                 <Companies />
             </Suspense>
@@ -82,3 +82,4 @@ function CompanyTile({ name, logo, jobs }: { name: string; logo: string; jobs: J
         </Card>
     );
 }
+

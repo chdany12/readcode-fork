@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ChevronRight, FileSearch } from "lucide-react";
 import type { JobMatch } from "@/lib/jobs";
-import { jobTitle, topicName } from "@/lib/format";
+import { areaName as areaLabel, jobTitle, topicName } from "@/lib/format";
 
 const PREVIEW = 3;
 
@@ -22,6 +22,7 @@ const PROFILE_POWER = 3;
 export default function RoleCard({ job }: { job: JobMatch }) {
     const [hovered, setHovered] = useState<string | null>(null);
     const [pinned, setPinned] = useState<string | null>(null);
+    const [probe, setProbe] = useState<string | null>(null); // concept under the pointer in the chart
     const active = hovered ?? pinned;
 
     const withExamples = job.topics.filter((t) => t.examples.length > 0);
@@ -36,10 +37,14 @@ export default function RoleCard({ job }: { job: JobMatch }) {
         ? activeTopic.examples.slice(0, PREVIEW).map((e) => ({ ...e, topic: activeTopic.label }))
         : withExamples.slice(0, PREVIEW).map((t) => ({ ...t.examples[0], topic: t.label }));
 
-    const total = job.topics.reduce((s, t) => s + t.needed, 0) || 1;
+    // topic mix widths come from the posting's weights (cubed like the chart), not from plan counts
+    const size = (t: { weight: number }) => t.weight ** PROFILE_POWER;
+    const total = job.topics.reduce((s, t) => s + size(t), 0) || 1;
     const pct = (n: number) => Math.round((n / total) * 100);
     const rest = job.topics.filter((t) => !colored.includes(t.label));
     const top = Math.max(...job.profile.map((p) => p.weight ** PROFILE_POWER)) || 1;
+    const probed = job.profile.find((p) => p.label === probe);
+    const inPlan = (label: string) => job.topics.some((t) => t.label === label);
 
     // shared handlers for anything that represents a topic
     const topicProps = (label: string) => ({
@@ -58,34 +63,43 @@ export default function RoleCard({ job }: { job: JobMatch }) {
                 </div>
             </Link>
 
-            {/* concept chart: every taxonomy concept, in taxonomy order */}
-            <div className="mt-3 flex h-8 items-end gap-px" aria-hidden>
+            {/* concept chart: every taxonomy concept, in taxonomy order; hover to read a bar */}
+            <div className="mt-3 flex h-8 items-end gap-px" onMouseLeave={() => { setProbe(null); setHovered(null); }}>
                 {job.profile.map((p) => (
                     <span
                         key={p.label}
-                        title={p.weight > 0 ? `${topicName(p.label)}: ${Math.round(p.weight * 100)}%` : undefined}
-                        className="min-w-0 flex-1 rounded-t-[1px] transition-opacity duration-200"
-                        style={{
-                            height: p.weight > 0 ? `${Math.max(((p.weight ** PROFILE_POWER) / top) * 100, 3)}%` : "1px",
-                            background: p.label === active && !colored.includes(p.label) ? "var(--foreground)" : colored.includes(p.label) ? colorOf(p.label) : "var(--muted-foreground)",
-                            opacity: active ? (p.label === active ? 1 : 0.15) : colored.includes(p.label) ? 1 : p.weight > 0 ? 0.45 : 0.2,
-                        }}
-                    />
+                        onMouseEnter={() => { setProbe(p.label); setHovered(inPlan(p.label) ? p.label : null); }}
+                        className="flex h-full min-w-0 flex-1 cursor-default items-end"
+                    >
+                        <span
+                            className="block w-full rounded-t-[1px] transition-opacity duration-200"
+                            style={{
+                                height: p.weight > 0 ? `${Math.max(((p.weight ** PROFILE_POWER) / top) * 100, 3)}%` : "1px",
+                                background: (p.label === active || p.label === probe) && !colored.includes(p.label) ? "var(--foreground)" : colored.includes(p.label) ? colorOf(p.label) : "var(--muted-foreground)",
+                                opacity: probe ? (p.label === probe ? 1 : 0.25) : active ? (p.label === active ? 1 : 0.15) : colored.includes(p.label) ? 1 : p.weight > 0 ? 0.45 : 0.2,
+                            }}
+                        />
+                    </span>
                 ))}
+            </div>
+            <div className="mt-1 h-4 truncate text-[11px] text-muted-foreground">
+                {probed
+                    ? <>{areaLabel(probed.label)} › <span className="text-foreground">{topicName(probed.label)}</span> · {Math.round(probed.weight * 100)}%{inPlan(probed.label) ? " · in plan" : ""}</>
+                    : null}
             </div>
 
             {/* topic mix: each segment is a topic's share of the plan */}
-            <div className="mt-3 flex h-2 gap-0.5">
+            <div className="mt-2 flex h-2 gap-0.5">
                 {job.topics.map((t) => (
                     <button
                         key={t.label}
                         type="button"
-                        aria-label={`${topicName(t.label)}: ${pct(t.needed)}%`}
-                        title={`${topicName(t.label)}: ${pct(t.needed)}%`}
+                        aria-label={`${topicName(t.label)}: ${pct(size(t))}%`}
+                        title={`${topicName(t.label)}: ${pct(size(t))}%`}
                         {...topicProps(t.label)}
                         className="cursor-pointer transition-all duration-200 first:rounded-l-full last:rounded-r-full"
                         style={{
-                            width: `${(t.needed / total) * 100}%`,
+                            width: `${(size(t) / total) * 100}%`,
                             background: t.label === active && !colored.includes(t.label) ? "var(--foreground)" : colorOf(t.label),
                             opacity: dim(t.label) ? 0.3 : 1,
                             transform: t.label === active ? "scaleY(1.75)" : undefined,
@@ -103,14 +117,14 @@ export default function RoleCard({ job }: { job: JobMatch }) {
                         >
                             <span className="size-2 rounded-full" style={{ background: colorOf(label) }} />
                             <span className="text-foreground">{topicName(label)}</span>
-                            {pct(job.topics.find((t) => t.label === label)!.needed)}%
+                            {pct(size(job.topics.find((t) => t.label === label)!))}%
                         </button>
                     </li>
                 ))}
                 {rest.length > 0 && (
                     <li className={`flex items-center gap-1.5 ${active && colored.includes(active) ? "opacity-40" : ""}`} title={rest.map((t) => topicName(t.label)).join(", ")}>
                         <span className="size-2 rounded-full" style={{ background: GREY }} />
-                        {rest.length} more topics {pct(rest.reduce((s, t) => s + t.needed, 0))}%
+                        {rest.length} more topics {pct(rest.reduce((s, t) => s + size(t), 0))}%
                     </li>
                 )}
             </ul>
