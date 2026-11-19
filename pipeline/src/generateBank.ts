@@ -1,19 +1,21 @@
-// Generate the example bank from a master plan: one folder per example, examples/NNN-<topic>/.
-// Numbering follows the plan's order (each target's count, in sequence). Existing examples are
-// skipped, so an interrupted run resumes where it left off.
+// Generate the example bank from a master plan. For each (topic, language) target, examples already in
+// --out count toward it (read from each folder's public.json), and only the shortfall is generated.
+// New examples go to <out>/<topic>.<language>.<k>/ (e.g. api-idempotency.python.1), where k counts that
+// pair's examples, so names never collide with existing folders and an interrupted run resumes.
 //
 // Two ways to produce the model's part (the "draft"):
 //   --mode api       call the Claude API directly (needs ANTHROPIC_API_KEY)
-//   --mode prepare   write one job file per example to <out>/.work/jobs/NNN-<topic>.json with the
-//                    system prompt, user message, and defect decision. Run the prompt elsewhere
-//                    (e.g. Claude Code subagents) and save its JSON output to
-//                    <out>/.work/drafts/NNN-<topic>.json, in the draftSchema shape.
-//   --mode assemble  validate each draft and write the example, exactly as the API path does.
+//   --mode prepare   write one job file per example to <out>/.work/jobs/<name>.json with the system prompt,
+//                    user message, language and defect decision. Run the prompt elsewhere (e.g. Claude Code
+//                    subagents) and save its JSON output to <out>/.work/drafts/<name>.json (draftSchema shape).
+//   --mode assemble  validate each draft (including that it is in the requested language) and write the example.
+//
+// --languages Python,Java limits the run to those languages (e.g. the most demanded ones first).
 //
 // Usage: node --env-file-if-exists=.env pipeline/src/generateBank.ts --mode <api|prepare|assemble>
-//            --plan <master.json> --taxonomy <taxonomy.json> --out <dir> [--limit <n>] [--concurrency <n>]
+//            --plan <master.json> --taxonomy <taxonomy.json> --out <dir> [--languages <a,b>] [--limit <n>] [--concurrency <n>]
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
@@ -28,13 +30,14 @@ const { values } = parseArgs({
         plan: { type: "string" },
         taxonomy: { type: "string" },
         out: { type: "string" },
+        languages: { type: "string" },
         limit: { type: "string" },
         concurrency: { type: "string", default: "4" },
     },
 });
 
 if (!values.plan || !values.taxonomy || !values.out) {
-    console.error("Usage: node pipeline/src/generateBank.ts --mode <api|prepare|assemble> --plan <master.json> --taxonomy <taxonomy.json> --out <dir> [--limit <n>] [--concurrency <n>]");
+    console.error("Usage: node pipeline/src/generateBank.ts --mode <api|prepare|assemble> --plan <master.json> --taxonomy <taxonomy.json> --out <dir> [--languages <a,b>] [--limit <n>] [--concurrency <n>]");
     process.exit(1);
 }
 const plan = Plan.parse(JSON.parse(readFileSync(values.plan, "utf8")));
@@ -44,18 +47,35 @@ const out = values.out;
 const jobsDir = path.join(out, ".work", "jobs");
 const draftsDir = path.join(out, ".work", "drafts");
 
-// Expand the plan into numbered jobs: 001-<topic>, 002-<topic>, ...
-const all = plan.targets.flatMap((t) => Array.from({ length: t.count }, () => t.label));
-const width = Math.max(3, String(all.length).length);
-const pending = all
-    .map((label, i) => {
-        const name = `${String(i + 1).padStart(width, "0")}-${label.replace(/^backend\./, "").replaceAll(".", "-")}`;
-        return { label, name, index: i, dir: path.join(out, name) };
+// What the bank already has, per (topic, language): every example folder under --out with a public.json.
+const pairKey = (label: string, language: string) => `${label}|${language}`;
+const have = new Map<string, number>();
+for (const entry of existsSync(out) ? readdirSync(out, { withFileTypes: true }) : []) {
+    const pub = path.join(out, entry.name, "public.json");
+    if (!entry.isDirectory() || !existsSync(pub)) continue;
+    const { concepts, language } = JSON.parse(readFileSync(pub, "utf8")) as { concepts: string[]; language: string };
+    const key = pairKey(concepts[0], language);
+    have.set(key, (have.get(key) ?? 0) + 1);
+}
+
+// The shortfall as named jobs: <topic>.<language>.<k> for k = have+1 .. count.
+const onlyLanguages = values.languages?.split(",").map((l) => l.trim().toLowerCase());
+const slug = (s: string) => s.toLowerCase().replace(/\+/g, "p").replace(/#/g, "sharp").replace(/[^a-z0-9]+/g, "_");
+const pending = plan.targets
+    .filter((t) => !onlyLanguages || onlyLanguages.includes(t.language.toLowerCase()))
+    .flatMap((t) => {
+        const already = have.get(pairKey(t.label, t.language)) ?? 0;
+        return Array.from({ length: Math.max(0, t.count - already) }, (_, i) => {
+            const k = already + i + 1;
+            const name = `${t.label.replace(/^backend\./, "").replaceAll(".", "-")}.${slug(t.language)}.${k}`;
+            return { label: t.label, language: t.language, k, name, dir: path.join(out, name) };
+        });
     })
     .filter((j) => !existsSync(path.join(j.dir, "public.json")));
 const limit = values.limit ? Number(values.limit) : undefined;
+const planned = plan.targets.reduce((s, t) => s + t.count, 0);
 
-type Job = { label: LabelId; withDefect: boolean; scenario: string; system: string; user: string };
+type Job = { label: LabelId; language: string; withDefect: boolean; scenario: string; system: string; user: string };
 
 // Business domains, rotated within each topic so examples of the same concept differ.
 const SCENARIOS = [
@@ -66,19 +86,24 @@ const SCENARIOS = [
     "travel booking", "multiplayer game backend", "customer support ticketing", "HR and payroll",
 ];
 
+// A business domain for the k-th example of a (topic, language) pair: rotated by k, offset per pair
+// so pairs don't all start with the same domain.
+function scenarioFor(label: string, language: string, k: number): string {
+    let h = 0;
+    for (const ch of `${label}|${language}`) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return SCENARIOS[(h + k - 1) % SCENARIOS.length];
+}
+
 if (values.mode === "prepare") {
     mkdirSync(jobsDir, { recursive: true });
     const todo = pending.filter((j) => !existsSync(path.join(jobsDir, `${j.name}.json`))).slice(0, limit);
     for (const j of todo) {
-        // nth example of this topic gets the nth scenario, offset by topic so topics don't all start alike
-        const nth = all.slice(0, j.index).filter((l) => l === j.label).length;
-        const offset = plan.targets.findIndex((t) => t.label === j.label);
-        const scenario = SCENARIOS[(nth + offset * 7) % SCENARIOS.length];
-        const { withDefect, userContent } = prepareRequest(j.label, taxonomy, { scenario });
-        const job: Job = { label: j.label, withDefect, scenario, system: SYSTEM_PROMPT, user: userContent };
+        const scenario = scenarioFor(j.label, j.language, j.k);
+        const { withDefect, userContent } = prepareRequest(j.label, taxonomy, { scenario, language: j.language });
+        const job: Job = { label: j.label, language: j.language, withDefect, scenario, system: SYSTEM_PROMPT, user: userContent };
         writeFileSync(path.join(jobsDir, `${j.name}.json`), JSON.stringify(job, null, 2) + "\n");
     }
-    console.log(`${all.length} examples in plan; wrote ${todo.length} job files to ${jobsDir}`);
+    console.log(`${planned} examples in plan, ${pending.length} missing; wrote ${todo.length} job files to ${jobsDir}`);
 } else if (values.mode === "assemble") {
     let ok = 0;
     const failed: string[] = [];
@@ -89,6 +114,9 @@ if (values.mode === "prepare") {
         try {
             const job: Job = JSON.parse(readFileSync(jobFile, "utf8"));
             const example = exampleFromDraft(JSON.parse(readFileSync(draftFile, "utf8")), job.label, taxonomy, job.withDefect);
+            if (example.public.language.toLowerCase() !== job.language.toLowerCase()) {
+                throw new Error(`draft is in ${example.public.language}, job asked for ${job.language}`);
+            }
             await writeExample(example, j.dir);
             ok++;
             console.log(`✓ ${j.name}`);
@@ -100,7 +128,7 @@ if (values.mode === "prepare") {
     console.log(`assembled ${ok}, failed ${failed.length}${failed.length ? ": " + failed.join(", ") : ""}`);
 } else if (values.mode === "api") {
     const todo = pending.slice(0, limit);
-    console.log(`${all.length} examples in plan, ${todo.length} to generate this run`);
+    console.log(`${planned} examples in plan, ${pending.length} missing, ${todo.length} to generate this run`);
     let next = 0;
     let ok = 0;
     const failed: string[] = [];
@@ -109,7 +137,7 @@ if (values.mode === "prepare") {
             const j = todo[next++];
             for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
                 try {
-                    await writeExample(await generateExample(j.label, taxonomy), j.dir);
+                    await writeExample(await generateExample(j.label, taxonomy, { language: j.language, scenario: scenarioFor(j.label, j.language, j.k) }), j.dir);
                     ok++;
                     console.log(`✓ ${j.name}`);
                     break;

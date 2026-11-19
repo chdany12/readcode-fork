@@ -28,6 +28,7 @@ async function Jobs({ searchParams }: { searchParams: PageProps<"/jobs">["search
         logo: logoFor(j.company),
         title: jobTitle(j.title),
         location: j.location,
+        languages: j.languages,
         topTopics: j.topics.slice(0, 3).map((t) => topicName(t.label)),
         matched: j.matched,
         needed: j.needed,

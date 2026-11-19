@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ChevronRight, FileSearch } from "lucide-react";
 import type { JobMatch } from "@/lib/jobs";
 import { areaName as areaLabel, jobTitle, topicName } from "@/lib/format";
+import { LanguageBadge } from "@/components/language-badge";
 
 const PREVIEW = 3;
 
@@ -62,6 +63,11 @@ export default function RoleCard({ job }: { job: JobMatch }) {
                     {job.location ? `${job.location} · ` : ""}{all.length} exercises · ~{Math.round(minutes / 60)} h
                 </div>
             </Link>
+            {job.languages.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                    {job.languages.map((l) => <LanguageBadge key={l} language={l} />)}
+                </div>
+            )}
 
             {/* concept chart: every taxonomy concept, in taxonomy order; hover to read a bar */}
             <div className="mt-3 flex h-8 items-end gap-px" onMouseLeave={() => { setProbe(null); setHovered(null); }}>
@@ -143,7 +149,10 @@ export default function RoleCard({ job }: { job: JobMatch }) {
                         >
                             <FileSearch className="size-5 shrink-0 text-muted-foreground group-hover/row:text-foreground" />
                             <span className="min-w-0 flex-1">
-                                <span className="block truncate">{e.shortName}</span>
+                                <span className="flex items-center gap-1.5">
+                                    <span className="truncate">{e.shortName}</span>
+                                    <LanguageBadge language={e.language} />
+                                </span>
                                 <span className="block text-xs text-muted-foreground">Code review · {e.questionCount} questions · {e.durationMinutes} min</span>
                             </span>
                             <span className="size-2 shrink-0 rounded-full" style={{ background: activeTopic && !colored.includes(e.topic) ? "var(--foreground)" : colorOf(e.topic) }} title={topicName(e.topic)} />

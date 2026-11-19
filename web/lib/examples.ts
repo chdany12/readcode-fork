@@ -20,6 +20,7 @@ export type ExampleSummary = {
     concepts: string[];
     questionCount: number;
     durationMinutes: number;
+    language: string;
 };
 
 // Folders under EXAMPLES_ROOT/examples that contain a non-empty public.json.
@@ -46,6 +47,7 @@ export const listExamples = cache(async (): Promise<ExampleSummary[]> => {
                 concepts: pub.concepts ?? [],
                 questionCount: pub.questions?.length ?? 0,
                 durationMinutes: pub.durationMinutes ?? 0,
+                language: pub.language,
             };
         }),
     );

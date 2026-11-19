@@ -10,6 +10,7 @@ import { useToggleSet } from "@/lib/useToggleSet";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { DataTable, ExpandChevron, FilterBar, RowArrow } from "@/components/data-table";
+import { LanguageBadge } from "@/components/language-badge";
 
 // A one-line description per module (top-level area). Modules are listed alphabetically (no implied sequence).
 const BLURBS: Record<string, string> = {
@@ -51,6 +52,7 @@ export default function ExampleBrowser({ examples, roles }: { examples: ExampleS
     const [moduleFilter, setModuleFilter] = useState("");
     const [roleId, setRoleId] = useState("");
     const [length, setLength] = useState("");
+    const [language, setLanguage] = useState("");
     // modules start open; units start closed, but open while filtering (a click flips that default)
     const [collapsedModules, toggleModule] = useToggleSet();
     const [flippedUnits, toggleUnit] = useToggleSet();
@@ -64,7 +66,12 @@ export default function ExampleBrowser({ examples, roles }: { examples: ExampleS
         [examples],
     );
     const searchKey = useMemo(
-        () => new Map(examples.map((e) => [e.name, `${e.shortName} ${e.title} ${topicName(e.topic)} ${areaOf(e.topic)}`.toLowerCase()])),
+        () => new Map(examples.map((e) => [e.name, `${e.shortName} ${e.title} ${topicName(e.topic)} ${areaOf(e.topic)} ${e.language}`.toLowerCase()])),
+        [examples],
+    );
+    // languages in the bank, most examples first
+    const languages = useMemo(
+        () => [...Map.groupBy(examples, (e) => e.language).entries()].sort((a, b) => b[1].length - a[1].length).map(([l, list]) => ({ l, n: list.length })),
         [examples],
     );
 
@@ -76,6 +83,7 @@ export default function ExampleBrowser({ examples, roles }: { examples: ExampleS
         (!q || searchKey.get(e.name)!.includes(q)) &&
         (!moduleFilter || areaOf(e.topic) === moduleFilter) &&
         (!role || roleWeight.has(e.topic)) &&
+        (!language || e.language === language) &&
         lengthOpt.test(e.durationMinutes);
 
     const modules = tree
@@ -93,6 +101,7 @@ export default function ExampleBrowser({ examples, roles }: { examples: ExampleS
         q && { key: "q", label: `"${query.trim()}"`, clear: () => setQuery("") },
         moduleFilter && { key: "m", label: areaTitle(moduleFilter), clear: () => setModuleFilter("") },
         role && { key: "r", label: role.label, clear: () => setRoleId("") },
+        language && { key: "lang", label: language, clear: () => setLanguage("") },
         length && { key: "l", label: lengthOpt.label, clear: () => setLength("") },
     ].filter(Boolean) as { key: string; label: string; clear: () => void }[];
     const unitOpen = (topic: string) => (active.length > 0) !== flippedUnits.has(topic);
@@ -124,6 +133,10 @@ export default function ExampleBrowser({ examples, roles }: { examples: ExampleS
                 <NativeSelect aria-label="Module" value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)}>
                     <NativeSelectOption value="">All modules</NativeSelectOption>
                     {tree.map((m) => <NativeSelectOption key={m.area} value={m.area}>{areaTitle(m.area)}</NativeSelectOption>)}
+                </NativeSelect>
+                <NativeSelect aria-label="Language" value={language} onChange={(e) => setLanguage(e.target.value)}>
+                    <NativeSelectOption value="">All languages</NativeSelectOption>
+                    {languages.map(({ l, n }) => <NativeSelectOption key={l} value={l}>{l} ({n})</NativeSelectOption>)}
                 </NativeSelect>
                 <NativeSelect aria-label="Role" value={roleId} onChange={(e) => setRoleId(e.target.value)} className="max-w-60">
                     <NativeSelectOption value="">Any role</NativeSelectOption>
@@ -228,6 +241,7 @@ function ExampleRow({ example: e }: { example: ExampleSummary }) {
             <span className="flex min-w-0 items-center gap-2 pl-7">
                 <FileSearch className="size-4 shrink-0 text-muted-foreground group-hover/row:text-foreground" />
                 <span className="truncate">{e.shortName}</span>
+                <LanguageBadge language={e.language} />
             </span>
             <span />
             <span className="text-right text-xs text-muted-foreground tabular-nums">{e.questionCount} questions</span>

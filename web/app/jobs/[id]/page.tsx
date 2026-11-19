@@ -6,6 +6,7 @@ import { listJobMatches } from "@/lib/jobs";
 import { jobTitle, topicName } from "@/lib/format";
 import { buttonVariants } from "@/components/ui/button";
 import { logoFor } from "@/lib/companies";
+import { LanguageBadge } from "@/components/language-badge";
 
 // A role's practice plan: the posting's topics, how central each is, and the exercises for it.
 export default function RolePage({ params }: PageProps<"/jobs/[id]">) {
@@ -46,6 +47,9 @@ async function Role({ params }: { params: PageProps<"/jobs/[id]">["params"] }) {
             <div className="mt-3 flex flex-wrap items-center gap-x-3 text-sm text-muted-foreground">
                 {job.location && <span>{job.location}</span>}
                 <span>{examples.length} exercises · ~{Math.round(minutes / 60)} h</span>
+                {job.languages.length > 0 && (
+                    <span className="flex gap-1">{job.languages.map((l) => <LanguageBadge key={l} language={l} />)}</span>
+                )}
                 {job.url && (
                     <a href={job.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-foreground">
                         Original posting <ExternalLink className="size-3" />
@@ -80,7 +84,10 @@ async function Role({ params }: { params: PageProps<"/jobs/[id]">["params"] }) {
                                     >
                                         <FileSearch className="size-5 shrink-0 text-muted-foreground group-hover/row:text-foreground" />
                                         <span className="min-w-0 flex-1">
-                                            <span className="block truncate">{e.shortName}</span>
+                                            <span className="flex items-center gap-1.5">
+                                                <span className="truncate">{e.shortName}</span>
+                                                <LanguageBadge language={e.language} />
+                                            </span>
                                             <span className="block text-xs text-muted-foreground">Code review · {e.questionCount} questions · {e.durationMinutes} min</span>
                                         </span>
                                         {/* a round chevron that widens into "Practice" on hover */}

@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useToggleSet } from "@/lib/useToggleSet";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { DataTable, ExpandChevron, FilterBar, RowArrow } from "@/components/data-table";
+import { LanguageBadge } from "@/components/language-badge";
 
 // One posting as the jobs table needs it (built on the server from JobMatch).
 export type JobRow = {
@@ -14,6 +15,7 @@ export type JobRow = {
     logo?: string;
     title: string;          // display title
     location: string | null;
+    languages: string[];    // the plan's languages, most examples first
     topTopics: string[];    // display names of the plan's top topics
     matched: number;        // exercises available for the plan
     needed: number;         // exercises the plan asks for
@@ -35,16 +37,22 @@ export default function JobsBrowser({ jobs, initialCompany = "" }: { jobs: JobRo
     const [query, setQuery] = useState("");
     const [company, setCompany] = useState(initialCompany);
     const [sort, setSort] = useState("company");
+    const [language, setLanguage] = useState("");
     const [collapsed, toggle] = useToggleSet();
 
     const companies = useMemo(() => [...new Set(jobs.map((j) => j.company))], [jobs]);
+    // languages across all plans, by how many roles use them
+    const languages = useMemo(
+        () => [...Map.groupBy(jobs.flatMap((j) => j.languages), (l) => l).entries()].sort((a, b) => b[1].length - a[1].length).map(([l, n]) => ({ l, n: n.length })),
+        [jobs],
+    );
     const searchKey = useMemo(
-        () => new Map(jobs.map((j) => [j.id, `${j.title} ${j.company} ${j.location ?? ""} ${j.topTopics.join(" ")}`.toLowerCase()])),
+        () => new Map(jobs.map((j) => [j.id, `${j.title} ${j.company} ${j.location ?? ""} ${j.topTopics.join(" ")} ${j.languages.join(" ")}`.toLowerCase()])),
         [jobs],
     );
 
     const q = query.trim().toLowerCase();
-    const shown = jobs.filter((j) => (!company || j.company === company) && (!q || searchKey.get(j.id)!.includes(q)));
+    const shown = jobs.filter((j) => (!company || j.company === company) && (!language || j.languages.includes(language)) && (!q || searchKey.get(j.id)!.includes(q)));
     // groups: by company (in posting order), or a single flat group sorted by coverage
     const groups: [string | null, JobRow[]][] =
         sort === "coverage"
@@ -53,10 +61,14 @@ export default function JobsBrowser({ jobs, initialCompany = "" }: { jobs: JobRo
 
     return (
         <div>
-            <FilterBar query={query} onQuery={setQuery} placeholder="Search roles, locations or topics" shown={shown.length} total={jobs.length} noun="roles">
+            <FilterBar query={query} onQuery={setQuery} placeholder="Search roles, languages or topics" shown={shown.length} total={jobs.length} noun="roles">
                 <NativeSelect aria-label="Company" value={company} onChange={(e) => setCompany(e.target.value)}>
                     <NativeSelectOption value="">All companies</NativeSelectOption>
                     {companies.map((c) => <NativeSelectOption key={c} value={c}>{c}</NativeSelectOption>)}
+                </NativeSelect>
+                <NativeSelect aria-label="Language" value={language} onChange={(e) => setLanguage(e.target.value)}>
+                    <NativeSelectOption value="">All languages</NativeSelectOption>
+                    {languages.map(({ l, n }) => <NativeSelectOption key={l} value={l}>{l} ({n})</NativeSelectOption>)}
                 </NativeSelect>
                 <NativeSelect aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value)}>
                     {SORTS.map((s) => <NativeSelectOption key={s.id} value={s.id}>{s.label}</NativeSelectOption>)}
@@ -121,7 +133,10 @@ function JobRowLink({ job: j, showCompany }: { job: JobRow; showCompany: boolean
             <span />
             <span className="min-w-0">
                 <span className="block truncate">{showCompany ? `${j.company} · ${j.title}` : j.title}</span>
-                {j.location && <span className="block truncate text-xs text-muted-foreground">{j.location}</span>}
+                <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                    {j.languages.slice(0, 3).map((l) => <LanguageBadge key={l} language={l} />)}
+                    {j.location && <span className="truncate">{j.location}</span>}
+                </span>
             </span>
             <span className="hidden truncate text-xs text-muted-foreground md:block">{j.topTopics.join(" · ")}</span>
             <span className="flex flex-col items-end gap-1" title={`${j.matched} of ${j.needed} exercises available`}>
