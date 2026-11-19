@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/matchStateReplica.ts",
+        "startLine": 64,
+        "endLine": 68
+      }
+    },
+    1,
+    1,
+    1
+  ],
+  "explanations": [
+    "handleAppend never rejects a request whose term is lower than currentTerm. A deposed leader from an old term (e.g. after a network partition heals) is accepted: the replica records it as leader, resets its election timer, and can truncate entries and append its stale log, overwriting entries the new leader may already have committed. It must return success: false with its currentTerm when req.term < this.currentTerm, before touching leaderId or the log.",
+    "termAt(3) = 2 matches prevLogTerm. For index 4 the existing term 2 conflicts with 3, so the log is truncated to length 3, then the entry is pushed, giving 1-4 with index 4 at term 3; the old index 5 is discarded. Nothing is appended at index 6.",
+    "The consistency check only verifies the log through prevLogIndex plus the entries just received. Entries after lastNew might be leftovers from an old leader, so committing them would apply unverified data. Option 1 is the opposite concern (leaderCommit is already committed by the leader); it's not a throttling device, and leaderCommit is not always larger.",
+    "The log is mutated before await storage.save; when save throws the exception propagates out of handleAppend, so no response object is returned and the commitIndex/apply code after it does not run. Nothing rolls back the pushed entries, and no success:false response is built."
+  ]
+}

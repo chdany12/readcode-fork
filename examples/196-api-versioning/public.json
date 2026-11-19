@@ -1,0 +1,50 @@
+{
+  "id": "7983de2e-e309-4229-9f5a-783de5cda326",
+  "title": "Payroll employee API with v1 and v2",
+  "name": "Payroll employee API",
+  "createdAt": "2026-11-15T09:44:42.015Z",
+  "durationMinutes": 11,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how the v1 and v2 contracts are translated to and from the internal model? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A v2 client creates an employee with payFrequency \"semimonthly\". A v1 client then fetches the same employee. What payFrequency does the v1 client see?",
+      "choices": [
+        "\"semimonthly\"",
+        "\"biweekly\"",
+        "\"monthly\"",
+        "The request fails with 422"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Which response headers distinguish a GET /v1/employees/:id response from GET /v2/employees/:id?",
+      "choices": [
+        "v1 responses carry Deprecation: true and a Link to /v2/employees with rel=\"successor-version\"",
+        "v2 responses carry a Sunset header",
+        "Both carry Deprecation, but only v1 carries Link",
+        "Neither; the version is only in the path"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A v2 client posts compensation.annualSalaryCents as 7250000.5. What happens?",
+      "choices": [
+        "It is rounded to 7250001 and stored",
+        "It is stored as-is",
+        "It is rejected with 422 because Number.isInteger fails",
+        "It is rejected with 500 because RangeError is unhandled"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.versioning",
+    "backend.api.serialization_and_deserialization",
+    "backend.design.interface_design"
+  ]
+}

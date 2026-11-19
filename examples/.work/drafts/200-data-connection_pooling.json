@@ -1,0 +1,65 @@
+{
+  "title": "CI runner job leasing",
+  "name": "CI job lease queue",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/db.ts",
+      "content": "import { Pool, PoolClient } from \"pg\";\n\nexport const pool = new Pool({\n  connectionString: process.env.DATABASE_URL,\n  max: 8,\n  connectionTimeoutMillis: 0,\n  idleTimeoutMillis: 60_000,\n  statement_timeout: 15_000,\n});\n\nexport async function withConnection<T>(fn: (c: PoolClient) => Promise<T>): Promise<T> {\n  const client = await pool.connect();\n  try {\n    return await fn(client);\n  } finally {\n    client.release();\n  }\n}\n\nexport async function withTransaction<T>(fn: (c: PoolClient) => Promise<T>): Promise<T> {\n  return withConnection(async (client) => {\n    await client.query(\"BEGIN\");\n    try {\n      const result = await fn(client);\n      await client.query(\"COMMIT\");\n      return result;\n    } catch (err) {\n      await client.query(\"ROLLBACK\");\n      throw err;\n    }\n  });\n}\n"
+    },
+    {
+      "path": "src/jobQueue.ts",
+      "content": "import { PoolClient } from \"pg\";\nimport { withConnection, withTransaction } from \"./db\";\n\nexport interface ClaimedJob {\n  id: string;\n  pipelineId: string;\n  image: string;\n  steps: string[];\n}\n\nasync function loadPipelineSecrets(pipelineId: string): Promise<Record<string, string>> {\n  return withConnection(async (c) => {\n    const { rows } = await c.query(\n      \"SELECT name, ciphertext FROM pipeline_secrets WHERE pipeline_id = $1\",\n      [pipelineId],\n    );\n    return Object.fromEntries(rows.map((r) => [r.name, r.ciphertext]));\n  });\n}\n\nasync function claimNext(client: PoolClient, runnerId: string): Promise<ClaimedJob | null> {\n  const { rows } = await client.query(\n    `SELECT id, pipeline_id, image, steps\n       FROM ci_jobs\n      WHERE state = 'queued'\n      ORDER BY enqueued_at\n      LIMIT 1\n      FOR UPDATE SKIP LOCKED`,\n  );\n  if (rows.length === 0) return null;\n  await client.query(\n    \"UPDATE ci_jobs SET state = 'running', runner_id = $2, started_at = now() WHERE id = $1\",\n    [rows[0].id, runnerId],\n  );\n  return {\n    id: rows[0].id,\n    pipelineId: rows[0].pipeline_id,\n    image: rows[0].image,\n    steps: rows[0].steps,\n  };\n}\n\nexport async function leaseJob(\n  runnerId: string,\n): Promise<{ job: ClaimedJob; secrets: Record<string, string> } | null> {\n  return withTransaction(async (client) => {\n    const job = await claimNext(client, runnerId);\n    if (!job) return null;\n    const secrets = await loadPipelineSecrets(job.pipelineId);\n    await client.query(\n      \"INSERT INTO job_events (job_id, kind, runner_id) VALUES ($1, 'leased', $2)\",\n      [job.id, runnerId],\n    );\n    return { job, secrets };\n  });\n}\n\nexport async function completeJob(jobId: string, exitCode: number): Promise<void> {\n  await withConnection(async (c) => {\n    await c.query(\n      \"UPDATE ci_jobs SET state = $2, finished_at = now() WHERE id = $1 AND state = 'running'\",\n      [jobId, exitCode === 0 ? \"succeeded\" : \"failed\"],\n    );\n  });\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/jobQueue.ts",
+    "snippet": "    const secrets = await loadPipelineSecrets(job.pipelineId);"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code uses the connection pool? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "leaseJob holds one pooled connection for its transaction and then calls loadPipelineSecrets, which checks out a second connection from the same pool. With max: 8, eight runners polling at once can each hold a transaction connection and then all wait for a second one that will never be freed. connectionTimeoutMillis is 0 (wait forever), so the pool deadlocks and every lease and completeJob call hangs. The secrets query should run on the transaction's client (pass client in) or after the transaction commits."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Two runners call leaseJob at the same moment while three jobs are queued. What does FOR UPDATE SKIP LOCKED cause?",
+      "choices": [
+        "Each runner locks and claims a different queued job instead of blocking on the same row",
+        "Both runners claim the same oldest job and one UPDATE fails",
+        "The second runner waits until the first commits, then claims the same job",
+        "The second runner always gets null because a row is locked"
+      ],
+      "answer": 0,
+      "explanation": "SKIP LOCKED makes the second SELECT pass over the row locked by the first transaction and pick the next queued row, so the runners claim different jobs without waiting. Without SKIP LOCKED the second would block; it does not return null while other unlocked rows exist, and it never sees the same locked row."
+    },
+    {
+      "prompt": "With connectionTimeoutMillis: 0, what happens to pool.connect() when all 8 connections are in use?",
+      "choices": [
+        "It rejects immediately",
+        "It waits indefinitely until a connection is released",
+        "It opens a temporary connection beyond max",
+        "It retries every 15 seconds because of statement_timeout"
+      ],
+      "answer": 1,
+      "explanation": "In pg, connectionTimeoutMillis of 0 means no timeout, so connect() queues until some client is released. It does not reject, exceed max, or relate to statement_timeout, which only limits how long a single statement may run on the server."
+    },
+    {
+      "prompt": "completeJob is called for a job that was never leased (state is still 'queued'). What happens?",
+      "choices": [
+        "The job is marked succeeded or failed anyway",
+        "An error is thrown because no row matched",
+        "The job is moved back to running",
+        "The UPDATE matches no rows and the job is left queued, with no error"
+      ],
+      "answer": 3,
+      "explanation": "The WHERE clause requires state = 'running', so the UPDATE affects zero rows. completeJob does not check rowCount, so nothing is thrown, and the job stays queued. Nothing in the statement sets running."
+    }
+  ],
+  "concepts": [
+    "backend.data.connection_pooling",
+    "backend.concurrency.deadlocks",
+    "backend.data.transactions_and_isolation_levels",
+    "backend.messaging.queues_and_consumers"
+  ]
+}

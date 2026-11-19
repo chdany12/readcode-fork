@@ -1,0 +1,51 @@
+{
+  "id": "2929f7a4-717a-4c16-879d-ed23c10c6b8f",
+  "title": "Payroll bank payout client with retry and backoff",
+  "name": "Payroll payout client",
+  "createdAt": "2026-11-15T09:41:31.714Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code retries failed payout submissions? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "With baseDelayMs 250 and maxDelayMs 8000, what is the range of the jittered delay after the 4th failed attempt?",
+      "choices": [
+        "Exactly 2000 ms",
+        "0 to 8000 ms",
+        "2000 to 4000 ms",
+        "0 to just under 2000 ms"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The bank returns 400 because the bank account token is malformed. What happens?",
+      "choices": [
+        "The HttpError is thrown to the caller after the first attempt, without sleeping",
+        "It is retried up to 5 times with backoff",
+        "It is returned as a 'duplicate' receipt",
+        "It is retried once after Retry-After"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Under a 429 with Retry-After: 30, how long does withRetry wait before the next attempt?",
+      "choices": [
+        "30 seconds, as instructed by the server",
+        "At most 8 seconds, the larger of the jittered delay and the hint capped at maxDelayMs",
+        "Only the jittered delay; Retry-After is ignored",
+        "No wait; 429 is retried immediately"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.resilience.retries_and_backoff",
+    "backend.api.idempotency",
+    "backend.resilience.timeouts",
+    "backend.integrations.third_party_adapters"
+  ]
+}

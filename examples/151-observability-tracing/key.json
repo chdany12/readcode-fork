@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "There is no defect. The job span is parented on the triggering push via extract into ROOT_CONTEXT and context.with, and coalesced pushes are attached as links (only valid span contexts) rather than as competing parents. Each step span is active while runStep runs, so the TRACEPARENT handed to the subprocess names that step span. Every span is ended in a finally, step failures by exit code and by exception are both marked ERROR, and the job's status and outcome attribute are set in finally before the span ends.",
+    "A span can only have one parent, which here comes from job.triggerHeaders. linksFor extracts a span context from each coalesced trigger and adds it as a Link, so the other traces are referenced without being parents. Only one job span is created, and links (not events) carry the references.",
+    "runStep is called inside the step's startActiveSpan callback, so context.active() is the step span when propagation.inject fills the carrier, and TRACEPARENT holds the step span's ID. The job span is the step's parent, not the active span at that moment. TRACEPARENT is a common convention that tools honour, so they join rather than start a new trace.",
+    "The timer sends SIGKILL; the exit handler sees code null and a signal, so exitCode becomes 137. The step span is set to ERROR because exitCode is non-zero, and the loop sets outcome to failed and breaks. runStep resolves rather than rejects in this case, the timer is only cleared after exit, and a null code maps to a non-zero value."
+  ]
+}

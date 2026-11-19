@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/fares/snapshotReader.ts",
+        "startLine": 22,
+        "endLine": 24
+      }
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "In readSnapshot the size check throws SnapshotTooLargeError after open() succeeded but before the try/finally begins, so handle.close() never runs for oversized files. The loader catches the error, logs and skips, and startPolling retries the same file every interval, leaking one descriptor per oversized snapshot per poll until the process hits EMFILE. The open/stat/check should sit inside the try (or the check should close the handle before throwing).",
+    "The parse happens inside the try whose finally awaits handle.close(); the error propagates to the per-file catch in loadAll, which logs, pushes to skipped and continues. Nothing aborts the loop, and replaceSupplier is only called after a successful parse, so the index is untouched.",
+    "loadAll checks this.running first and returns { loaded: 0, skipped: [] } after logging. Node runs this check synchronously on one thread, so there is no concurrent run, no waiting, and no throw.",
+    "FileHandle.read can return a short read; the loop advances offset by bytesRead and stops on 0 (EOF, e.g. the file shrank). There is no fixed 64 KB cap, the loop keeps the handle open rather than releasing it, and reads go forward from offset 0."
+  ]
+}

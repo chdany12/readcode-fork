@@ -1,0 +1,50 @@
+{
+  "id": "30a2457b-f8e2-4387-be8d-48ef07cb013f",
+  "title": "File version history in a single DynamoDB table",
+  "name": "File version store",
+  "createdAt": "2026-11-15T09:41:31.649Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code models and queries file versions in the table? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two clients both read HEAD as version 4 and call commitVersion at the same time. What happens?",
+      "choices": [
+        "Both writes succeed and the later one overwrites version 5",
+        "One transaction succeeds; the other is cancelled because its conditions fail, and nothing from it is written",
+        "Both transactions fail because DynamoDB transactions cannot touch the same partition",
+        "The second client's version item is written but HEAD is not updated"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why are version items and the HEAD item stored under the same partition key?",
+      "choices": [
+        "So a single Query on pk can retrieve a file's whole history and HEAD can be read with a cheap GetItem on the same key",
+        "Because TransactWriteCommand requires all items to share a partition key",
+        "To spread writes for a busy file across many partitions",
+        "So that deleting HEAD automatically deletes all versions"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A file has never been committed. What does commitVersion do when called with expectedHead = 0?",
+      "choices": [
+        "It fails because HEAD does not exist and version = :expected cannot be evaluated",
+        "It writes version 0 and a HEAD of 0",
+        "It writes VER#1 and creates HEAD with version 1, because attribute_not_exists(pk) passes for the missing HEAD",
+        "It writes VER#1 but skips HEAD since no previous HEAD existed"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.nosql_modeling",
+    "backend.data.optimistic_vs_pessimistic_locking",
+    "backend.data.transactions_and_isolation_levels"
+  ]
+}

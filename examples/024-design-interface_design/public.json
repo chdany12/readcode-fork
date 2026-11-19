@@ -1,0 +1,50 @@
+{
+  "id": "f941d7ff-25af-42ea-9f1a-3f3f63089a2a",
+  "title": "Ride dispatcher built on small pluggable interfaces",
+  "name": "Ride dispatch loop",
+  "createdAt": "2026-11-15T09:41:31.534Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how the Dispatcher and NearestIdleStrategy use the interfaces declared in types.ts (return values, nullability, and the DispatchDecision variants)? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "radiiKm is [2, 5, 10]. No eligible driver is found at any radius and the request is older than maxRequestAgeMs. What does dispatch return?",
+      "choices": [
+        "{ kind: \"deferred\" } with retryAfterMs = deferMs",
+        "{ kind: \"no_drivers\", searchedRadiusKm: 2 }",
+        "It throws because chosen is null",
+        "{ kind: \"no_drivers\", searchedRadiusKm: 10 }"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A new MatchingStrategy is added that prefers premium-rated drivers. Which candidates can it ever be offered by the Dispatcher?",
+      "choices": [
+        "Only candidates whose vehicleClass matches the request, within the current radius",
+        "All nearby drivers regardless of vehicle class",
+        "Only drivers that have been idle for at least minIdleMs",
+        "Only the single nearest driver per radius"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What is the main benefit of NearestIdleStrategy taking a Clock rather than calling Date.now()?",
+      "choices": [
+        "It makes choose asynchronous so it can await the time source",
+        "Tests can fix the current time to check the minIdleMs cutoff deterministically, and it shares one notion of time with the Dispatcher",
+        "It prevents drivers with lastTripEndedAt === null from being chosen",
+        "It lets the strategy cache ETA results between calls"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.design.interface_design",
+    "backend.design.dependency_injection",
+    "backend.testing.unit_test_design"
+  ]
+}

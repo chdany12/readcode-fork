@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/orderStatusHub.ts",
+        "startLine": 66,
+        "endLine": 69
+      }
+    },
+    2,
+    0,
+    3
+  ],
+  "explanations": [
+    "broadcastToRestaurant sends to every open restaurant socket without the bufferedAmount check used for customers. A restaurant tablet on a stalled connection (busy kitchens get every order for the restaurant, so it is the highest-volume stream) keeps accumulating frames in the server-side send buffer with no limit, growing process memory until it is closed. It should apply the same SLOW_CLIENT_BYTES check and evict.",
+    "attachCustomer adds each socket to a Set keyed by customerId, and sendToCustomer loops over all of them, sending to each open one. There is no 'latest only' logic, no per-order subscription step, and restaurant connections are independent.",
+    "wireOrderEvents keeps lastVersion per order and returns early when event.version <= seen, so version 3 never reaches dispatch. Clients don't reorder anything here, the map isn't updated on the early return, and there is no restaurant-only path.",
+    "evict only calls ws.close; removal happens in the once('close') listener registered in attach, which runs when the socket actually closes. evict doesn't touch the map, dispatch doesn't prune, and the listener ensures it isn't kept forever."
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/playbackSessionService.ts",
+        "startLine": 26,
+        "endLine": 26
+      }
+    },
+    1,
+    1,
+    2
+  ],
+  "explanations": [
+    "start() counts active sessions and then inserts a new one, but runs under READ COMMITTED with no lock on the account. Two devices starting at the same moment both count, say, 1 of 2, neither sees the other's uncommitted insert, and both insert, leaving 3 active streams on a 2-stream plan. This is write skew; it needs SERIALIZABLE (with retry on 40001) or a lock that serializes starts per account, e.g. SELECT ... FROM accounts WHERE id = $1 FOR UPDATE before counting.",
+    "Before counting, start() deletes any session for the same account and device, so the stale session is gone. (It would also be excluded by the 90 second heartbeat filter.) There is no cleanup job in this code, 410 is only returned by heartbeat, and title_id plays no part in the count.",
+    "The DELETE and INSERT run on the same client inside BEGIN/COMMIT; the catch runs ROLLBACK, undoing the delete too. The finally block releases the client only after rollback, and only ConcurrentStreamLimitError maps to 409; other errors go to next().",
+    "The count filters on last_heartbeat within 90 seconds, so stale rows are not counted, and the DELETE only removes rows for the calling device. The rows remain but do not block the new session. The plan lookup succeeds for an existing account."
+  ]
+}

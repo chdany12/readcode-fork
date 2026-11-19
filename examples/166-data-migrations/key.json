@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/db/migrate.ts",
+        "startLine": 28,
+        "endLine": 32
+      }
+    },
+    2,
+    1,
+    1
+  ],
+  "explanations": [
+    "The version row is inserted before BEGIN, so it autocommits on its own. If up() then fails, the ROLLBACK undoes the schema change but not the version record. On the next boot max(version) already includes the failed migration, so it is skipped forever and the schema silently lacks it (for example, the unique constraint in 42 would never be created). The INSERT belongs inside the transaction, after up() succeeds.",
+    "The DELETE ... USING removes `a` where a.id > b.id among matching rows, so the higher id (17) goes and 10 stays, after which the unique constraint can be created. It does not fail, does not delete both, and keeps the lower id rather than the higher.",
+    "pg_advisory_lock blocks until released. The waiting replicas then re-read max(version), which is 43, so pending is empty. They do not run concurrently, they do not exit on contention (that would need pg_try_advisory_lock), and work is not split.",
+    "ALTER TABLE takes an ACCESS EXCLUSIVE lock held until COMMIT, and 41 runs the full-table UPDATE and further ALTERs in the same transaction, so readers block for the entire duration. They are not unaffected, they cannot see uncommitted NULLs, and there is no lock_timeout configured for them to fail fast."
+  ]
+}

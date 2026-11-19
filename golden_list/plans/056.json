@@ -1,0 +1,33 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.api.rest_design",
+      "count": 7
+    },
+    {
+      "label": "backend.observability.metrics",
+      "count": 3
+    },
+    {
+      "label": "backend.api.status_codes_and_error_responses",
+      "count": 2
+    },
+    {
+      "label": "backend.integrations.third_party_adapters",
+      "count": 2
+    },
+    {
+      "label": "backend.api.request_validation",
+      "count": 2
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.health_checks",
+      "count": 2
+    }
+  ]
+}

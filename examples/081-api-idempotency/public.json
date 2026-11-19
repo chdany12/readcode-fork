@@ -1,0 +1,51 @@
+{
+  "id": "46322d3a-11d5-40ad-b864-7a736260f5ff",
+  "title": "Payroll disbursement to the bank transfer API",
+  "name": "Payroll disbursement job",
+  "createdAt": "2026-11-15T09:41:31.612Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code uses idempotency keys when paying employees? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The bank responds 400 to a transfer for one employee. What does disburse do?",
+      "choices": [
+        "Retries up to MAX_ATTEMPTS with backoff",
+        "Marks that line failed immediately and continues with the next employee",
+        "Aborts the whole run and rethrows",
+        "Marks the line submitted with an empty transferId"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "How long does payWithRetry wait in total before giving up on an employee whose transfer keeps returning 503?",
+      "choices": [
+        "About 3.5 seconds (500 + 1000 + 2000 ms) plus request time",
+        "About 7.5 seconds",
+        "No waiting; it fails on the first 503",
+        "About 1.75 seconds (250 + 500 + 1000 ms)"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The process crashes after markPending but before markSubmitted for one employee, and the run is restarted. What does disburse do for that employee?",
+      "choices": [
+        "Skips them because a pending row exists",
+        "Throws because markPending is called twice",
+        "Calls the bank again, since only 'submitted' lines are skipped",
+        "Waits for the earlier transfer to be confirmed before continuing"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.idempotency",
+    "backend.resilience.retries_and_backoff",
+    "backend.resilience.timeouts",
+    "backend.data.money_and_ledgers"
+  ]
+}

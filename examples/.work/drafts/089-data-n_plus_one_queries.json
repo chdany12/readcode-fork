@@ -1,0 +1,64 @@
+{
+  "title": "CI pipeline run history endpoint",
+  "name": "Pipeline run history",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/runStore.ts",
+      "content": "import { Pool } from \"pg\";\n\nexport interface PipelineRun {\n  id: number;\n  repoId: number;\n  branch: string;\n  commitSha: string;\n  status: \"queued\" | \"running\" | \"passed\" | \"failed\";\n  startedAt: Date;\n}\n\nexport interface JobRow {\n  id: number;\n  runId: number;\n  name: string;\n  status: string;\n  durationMs: number | null;\n}\n\nexport class RunStore {\n  constructor(private readonly pool: Pool) {}\n\n  async recentRuns(repoId: number, limit: number, beforeId?: number): Promise<PipelineRun[]> {\n    const params: unknown[] = [repoId, Math.min(limit, 100)];\n    let cursor = \"\";\n    if (beforeId !== undefined) {\n      params.push(beforeId);\n      cursor = \"AND id < $3\";\n    }\n    const { rows } = await this.pool.query(\n      `SELECT id, repo_id AS \"repoId\", branch, commit_sha AS \"commitSha\", status,\n              started_at AS \"startedAt\"\n         FROM pipeline_runs\n        WHERE repo_id = $1 ${cursor}\n        ORDER BY id DESC\n        LIMIT $2`,\n      params,\n    );\n    return rows;\n  }\n\n  async jobsForRuns(runIds: number[]): Promise<JobRow[]> {\n    if (runIds.length === 0) return [];\n    const { rows } = await this.pool.query(\n      `SELECT id, run_id AS \"runId\", name, status, duration_ms AS \"durationMs\"\n         FROM pipeline_jobs\n        WHERE run_id = ANY($1::bigint[])\n        ORDER BY run_id, id`,\n      [runIds],\n    );\n    return rows;\n  }\n\n  async authorsForCommits(repoId: number, shas: string[]): Promise<Map<string, string>> {\n    if (shas.length === 0) return new Map();\n    const { rows } = await this.pool.query(\n      `SELECT sha, author_login AS \"login\" FROM commits WHERE repo_id = $1 AND sha = ANY($2)`,\n      [repoId, shas],\n    );\n    return new Map(rows.map((r: { sha: string; login: string }) => [r.sha, r.login]));\n  }\n}\n"
+    },
+    {
+      "path": "src/runHistoryHandler.ts",
+      "content": "import { RunStore, JobRow, PipelineRun } from \"./runStore\";\n\nexport interface RunSummary {\n  id: number;\n  branch: string;\n  commitSha: string;\n  author: string | null;\n  status: PipelineRun[\"status\"];\n  jobs: { name: string; status: string; durationMs: number | null }[];\n  slowestJob: string | null;\n}\n\nexport interface RunPage {\n  runs: RunSummary[];\n  nextCursor: number | null;\n}\n\nexport class RunHistoryHandler {\n  constructor(private readonly store: RunStore) {}\n\n  async list(repoId: number, limit: number, before?: number): Promise<RunPage> {\n    const runs = await this.store.recentRuns(repoId, limit, before);\n    const shas = [...new Set(runs.map((r) => r.commitSha))];\n\n    const [authors, jobsPerRun] = await Promise.all([\n      this.store.authorsForCommits(repoId, shas),\n      Promise.all(runs.map((r) => this.store.jobsForRuns([r.id]))),\n    ]);\n\n    const summaries = runs.map((run, i) => this.summarize(run, jobsPerRun[i], authors));\n    const last = runs[runs.length - 1];\n    return {\n      runs: summaries,\n      nextCursor: runs.length === Math.min(limit, 100) && last ? last.id : null,\n    };\n  }\n\n  private summarize(run: PipelineRun, jobs: JobRow[], authors: Map<string, string>): RunSummary {\n    let slowest: JobRow | null = null;\n    for (const job of jobs) {\n      if (job.durationMs === null) continue;\n      if (!slowest || (slowest.durationMs ?? 0) < job.durationMs) slowest = job;\n    }\n    return {\n      id: run.id,\n      branch: run.branch,\n      commitSha: run.commitSha,\n      author: authors.get(run.commitSha) ?? null,\n      status: run.status,\n      jobs: jobs.map((j) => ({ name: j.name, status: j.status, durationMs: j.durationMs })),\n      slowestJob: slowest ? slowest.name : null,\n    };\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/runHistoryHandler.ts",
+    "snippet": "      Promise.all(runs.map((r) => this.store.jobsForRuns([r.id]))),"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code loads data for a page of runs? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "RunHistoryHandler.list calls `this.store.jobsForRuns([r.id])` once per run inside `runs.map`, so a 100-run page issues 100 pipeline_jobs queries (N+1), even though jobsForRuns takes an array and can load every run's jobs in one `ANY` query. Because they run concurrently through Promise.all, a single page request can also take up to 100 pool connections at once, starving other requests. It should call jobsForRuns(runs.map(r => r.id)) once and group the rows by runId."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A client requests limit=500. What does the response look like?",
+      "choices": [
+        "Up to 500 runs, with nextCursor set when 500 were returned",
+        "An error, because limit exceeds the maximum",
+        "Up to 100 runs, and nextCursor is set when exactly 100 were returned",
+        "Up to 100 runs, and nextCursor is always null"
+      ],
+      "answer": 2,
+      "explanation": "recentRuns clamps the limit with Math.min(limit, 100), and list compares runs.length to the same Math.min(limit, 100) when setting nextCursor. No error is raised, and the cursor is not always null."
+    },
+    {
+      "prompt": "How does the cursor for the next page work?",
+      "choices": [
+        "It is an offset that the next request skips",
+        "It is the smallest run id on this page, and the next query fetches ids strictly lower than it",
+        "It is the largest run id, and the next query fetches ids greater than it",
+        "It is a started_at timestamp"
+      ],
+      "answer": 1,
+      "explanation": "Rows are ordered by id DESC, nextCursor is the last (smallest) id, and recentRuns adds `AND id < $3` for beforeId. It is keyset pagination, not an offset, and not timestamp-based."
+    },
+    {
+      "prompt": "If every job in a run still has durationMs null (the run is queued), what is slowestJob?",
+      "choices": [
+        "null",
+        "The first job's name",
+        "The last job's name",
+        "It throws on comparison with null"
+      ],
+      "answer": 0,
+      "explanation": "summarize skips jobs with `durationMs === null`, so slowest stays null and slowestJob is null. No job is chosen by position, and the null check prevents comparing against null."
+    }
+  ],
+  "concepts": [
+    "backend.data.n_plus_one_queries",
+    "backend.data.pagination",
+    "backend.data.connection_pooling"
+  ]
+}

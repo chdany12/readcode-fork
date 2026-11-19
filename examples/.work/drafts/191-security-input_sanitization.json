@@ -1,0 +1,66 @@
+{
+  "title": "Mention notification email rendering",
+  "name": "Mention email renderer",
+  "language": "TypeScript",
+  "durationMinutes": 11,
+  "files": [
+    {
+      "path": "src/sanitize.ts",
+      "content": "const HTML_ESCAPES: Record<string, string> = {\n  \"&\": \"&amp;\",\n  \"<\": \"&lt;\",\n  \">\": \"&gt;\",\n  '\"': \"&quot;\",\n  \"'\": \"&#39;\",\n};\n\nexport function escapeHtml(input: string): string {\n  return input.replace(/[&<>\"']/g, (ch) => HTML_ESCAPES[ch]);\n}\n\nexport function stripControlChars(input: string): string {\n  return input.replace(/[\\u0000-\\u001f\\u007f]/g, \"\");\n}\n\nexport function clampLength(input: string, max: number): string {\n  const chars = Array.from(input);\n  return chars.length <= max ? input : chars.slice(0, max - 1).join(\"\") + \"\u2026\";\n}\n"
+    },
+    {
+      "path": "src/renderMention.ts",
+      "content": "import { clampLength, escapeHtml, stripControlChars } from \"./sanitize\";\n\nexport interface MentionNotification {\n  recipientEmail: string;\n  senderDisplayName: string;\n  channelName: string;\n  messageText: string;\n  messageUrl: string;\n}\n\nexport interface RenderedEmail {\n  to: string;\n  subject: string;\n  html: string;\n  text: string;\n}\n\nconst APP_ORIGIN = \"https://chat.example.com\";\n\nfunction safeLink(url: string): string {\n  const parsed = new URL(url, APP_ORIGIN);\n  if (parsed.origin !== APP_ORIGIN) {\n    return APP_ORIGIN;\n  }\n  return parsed.toString();\n}\n\nexport function renderMentionEmail(n: MentionNotification): RenderedEmail {\n  const sender = clampLength(stripControlChars(n.senderDisplayName), 64);\n  const channel = clampLength(stripControlChars(n.channelName), 80);\n  const preview = clampLength(n.messageText.trim(), 280);\n  const link = safeLink(n.messageUrl);\n\n  const subject = `${sender} mentioned you in #${channel}`;\n\n  const html = [\n    `<p><strong>${escapeHtml(sender)}</strong> mentioned you in`,\n    ` <strong>#${channel}</strong>:</p>`,\n    `<blockquote>${escapeHtml(preview).replace(/\\n/g, \"<br>\")}</blockquote>`,\n    `<p><a href=\"${escapeHtml(link)}\">Open the conversation</a></p>`,\n  ].join(\"\");\n\n  const text = [\n    `${sender} mentioned you in #${channel}:`,\n    \"\",\n    preview,\n    \"\",\n    `Open the conversation: ${link}`,\n  ].join(\"\\n\");\n\n  return { to: n.recipientEmail, subject, html, text };\n}\n"
+    },
+    {
+      "path": "src/deliverMention.ts",
+      "content": "import { renderMentionEmail, MentionNotification } from \"./renderMention\";\n\nexport interface Mailer {\n  send(mail: { to: string; subject: string; html: string; text: string }): Promise<void>;\n}\n\nexport interface Prefs {\n  emailMentionsEnabled(email: string): Promise<boolean>;\n}\n\nexport async function deliverMention(\n  mailer: Mailer,\n  prefs: Prefs,\n  n: MentionNotification,\n): Promise<\"sent\" | \"skipped\"> {\n  if (!(await prefs.emailMentionsEnabled(n.recipientEmail))) {\n    return \"skipped\";\n  }\n  const mail = renderMentionEmail(n);\n  await mailer.send(mail);\n  return \"sent\";\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/renderMention.ts",
+    "snippet": "    ` <strong>#${channel}</strong>:</p>`,"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how user-controlled values are sanitized before being placed in the notification email? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "Yes. The channel name is user-controlled, and it is interpolated into the HTML body without escapeHtml. stripControlChars only removes control characters, not < or \". A channel named something like <a href=\"https://phish.example\">reset your password</a> renders as live markup in every recipient's mail client, which allows phishing links or layout injection in mail that appears to come from the product. The sender and preview are escaped; the channel needs the same treatment in the HTML part."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A message's messageUrl is \"https://evil.example/login\". What link appears in the email?",
+      "choices": [
+        "https://evil.example/login, HTML-escaped",
+        "An empty href",
+        "https://chat.example.com",
+        "https://chat.example.com/https://evil.example/login"
+      ],
+      "answer": 2,
+      "explanation": "safeLink resolves the URL against APP_ORIGIN; an absolute URL keeps its own origin, which differs from APP_ORIGIN, so the function returns APP_ORIGIN itself. The foreign URL is never used, the href is never empty, and absolute URLs are not appended to the base path."
+    },
+    {
+      "prompt": "Why does the code strip control characters from the sender display name before using it in the subject?",
+      "choices": [
+        "To keep CR/LF out of the subject so it cannot inject extra mail headers or break the header line",
+        "Because escapeHtml cannot handle non-ASCII characters",
+        "To make clampLength count characters correctly",
+        "Because control characters make the URL invalid"
+      ],
+      "answer": 0,
+      "explanation": "The subject goes into a mail header, where CR/LF would end the header line or add new headers; removing \\u0000-\\u001f covers them. escapeHtml handles any characters, clampLength counts code points regardless, and the sender never goes into the URL."
+    },
+    {
+      "prompt": "The message text is 'a\\n<b>hi</b>'. How does it appear in the HTML blockquote?",
+      "choices": [
+        "a<br><b>hi</b>, with 'hi' rendered bold",
+        "a&lt;br&gt;&lt;b&gt;hi&lt;/b&gt;",
+        "a<br>&lt;b&gt;hi&lt;/b&gt;, a line break followed by the literal tags as text",
+        "a &lt;b&gt;hi&lt;/b&gt; on one line"
+      ],
+      "answer": 2,
+      "explanation": "The preview is escaped first, so the tags become entities, and the newline is then replaced with a real <br>. Because the replacement happens after escaping, the <br> is not itself escaped, and the bold tags stay inert text. The newline is converted, so the text does not stay on one line."
+    }
+  ],
+  "concepts": [
+    "backend.security.input_sanitization"
+  ]
+}

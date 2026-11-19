@@ -1,0 +1,33 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.testing.unit_test_design",
+      "count": 7
+    },
+    {
+      "label": "backend.api.rest_design",
+      "count": 3
+    },
+    {
+      "label": "backend.errors.error_propagation",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.metrics",
+      "count": 2
+    },
+    {
+      "label": "backend.testing.integration_tests",
+      "count": 2
+    },
+    {
+      "label": "backend.design.interface_design",
+      "count": 2
+    },
+    {
+      "label": "backend.design.coupling_and_cohesion",
+      "count": 2
+    }
+  ]
+}

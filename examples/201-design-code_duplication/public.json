@@ -1,0 +1,49 @@
+{
+  "id": "bb937661-4628-489f-b8f1-be35897aaf30",
+  "title": "Monthly payslip calculation",
+  "name": "Payroll payslip calculator",
+  "createdAt": "2026-11-15T09:44:42.021Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how the different payslip variants compute their amounts? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Finance changes the top bracket rate from 0.32 to 0.35. Which payslip variants pick up the change?",
+      "choices": [
+        "Only regularPayslip, since the others prorate first",
+        "Only finalPayslip and partialPeriodPayslip",
+        "All three, because they all compute withholding through buildPayslip with the same BRACKETS",
+        "None until each variant's withholding code is updated separately"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "For a taxable amount of 150_000 cents, what does applyBrackets return?",
+      "choices": [
+        "21_000",
+        "15_000",
+        "33_000",
+        "48_000"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "An employee is terminated inside the period and also has a leave payout. How is the payout treated relative to pretax deductions and tax?",
+      "choices": [
+        "It is paid on top of net with no tax",
+        "It is added to gross, so it is taxed, while pretax deductions are prorated only on days worked",
+        "It reduces pretax deductions",
+        "It is prorated by days worked before being added"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.design.code_duplication",
+    "backend.data.money_and_ledgers"
+  ]
+}

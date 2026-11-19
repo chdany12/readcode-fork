@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "There is no defect. continueWatching loads the asset and title through a nested select in a single query, so there is no per-row lazy load (N+1) and no over-fetching of whole rows. recordProgress uses updateMany with an updatedAt < reportedAt guard so out-of-order heartbeats cannot overwrite newer progress, and falls back to create, treating a unique-constraint violation (P2002) as a lost race rather than an error. markCompletedForTitle filters on a relation inside updateMany, which Prisma turns into one set-based UPDATE. removeProfile deletes child rows and the profile inside one $transaction, so a failure cannot leave orphaned progress rows.",
+    "updateMany only matches when updatedAt < reportedAt. After the 12:00:10 write, the 12:00:05 heartbeat matches nothing (count 0), so the code tries create, which hits the unique constraint (P2002) and is caught, returning false. The stale write is not applied. It does not overwrite, since the where clause excludes it; it does not create a duplicate, since the unique index rejects it; and Prisma has no implicit optimistic-locking error here.",
+    "The relations are requested up front in a nested select, so Prisma fetches them with a fixed number of queries (one joined or batched query per relation level), regardless of how many rows come back. Prisma has no lazy loading, so there is no per-row query (ruling out 21 and 41), and nothing is cached between calls on the client (ruling out the last choice).",
+    "Both operations are passed as an array to $transaction, which runs them in one database transaction. If profile.delete fails, the deleteMany is rolled back too, so nothing changes. The other choices describe what would happen with two independent calls or with a cascade that the code does not configure."
+  ]
+}

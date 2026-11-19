@@ -1,0 +1,52 @@
+{
+  "id": "e6cc27cd-86d9-40bf-a46f-45497706df31",
+  "title": "Authorizing balance reads and transfers between bank accounts",
+  "name": "Account transfer routes",
+  "createdAt": "2026-11-15T09:41:31.605Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how these routes decide whether the caller may act on an account? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A logged-in customer requests the balance of an account ID that belongs to another customer. What response do they get?",
+      "choices": [
+        "403 forbidden",
+        "404 account_not_found, the same as for an ID that does not exist",
+        "200 with the balance, because the caller is authenticated",
+        "400 invalid_request"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client times out and resends the exact same transfer request with the same idempotencyKey. Assuming TransferService honours the key, what happens?",
+      "choices": [
+        "The transfer runs again and the source is debited twice",
+        "The second request is rejected with 409",
+        "The original result is returned with status 200 and no second debit",
+        "The second request returns 201 with a new transferId"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Which of these does the transfer route check before calling TransferService.execute?",
+      "choices": [
+        "That the source has enough balance to cover amountMinor",
+        "That the source account is not frozen and that both accounts use the same currency",
+        "That the destination account is not frozen",
+        "That amountMinor is under a daily transfer limit"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.security.authorization_checks",
+    "backend.api.status_codes_and_error_responses",
+    "backend.api.request_validation",
+    "backend.api.idempotency",
+    "backend.data.money_and_ledgers"
+  ]
+}

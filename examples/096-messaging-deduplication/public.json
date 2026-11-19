@@ -1,0 +1,51 @@
+{
+  "id": "69c8c8ca-be6b-458e-8aab-bfa03aeb7958",
+  "title": "Deduplicating video transcode jobs",
+  "name": "Transcode job consumer",
+  "createdAt": "2026-11-15T09:41:31.633Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this consumer deduplicates transcode jobs? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The upload service publishes two separate messages (different ids) requesting the 720p rendition of the same asset within a minute. Assuming both succeed, how many times is the 720p rendition transcoded?",
+      "choices": [
+        "Twice, because the message ids differ",
+        "Once, because the dedup key is built from assetId and renditionProfile, not the message id",
+        "Zero times, because both are treated as duplicates",
+        "Once per worker process, so up to four times"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why is the claim done with a single `SET key value EX ttl NX` rather than a GET followed by a SET?",
+      "choices": [
+        "Because GET is not supported on keys that have a TTL",
+        "To reduce memory used per key",
+        "So that two workers receiving copies concurrently cannot both see the key as absent and both proceed",
+        "So that the TTL refreshes on every duplicate"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "An artist re-uploads a corrected source for the same assetId two hours after the first 1080p transcode completed, and a new 1080p job is published. What happens?",
+      "choices": [
+        "It is skipped as a duplicate, since the 6-hour dedup key for that asset/profile still exists",
+        "It is transcoded, because the sourceUri differs",
+        "It is transcoded, because the key expired when the first job acked",
+        "It fails and is sent to markFailed"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.messaging.deduplication",
+    "backend.messaging.at_least_once_delivery",
+    "backend.concurrency.atomic_operations",
+    "backend.caching.ttls_and_expiry"
+  ]
+}

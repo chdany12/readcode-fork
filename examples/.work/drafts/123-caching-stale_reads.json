@@ -1,0 +1,67 @@
+{
+  "title": "Account balance cache in a ledger service",
+  "name": "Ledger balance cache",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/ledgerService.ts",
+      "content": "import { Pool, PoolClient } from \"pg\";\nimport { BalanceCache } from \"./balanceCache\";\n\nexport class InsufficientFundsError extends Error {\n  constructor(public readonly accountId: string) {\n    super(`insufficient funds in ${accountId}`);\n  }\n}\n\nexport interface Balance {\n  accountId: string;\n  availableCents: number;\n  version: number;\n}\n\nexport class LedgerService {\n  constructor(private readonly db: Pool, private readonly cache: BalanceCache) {}\n\n  async getBalance(accountId: string): Promise<Balance | null> {\n    const cached = await this.cache.get(accountId);\n    if (cached) return cached;\n\n    const { rows } = await this.db.query(\n      \"SELECT account_id, available_cents, version FROM accounts WHERE account_id = $1\",\n      [accountId],\n    );\n    if (rows.length === 0) return null;\n    const balance: Balance = {\n      accountId: rows[0].account_id,\n      availableCents: Number(rows[0].available_cents),\n      version: Number(rows[0].version),\n    };\n    await this.cache.set(balance);\n    return balance;\n  }\n\n  async transfer(fromId: string, toId: string, amountCents: number, reference: string): Promise<void> {\n    if (!Number.isInteger(amountCents) || amountCents <= 0) {\n      throw new RangeError(\"amount must be a positive integer number of cents\");\n    }\n    const [first, second] = [fromId, toId].sort();\n    const client: PoolClient = await this.db.connect();\n    try {\n      await client.query(\"BEGIN\");\n      await client.query(\n        \"SELECT account_id FROM accounts WHERE account_id IN ($1, $2) ORDER BY account_id FOR UPDATE\",\n        [first, second],\n      );\n      const debit = await client.query(\n        `UPDATE accounts SET available_cents = available_cents - $2, version = version + 1\n         WHERE account_id = $1 AND available_cents >= $2 RETURNING version`,\n        [fromId, amountCents],\n      );\n      if (debit.rowCount === 0) throw new InsufficientFundsError(fromId);\n      await client.query(\n        \"UPDATE accounts SET available_cents = available_cents + $2, version = version + 1 WHERE account_id = $1\",\n        [toId, amountCents],\n      );\n      await client.query(\n        \"INSERT INTO ledger_entries (reference, debit_account, credit_account, amount_cents) VALUES ($1, $2, $3, $4)\",\n        [reference, fromId, toId, amountCents],\n      );\n      await this.cache.invalidate(fromId, toId);\n      await client.query(\"COMMIT\");\n    } catch (err) {\n      await client.query(\"ROLLBACK\");\n      throw err;\n    } finally {\n      client.release();\n    }\n  }\n}\n"
+    },
+    {
+      "path": "src/balanceCache.ts",
+      "content": "import Redis from \"ioredis\";\nimport type { Balance } from \"./ledgerService\";\n\nconst TTL_SECONDS = 300;\n\nexport class BalanceCache {\n  constructor(private readonly redis: Redis) {}\n\n  private key(accountId: string): string {\n    return `balance:v1:${accountId}`;\n  }\n\n  async get(accountId: string): Promise<Balance | null> {\n    try {\n      const raw = await this.redis.get(this.key(accountId));\n      return raw ? (JSON.parse(raw) as Balance) : null;\n    } catch {\n      return null;\n    }\n  }\n\n  async set(balance: Balance): Promise<void> {\n    await this.redis.set(this.key(balance.accountId), JSON.stringify(balance), \"EX\", TTL_SECONDS);\n  }\n\n  async invalidate(...accountIds: string[]): Promise<void> {\n    if (accountIds.length === 0) return;\n    await this.redis.del(...accountIds.map((id) => this.key(id)));\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/ledgerService.ts",
+    "snippet": "      await this.cache.invalidate(fromId, toId);\n      await client.query(\"COMMIT\");"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code keeps cached balances consistent with the database? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "In transfer(), the cache keys are deleted before COMMIT. Between the delete and the commit, a concurrent getBalance() misses the cache, reads the still-committed old row (READ COMMITTED cannot see the uncommitted update), and writes that old balance back into Redis with a 300 second TTL. After the commit nothing invalidates again, so customers and downstream checks see the pre-transfer balance for up to five minutes. Invalidation must happen after COMMIT succeeds (and ideally use a version check on set)."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Two transfers run concurrently: A->B and B->A. What prevents them from deadlocking on the row locks?",
+      "choices": [
+        "The ROLLBACK in the catch block releases locks when Postgres detects the deadlock",
+        "Both transactions lock the two rows in sorted account_id order via the SELECT ... ORDER BY ... FOR UPDATE",
+        "The conditional UPDATE with available_cents >= $2 never waits on a lock",
+        "Each transfer uses its own pooled client, so the locks are independent"
+      ],
+      "answer": 1,
+      "explanation": "The ids are sorted and the SELECT ... ORDER BY account_id FOR UPDATE acquires both locks in the same global order, so no cycle can form. A rollback after a detected deadlock is recovery, not prevention; the UPDATE does wait on locks; separate clients are exactly what make lock conflicts possible."
+    },
+    {
+      "prompt": "If Redis is unreachable while getBalance() runs, what happens?",
+      "choices": [
+        "get() returns null, the balance is read from Postgres, then set() throws and getBalance() rejects",
+        "getBalance() returns null as if the account did not exist",
+        "The balance is read from Postgres and returned normally because both cache calls swallow errors",
+        "getBalance() hangs until the 300 second TTL elapses"
+      ],
+      "answer": 0,
+      "explanation": "BalanceCache.get() catches errors and returns null, so the code falls through to the database. But set() has no try/catch, so its rejection propagates out of getBalance() even though a valid balance was loaded. It does not return null for the account, set() does not swallow errors, and the TTL is unrelated to connection failures."
+    },
+    {
+      "prompt": "What does the version column contribute in this code as written?",
+      "choices": [
+        "It is used by set() to refuse overwriting a newer cached balance",
+        "It makes the debit UPDATE an optimistic-concurrency check",
+        "It is incremented and stored in the cache but nothing compares it, so it does not affect which value wins in Redis",
+        "It is used by getBalance() to detect and discard expired cache entries"
+      ],
+      "answer": 2,
+      "explanation": "Both UPDATEs bump version and getBalance() copies it into the cached object, but BalanceCache.set() writes unconditionally and no query filters on version. Concurrency is handled by FOR UPDATE row locks, and expiry is handled only by the Redis TTL."
+    }
+  ],
+  "concepts": [
+    "backend.caching.stale_reads",
+    "backend.caching.cache_invalidation",
+    "backend.caching.cache_aside_vs_write_through",
+    "backend.concurrency.deadlocks",
+    "backend.data.transactions_and_isolation_levels",
+    "backend.data.money_and_ledgers"
+  ]
+}

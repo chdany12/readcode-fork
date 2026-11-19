@@ -1,0 +1,62 @@
+{
+  "title": "Multi-resource locking for appointment booking",
+  "name": "Clinic appointment scheduler",
+  "language": "TypeScript",
+  "durationMinutes": 16,
+  "files": [
+    {
+      "path": "src/lockManager.ts",
+      "content": "export class LockTimeoutError extends Error {\n  constructor(readonly key: string, readonly waitedMs: number) {\n    super(`timed out after ${waitedMs}ms waiting for ${key}`);\n  }\n}\n\ninterface Entry {\n  held: boolean;\n  waiters: Array<{ grant: () => void }>;\n}\n\nexport class ResourceLockManager {\n  private readonly entries = new Map<string, Entry>();\n\n  private entry(key: string): Entry {\n    let e = this.entries.get(key);\n    if (!e) {\n      e = { held: false, waiters: [] };\n      this.entries.set(key, e);\n    }\n    return e;\n  }\n\n  private acquireOne(key: string, timeoutMs: number): Promise<void> {\n    const e = this.entry(key);\n    if (!e.held) {\n      e.held = true;\n      return Promise.resolve();\n    }\n    return new Promise<void>((resolve, reject) => {\n      const waiter = {\n        grant: () => {\n          clearTimeout(timer);\n          resolve();\n        },\n      };\n      const timer = setTimeout(() => {\n        const i = e.waiters.indexOf(waiter);\n        if (i !== -1) {\n          e.waiters.splice(i, 1);\n          reject(new LockTimeoutError(key, timeoutMs));\n        }\n      }, timeoutMs);\n      e.waiters.push(waiter);\n    });\n  }\n\n  private releaseOne(key: string): void {\n    const e = this.entries.get(key);\n    if (!e || !e.held) return;\n    const next = e.waiters.shift();\n    if (next) {\n      next.grant();\n    } else {\n      e.held = false;\n      this.entries.delete(key);\n    }\n  }\n\n  async withLocks<T>(keys: string[], timeoutMs: number, fn: () => Promise<T>): Promise<T> {\n    const ordered = [...new Set(keys)].sort();\n    const acquired: string[] = [];\n    try {\n      for (const k of ordered) {\n        await this.acquireOne(k, timeoutMs);\n        acquired.push(k);\n      }\n      return await fn();\n    } finally {\n      for (let i = acquired.length - 1; i >= 0; i--) this.releaseOne(acquired[i]);\n    }\n  }\n}\n"
+    },
+    {
+      "path": "src/schedulingService.ts",
+      "content": "import { LockTimeoutError, ResourceLockManager } from \"./lockManager\";\n\nexport interface Slot {\n  providerId: string;\n  roomId: string;\n  startsAt: Date;\n  minutes: number;\n}\n\nexport interface Appointment extends Slot {\n  id: string;\n  patientId: string;\n  status: \"booked\" | \"cancelled\";\n}\n\nexport interface AppointmentRepo {\n  findById(id: string): Promise<Appointment | undefined>;\n  overlapping(field: \"providerId\" | \"roomId\", id: string, from: Date, to: Date): Promise<Appointment[]>;\n  insert(a: Appointment): Promise<void>;\n  update(a: Appointment): Promise<void>;\n}\n\nexport type BookingResult =\n  | { ok: true; appointment: Appointment }\n  | { ok: false; reason: \"conflict\" | \"busy\" | \"not_found\" };\n\nconst LOCK_WAIT_MS = 2_000;\n\nexport class SchedulingService {\n  constructor(\n    private readonly repo: AppointmentRepo,\n    private readonly locks: ResourceLockManager,\n    private readonly newId: () => string,\n  ) {}\n\n  private keysFor(...slots: Slot[]): string[] {\n    return slots.flatMap((s) => [`provider:${s.providerId}`, `room:${s.roomId}`]);\n  }\n\n  private async isFree(slot: Slot, ignoreId?: string): Promise<boolean> {\n    const end = new Date(slot.startsAt.getTime() + slot.minutes * 60_000);\n    const [byProvider, byRoom] = await Promise.all([\n      this.repo.overlapping(\"providerId\", slot.providerId, slot.startsAt, end),\n      this.repo.overlapping(\"roomId\", slot.roomId, slot.startsAt, end),\n    ]);\n    return [...byProvider, ...byRoom].every((a) => a.status === \"cancelled\" || a.id === ignoreId);\n  }\n\n  async book(patientId: string, slot: Slot): Promise<BookingResult> {\n    try {\n      return await this.locks.withLocks(this.keysFor(slot), LOCK_WAIT_MS, async () => {\n        if (!(await this.isFree(slot))) return { ok: false, reason: \"conflict\" } as const;\n        const appointment: Appointment = { ...slot, id: this.newId(), patientId, status: \"booked\" };\n        await this.repo.insert(appointment);\n        return { ok: true, appointment } as const;\n      });\n    } catch (err) {\n      if (err instanceof LockTimeoutError) return { ok: false, reason: \"busy\" };\n      throw err;\n    }\n  }\n\n  async reschedule(appointmentId: string, current: Slot, next: Slot): Promise<BookingResult> {\n    try {\n      return await this.locks.withLocks(this.keysFor(current, next), LOCK_WAIT_MS, async () => {\n        const existing = await this.repo.findById(appointmentId);\n        if (!existing || existing.status !== \"booked\") return { ok: false, reason: \"not_found\" } as const;\n        if (existing.providerId !== current.providerId || existing.roomId !== current.roomId) {\n          return { ok: false, reason: \"conflict\" } as const;\n        }\n        if (!(await this.isFree(next, appointmentId))) return { ok: false, reason: \"conflict\" } as const;\n        const updated: Appointment = { ...existing, ...next };\n        await this.repo.update(updated);\n        return { ok: true, appointment: updated } as const;\n      });\n    } catch (err) {\n      if (err instanceof LockTimeoutError) return { ok: false, reason: \"busy\" };\n      throw err;\n    }\n  }\n}\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code acquires, orders, or releases provider and room locks? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is none. withLocks dedupes and sorts keys, so book and reschedule calls touching overlapping providers and rooms always acquire in one global order and cannot deadlock; rescheduling within the same provider or room does not try to lock it twice because of the Set. A key is pushed to `acquired` only after acquireOne resolves, so on a LockTimeoutError the finally releases exactly the locks already held. A timed-out waiter is spliced out of the queue before rejecting, and grant() clears the timer, so a lock is never handed to a waiter that has given up. releaseOne hands ownership directly to the next waiter, so no caller can barge in."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A reschedule moves an appointment to a new time with the same provider and same room. How many distinct locks does withLocks acquire?",
+      "choices": [
+        "Four, one per key generated by keysFor",
+        "Two, because duplicate keys are removed before acquiring",
+        "One, because provider and room keys are merged",
+        "Zero, because the slots are equal and locking is skipped"
+      ],
+      "answer": 1,
+      "explanation": "keysFor(current, next) yields provider:P, room:R, provider:P, room:R. withLocks wraps them in a Set, leaving two distinct keys, each acquired once. Provider and room keys have different prefixes so they are not merged, and nothing skips locking."
+    },
+    {
+      "prompt": "A booking acquires `provider:7` and then times out waiting for `room:3`. What does the caller of book() see and what happens to `provider:7`?",
+      "choices": [
+        "An exception propagates and provider:7 stays held",
+        "{ ok: false, reason: \"conflict\" } and provider:7 is released",
+        "{ ok: false, reason: \"busy\" } and provider:7 is released",
+        "{ ok: false, reason: \"busy\" } but provider:7 is released only when its timer fires"
+      ],
+      "answer": 2,
+      "explanation": "acquireOne for room:3 rejects with LockTimeoutError; the finally in withLocks releases provider:7 (it is in `acquired`), and book catches LockTimeoutError and returns reason \"busy\". \"conflict\" is only for overlapping appointments, and release is immediate in finally, not timer-driven."
+    },
+    {
+      "prompt": "Why does reschedule re-check the existing appointment's providerId and roomId against `current` inside the lock?",
+      "choices": [
+        "The locks taken are derived from the caller-supplied `current`; if the stored appointment has since moved, those locks would not protect its real resources",
+        "To avoid an N+1 query in isFree",
+        "Because withLocks requires the keys to be verified before release",
+        "It is redundant; the lock already guarantees the values match"
+      ],
+      "answer": 0,
+      "explanation": "The caller provides `current`, possibly from a stale read. If another reschedule already moved the appointment, the locks held would cover the wrong provider/room, so the code bails with a conflict rather than updating unprotected resources. It has nothing to do with query counts or release mechanics, and the lock alone cannot guarantee the caller's input is fresh."
+    }
+  ],
+  "concepts": [
+    "backend.concurrency.locking_and_lock_ordering",
+    "backend.concurrency.deadlocks",
+    "backend.resilience.timeouts",
+    "backend.concurrency.race_conditions"
+  ]
+}

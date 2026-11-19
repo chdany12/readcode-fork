@@ -1,0 +1,33 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.security.authorization_checks",
+      "count": 4
+    },
+    {
+      "label": "backend.data.money_and_ledgers",
+      "count": 4
+    },
+    {
+      "label": "backend.security.authentication",
+      "count": 3
+    },
+    {
+      "label": "backend.security.audit_logging",
+      "count": 3
+    },
+    {
+      "label": "backend.data.transactions_and_isolation_levels",
+      "count": 2
+    },
+    {
+      "label": "backend.api.idempotency",
+      "count": 2
+    },
+    {
+      "label": "backend.data.migrations",
+      "count": 2
+    }
+  ]
+}

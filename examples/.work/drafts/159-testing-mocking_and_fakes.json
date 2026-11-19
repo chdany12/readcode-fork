@@ -1,0 +1,64 @@
+{
+  "title": "CI run failure notifier and its mocked tests",
+  "name": "CI failure notifier",
+  "language": "TypeScript",
+  "durationMinutes": 11,
+  "files": [
+    {
+      "path": "src/runCompletion.ts",
+      "content": "export interface PipelineRun {\n  id: string;\n  repo: string;\n  branch: string;\n  status: \"passed\" | \"failed\" | \"cancelled\";\n  failedStep?: string;\n  triggeredBy: string;\n}\n\nexport interface ChatNotifier {\n  notifyFailure(channel: string, message: string): Promise<void>;\n}\n\nexport interface OwnershipLookup {\n  channelFor(repo: string): Promise<string | undefined>;\n}\n\nexport class RunCompletionHandler {\n  constructor(\n    private readonly notifier: ChatNotifier,\n    private readonly owners: OwnershipLookup,\n    private readonly protectedBranches: string[] = [\"main\", \"release\"],\n  ) {}\n\n  async onRunCompleted(run: PipelineRun): Promise<\"notified\" | \"skipped\"> {\n    if (run.status !== \"failed\") return \"skipped\";\n    if (!this.protectedBranches.includes(run.branch)) return \"skipped\";\n\n    const channel = (await this.owners.channelFor(run.repo)) ?? \"#ci-alerts\";\n    const step = run.failedStep ?? \"unknown step\";\n    await this.notifier.notifyFailure(\n      channel,\n      `${run.repo}@${run.branch} failed at ${step} (run ${run.id}, by ${run.triggeredBy})`,\n    );\n    return \"notified\";\n  }\n}\n"
+    },
+    {
+      "path": "src/runCompletion.test.ts",
+      "content": "import { RunCompletionHandler, PipelineRun, ChatNotifier, OwnershipLookup } from \"./runCompletion\";\n\nfunction makeRun(overrides: Partial<PipelineRun> = {}): PipelineRun {\n  return {\n    id: \"run_42\",\n    repo: \"payments-api\",\n    branch: \"main\",\n    status: \"failed\",\n    failedStep: \"integration-tests\",\n    triggeredBy: \"merge-bot\",\n    ...overrides,\n  };\n}\n\ndescribe(\"RunCompletionHandler\", () => {\n  let notifier: jest.Mocked<ChatNotifier>;\n  let owners: jest.Mocked<OwnershipLookup>;\n  let handler: RunCompletionHandler;\n\n  beforeEach(() => {\n    notifier = { notifyFailure: jest.fn().mockResolvedValue(undefined) };\n    owners = { channelFor: jest.fn().mockResolvedValue(\"#payments-eng\") };\n    handler = new RunCompletionHandler(notifier, owners);\n  });\n\n  it(\"posts to the owning team's channel on a failed main build\", async () => {\n    const result = await handler.onRunCompleted(makeRun());\n    expect(result).toBe(\"notified\");\n    expect(owners.channelFor).toHaveBeenCalledWith(\"payments-api\");\n    expect(notifier.notifyFailure).toHaveBeenCalledWith(\n      \"#payments-eng\",\n      \"payments-api@main failed at integration-tests (run run_42, by merge-bot)\",\n    );\n  });\n\n  it(\"falls back to #ci-alerts when the repo has no owner\", async () => {\n    owners.channelFor.mockResolvedValueOnce(undefined);\n    await handler.onRunCompleted(makeRun({ repo: \"legacy-batch\" }));\n    expect(notifier.notifyFailure).toHaveBeenCalledWith(\"#ci-alerts\", expect.stringContaining(\"legacy-batch@main\"));\n  });\n\n  it(\"stays quiet for feature branches\", async () => {\n    const result = await handler.onRunCompleted(makeRun({ branch: \"feature/retry-ui\" }));\n    expect(result).toBe(\"skipped\");\n    expect(notifier.notifyFailure).not.toHaveBeenCalled();\n  });\n\n  it(\"stays quiet for passing runs\", async () => {\n    const result = await handler.onRunCompleted(makeRun({ status: \"passed\" }));\n    expect(result).toBe(\"skipped\");\n    expect(owners.channelFor).not.toHaveBeenCalled();\n  });\n\n  it(\"notifies for release branch failures without a step name\", async () => {\n    await handler.onRunCompleted(makeRun({ branch: \"release\", failedStep: undefined }));\n    expect(notifier.notifyFailure).toHaveBeenCalled;\n    expect(notifier.notifyFailure.mock.calls[0]?.[1] ?? \"\").toContain(\"unknown step\");\n  });\n\n  it(\"propagates notifier outages to the caller\", async () => {\n    notifier.notifyFailure.mockRejectedValueOnce(new Error(\"chat API 503\"));\n    await expect(handler.onRunCompleted(makeRun())).rejects.toThrow(\"chat API 503\");\n  });\n});\n"
+    }
+  ],
+  "defect": {
+    "path": "src/runCompletion.test.ts",
+    "snippet": "    expect(notifier.notifyFailure).toHaveBeenCalled;\n    expect(notifier.notifyFailure.mock.calls[0]?.[1] ?? \"\").toContain(\"unknown step\");"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how these tests use mocks to verify the handler's behavior? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "In the release-branch test, `expect(notifier.notifyFailure).toHaveBeenCalled;` references the matcher without calling it, so it asserts nothing. The next line then falls back to \"\" when there is no call, which would fail, but only by accident and with a misleading message; more importantly, if someone later loosens that line the test silently verifies nothing about whether release failures notify. The intended assertion `toHaveBeenCalled()` is missing, so the mock interaction for the release branch is not actually checked."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Why do the tests not leak mock call history from one test into the next?",
+      "choices": [
+        "Jest clears all mocks automatically after each test by default",
+        "beforeEach builds fresh jest.fn() instances and a new handler for every test",
+        "mockResolvedValueOnce resets the mock after it is used",
+        "The handler copies the notifier in its constructor"
+      ],
+      "answer": 1,
+      "explanation": "beforeEach recreates notifier, owners and handler, so every test starts with new mocks and empty call lists. Jest does not clear mocks by default unless configured, mockResolvedValueOnce only affects the next return value, and the constructor stores the reference as-is."
+    },
+    {
+      "prompt": "In the 'stays quiet for passing runs' test, what does asserting owners.channelFor was not called establish?",
+      "choices": [
+        "That the ownership lookup failed",
+        "That the handler returns 'skipped' only for feature branches",
+        "That the status check short-circuits before any external lookup is made",
+        "That #ci-alerts was used as the channel"
+      ],
+      "answer": 2,
+      "explanation": "onRunCompleted returns early on status !== 'failed', before calling owners.channelFor. The assertion checks that ordering. The lookup didn't fail; it was never invoked, and no channel was chosen."
+    },
+    {
+      "prompt": "If the real chat API is down, what does the handler do according to the code and its last test?",
+      "choices": [
+        "Rejects with the notifier's error so the caller can decide to retry",
+        "Returns 'skipped'",
+        "Logs and returns 'notified'",
+        "Falls back to posting in #ci-alerts"
+      ],
+      "answer": 0,
+      "explanation": "notifyFailure is awaited with no try/catch, so its rejection propagates; the test asserts rejects.toThrow('chat API 503'). There's no catch to return 'skipped' or 'notified', and #ci-alerts is only a fallback for a missing owner, not for errors."
+    }
+  ],
+  "concepts": [
+    "backend.testing.mocking_and_fakes",
+    "backend.testing.unit_test_design",
+    "backend.errors.error_propagation"
+  ]
+}

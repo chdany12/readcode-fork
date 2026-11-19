@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/errors.ts",
+        "startLine": 17,
+        "endLine": 18
+      }
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "problemHandler looks up mappers by err.name. Every error class sets this.name except CarrierUnavailableError, whose constructor only calls super(...). Its name therefore stays \"Error\", no mapper matches, and a carrier outage is answered with a generic 500 and no Retry-After header instead of 503 with Retry-After. Clients cannot tell a transient carrier problem from a server bug, and the retry hint is lost. Setting this.name = \"CarrierUnavailableError\" (or mapping by instanceof) fixes it.",
+    "InvalidStateTransitionError sets its name, so mappers[\"InvalidStateTransitionError\"] matches and builds status 409 with detail `${from} -> ${to} is not allowed`. 404 is for missing shipments, 422 is used for address rejection, and 204 is only sent when cancel succeeds.",
+    "The first line checks res.headersSent and calls next(err), handing the error to express's default handler, which closes the connection rather than writing a second response. It does not write a problem body (headers are already sent), does not swallow the error, and never re-runs the route.",
+    "instance is set to req.originalUrl, identifying this occurrence, while type is a stable identifier for the problem kind that clients can switch on. The status has its own field, and no stack trace is ever included in the body."
+  ]
+}

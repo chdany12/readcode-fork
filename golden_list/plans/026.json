@@ -1,0 +1,33 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.testing.flaky_tests",
+      "count": 6
+    },
+    {
+      "label": "backend.observability.metrics",
+      "count": 3
+    },
+    {
+      "label": "backend.testing.integration_tests",
+      "count": 3
+    },
+    {
+      "label": "backend.config.configuration_loading",
+      "count": 2
+    },
+    {
+      "label": "backend.config.environment_specific_behaviour",
+      "count": 2
+    },
+    {
+      "label": "backend.concurrency.async_await_pitfalls",
+      "count": 2
+    },
+    {
+      "label": "backend.api.rest_design",
+      "count": 2
+    }
+  ]
+}

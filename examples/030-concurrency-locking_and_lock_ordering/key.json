@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    2,
+    0,
+    2
+  ],
+  "explanations": [
+    "There is none. runExclusive dedupes and sorts keys, so reallocate(A,B) and reallocate(B,A) and rebalance all acquire locks in the same global order and cannot form a wait cycle. Locks are recorded in `taken` only after they are obtained and are released in a finally block, so a thrown InsufficientBudgetError or repo failure never leaks a lock. unlock hands the lock directly to the next waiter (held stays set) so no third caller can barge in between, and the duplicate-key case is handled by the Set, so a key is never locked twice by the same call.",
+    "The lock is handed off: the key remains in `held`, and the resumed waiter now owns it. If it were deleted first, a fresh lock() call could add the key and proceed while the woken waiter also proceeds, giving two owners. It is not leaked, since the last unlock with an empty queue deletes it, and waiters never touch `held` themselves.",
+    "The check happens before any save, so nothing is written. The throw propagates out of fn, and runExclusive's finally pops and unlocks every key in `taken`, which contains both. No partial save occurs because the saves are after the check.",
+    "Waiters are FIFO per key, so rebalance queues on each key in sorted order. While it holds X's lock, chargeImpression calls for X wait in X's queue, then proceed against the rebalanced value. Nothing fails fast, nothing reads outside the lock, and there is no priority or preemption."
+  ]
+}

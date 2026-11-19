@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/postRepository.ts",
+        "startLine": 51,
+        "endLine": 52
+      }
+    },
+    1,
+    0,
+    2
+  ],
+  "explanations": [
+    "PostRepository.findById takes communityId but never uses it: the query filters only on id and hidden. Any authenticated member of one community can call GET /posts/:id with a post id from another community and read it. The WHERE clause needs AND community_id = $2, with communityId passed as a parameter, like feed does.",
+    "The auth middleware stores the result of verifySession on req.member, and the feed handler passes req.member!.communityId to posts.feed. The route reads no communityId from the query string or from headers, and it is not derived from posts.",
+    "The cursor is the last item's createdAt, and the next query uses a strict created_at < $2. Any posts with that same timestamp that didn't fit on the previous page are excluded, so they are skipped rather than repeated. The ORDER BY has no id tiebreak, and a valid date never triggers the 400.",
+    "The handler reads only req.body.body and passes req.member!.communityId and req.member!.userId to create, so any communityId in the body is ignored. It is not rejected; extra fields don't affect the validation."
+  ]
+}

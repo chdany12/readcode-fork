@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "shipping/shipRelayClient.ts",
+        "startLine": 26,
+        "endLine": 28
+      }
+    },
+    1,
+    3,
+    0
+  ],
+  "explanations": [
+    "The Idempotency-Key is generated inside the retry loop, so every attempt sends a fresh key. If POST /v2/shipments times out (AbortSignal.timeout) or gets a 502/504 after ShipRelay has already bought the label, the retry carries a new key and ShipRelay treats it as a new purchase: the merchant is charged for two or more labels for the same order. The key must be created once per logical operation (e.g. before the loop, or derived from orderId) and reused on every attempt.",
+    "422 is not in RETRYABLE_STATUS, so request() throws the error built by CarrierError.fromStatus, which maps 422 to InvalidAddress. The catch block rethrows CarrierErrors whose kind is not Unavailable, so there is no retry. Nothing returns an empty list, and Rejected is only used for other non-mapped statuses (and for the cost check in buyLabel).",
+    "503 is retryable. Retry-After of 0 fails the retryAfter > 0 check, so the code falls back to backoff(attempt): 200-400ms, then 400-800ms, then 800-1600ms (it also sleeps after the final attempt). After the loop it throws lastError, which fromStatus mapped to Unavailable. Nothing resets the counter, and 0 is not treated as 'do not retry'.",
+    "ShipRelayCarrier translates domain Address/Parcel into ShipRelay's street1/zip/weight_oz shape and translates decimal-string amounts back into cents, and errors are normalized into CarrierErrorKind values. That isolation is the point of the adapter. There is no caching, the interface itself makes no delivery guarantees, and maxAttempts is fixed in ShipRelayConfig, not passed per call."
+  ]
+}

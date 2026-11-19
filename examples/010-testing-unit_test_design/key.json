@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "There is none. Time is injected through a FixedClock, so recency decay is deterministic rather than depending on Date.now(). The shared `ranker` at describe level is stateless, so sharing it cannot leak state between tests. Exact equality is used where values are integers (no decay at age 0), and toBeCloseTo is used for the half-life ratio where floating point is involved. The rank test includes a tie and a non-match, so it actually exercises the id tie-break, the filter, and the limit.",
+    "doc() defaults updatedAt to NOW (Jan 31 2026). With a real clock, ageDays is large, the decay factor is well under 1, and the exact toBe(3)/toBe(1) checks fail. Title weighting is multiplied by decay, so it is not time independent; the day of month is irrelevant; nothing throws.",
+    "\"c\" appears before \"a\" in the input, but the expected output has \"a\" first, which only holds because of `a.id.localeCompare(b.id)` in the sort comparator. Nothing is deduplicated, the limit is applied after sort, and \"top\" scoring 3 shows title and body are not equal.",
+    "ageDays uses Math.max(0, now - updatedAt), so a negative age becomes 0 and 0.5^0 = 1, leaving the single body match's raw score of 1. There is no filtering of future docs, no reversed half-life, and tokenize does not look at timestamps."
+  ]
+}

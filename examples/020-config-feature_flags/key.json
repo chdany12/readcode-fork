@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/orgFlags.ts",
+        "startLine": 34,
+        "endLine": 34
+      }
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "allowedOrgs is a comma-separated string, and enabledFor uses String.includes on it. That is a substring match, so allowing \"org-12\" also enables \"org-1\" and \"org-2\", and allowing \"acme-eu\" enables \"acme\". AI triage leaks to organizations that never opted in. The list should be split on commas, trimmed, and compared for exact equality.",
+    "load() returns the cached flag while now - at < ttlMs, so each instance keeps the old value for up to ttlMs before refetching. It is not immediate and does not need a restart.",
+    "The empty catch swallows the error and execution falls through to ruleBasedQueue and assign with reason \"rules\". Nothing logs or rethrows, there is no retry, and tier2-urgent is only for urgent priority.",
+    "The wildcard branch returns flag.plans.includes(org.plan), so the plans list still filters. It is not unconditional, \"*\" is handled explicitly, and enterprise is only included if listed."
+  ]
+}

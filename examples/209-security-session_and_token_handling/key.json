@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/auth/syncClientTokens.ts",
+        "startLine": 59,
+        "endLine": 59
+      }
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "refresh() mints a new token in the same family but never marks the presented record as revoked. The reuse-detection branch (record.revoked) therefore never fires for normal rotation: the old refresh token stays valid for its full 30 days alongside the new one. A stolen refresh token can be used indefinitely in parallel with the legitimate client without triggering family revocation. The presented record should be marked revoked (ideally atomically with inserting the new one) before minting.",
+    "Only hash(refreshToken) is inserted, and lookups hash the presented value. A database leak exposes hashes, which cannot be presented as tokens. Tokens are random per device, hashing is not about speed, and the userId comes from the stored record, not the hash.",
+    "The deviceId check calls store.revokeFamily(record.familyId) and throws InvalidRefreshError, which refreshHandler maps to 401 invalid_grant. No new pair is issued, the route only checks that deviceId is a string, and revocation covers the whole family, not one token.",
+    "Only InvalidRefreshError is mapped to 401; any other error is rethrown with throw err. That avoids logging clients out during an outage. There is no 400 path for store errors and no retry loop."
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "id": "6878af73-711f-4c24-ae2c-aa9db6435ef4",
+  "title": "Rider ride request and cancellation through a dispatch service",
+  "name": "Rider dispatch service",
+  "createdAt": "2026-11-15T09:44:42.037Z",
+  "durationMinutes": 13,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how data passes between the persistence layer and the dispatch service? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two requestRide calls for the same rider arrive at nearly the same time and neither finds an active ride. What does this code do?",
+      "choices": [
+        "The second call throws RideConflict because create checks for an active ride",
+        "Postgres serializes the two calls because findActiveForRider uses LIMIT 1",
+        "Both calls can create a ride, since the check and the insert are separate statements with no lock or unique constraint shown",
+        "The handler returns 409 for the second call because it shares res.locals"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Where is the rule 'a ride that is in progress cannot be cancelled' enforced?",
+      "choices": [
+        "In DispatchService.cancelRide, before any write",
+        "In the SQL WHERE clause of setStatus",
+        "In the cancel HTTP handler before calling the service",
+        "In RideRepository.findById, which filters out in-progress rides"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "cancelRide throws RideNotFound (404) both when the ride does not exist and when it belongs to a different rider. What is the effect of that choice?",
+      "choices": [
+        "Another rider's ride is cancelled but the caller is told it was not found",
+        "A caller cannot tell whether a ride id they do not own exists",
+        "The driver is released even though the request is rejected",
+        "Express retries the request against the next matching route"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.design.layering",
+    "backend.data.orm_pitfalls",
+    "backend.concurrency.race_conditions"
+  ]
+}

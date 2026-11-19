@@ -1,0 +1,50 @@
+{
+  "id": "0f4a8f33-f4af-4024-ad4d-bfaf9ae8735d",
+  "title": "Validating search query parameters",
+  "name": "Search parameter parsing",
+  "createdAt": "2026-11-15T09:41:31.727Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code validates the search request parameters? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends filter.tenant_id=42 along with a valid query. What happens?",
+      "choices": [
+        "The filter is ignored and the search runs unfiltered",
+        "The filter is passed to the engine as a term filter",
+        "The route responds 400 with field \"filter.tenant_id\"",
+        "The route calls next(err) and returns 500"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends offset=2.5. How is it handled?",
+      "choices": [
+        "Rejected with 400 because Number.isInteger(2.5) is false",
+        "Truncated to 2 and accepted",
+        "Rounded to 3 and accepted",
+        "Accepted as 2.5 and passed to the engine"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does the route wrap parseSearchParams in its own try/catch separate from the engine call?",
+      "choices": [
+        "So validation errors are retried with default values",
+        "So client input errors become 400s while unexpected errors still go to the error middleware",
+        "Because parseSearchParams is async and must be awaited separately",
+        "So engine errors are reported as 400 invalid_parameter"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.request_validation",
+    "backend.api.status_codes_and_error_responses",
+    "backend.data.pagination"
+  ]
+}

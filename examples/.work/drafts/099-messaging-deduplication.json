@@ -1,0 +1,65 @@
+{
+  "title": "Ad click billing handler with seen-key deduplication",
+  "name": "Click billing handler",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/types.ts",
+      "content": "export interface ClickEvent {\n  clickId: string;\n  campaignId: string;\n  advertiserId: string;\n  costMicros: number;\n  occurredAt: string;\n}\n\nexport interface QueueMessage {\n  body: string;\n  receivedAt: number;\n  deliveryAttempt: number;\n}\n\nexport interface SeenStore {\n  markIfNew(key: string, ttlSeconds: number): Promise<boolean>;\n  forget(key: string): Promise<void>;\n}\n\nexport interface SpendLedger {\n  addSpend(advertiserId: string, campaignId: string, costMicros: number, at: string): Promise<void>;\n}\n"
+    },
+    {
+      "path": "src/clickBillingHandler.ts",
+      "content": "import { ClickEvent, QueueMessage, SeenStore, SpendLedger } from \"./types\";\n\nconst DEDUP_TTL_SECONDS = 48 * 3600;\n\nexport class InvalidClickError extends Error {}\n\nexport function parseClick(raw: string): ClickEvent {\n  let data: any;\n  try {\n    data = JSON.parse(raw);\n  } catch {\n    throw new InvalidClickError(\"click payload is not JSON\");\n  }\n  if (typeof data.clickId !== \"string\" || data.clickId.length === 0) {\n    throw new InvalidClickError(\"missing clickId\");\n  }\n  if (!Number.isInteger(data.costMicros) || data.costMicros < 0) {\n    throw new InvalidClickError(`bad costMicros for ${data.clickId}`);\n  }\n  return {\n    clickId: data.clickId,\n    campaignId: String(data.campaignId),\n    advertiserId: String(data.advertiserId),\n    costMicros: data.costMicros,\n    occurredAt: String(data.occurredAt),\n  };\n}\n\nexport type Outcome = \"billed\" | \"duplicate\" | \"rejected\";\n\nexport class ClickBillingHandler {\n  constructor(\n    private readonly seen: SeenStore,\n    private readonly ledger: SpendLedger,\n    private readonly metrics: { increment(name: string, tags?: Record<string, string>): void },\n  ) {}\n\n  async handle(msg: QueueMessage): Promise<Outcome> {\n    let click: ClickEvent;\n    try {\n      click = parseClick(msg.body);\n    } catch (err) {\n      if (err instanceof InvalidClickError) {\n        this.metrics.increment(\"clicks.rejected\");\n        return \"rejected\";\n      }\n      throw err;\n    }\n\n    const key = `click:${click.clickId}:${msg.receivedAt}`;\n    const isNew = await this.seen.markIfNew(key, DEDUP_TTL_SECONDS);\n    if (!isNew) {\n      this.metrics.increment(\"clicks.duplicate\", { campaign: click.campaignId });\n      return \"duplicate\";\n    }\n\n    try {\n      await this.ledger.addSpend(click.advertiserId, click.campaignId, click.costMicros, click.occurredAt);\n    } catch (err) {\n      await this.seen.forget(key);\n      throw err;\n    }\n\n    this.metrics.increment(\"clicks.billed\", { campaign: click.campaignId });\n    return \"billed\";\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/clickBillingHandler.ts",
+    "snippet": "    const key = `click:${click.clickId}:${msg.receivedAt}`;"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this handler prevents a click from being billed more than once? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The dedup key includes msg.receivedAt, which is the time this particular delivery arrived, not a property of the click. When the queue redelivers the same click (after a timeout, a crash before ack, or an upstream retry), receivedAt differs, so the key is new, markIfNew returns true, and addSpend charges the advertiser again. The key should be derived only from the click's identity (click:${click.clickId})."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "addSpend throws because the ledger database is briefly unavailable. What does the handler do?",
+      "choices": [
+        "Returns 'duplicate' so the message is acked without billing",
+        "Removes the seen key and rethrows, so the message can be retried and billed",
+        "Keeps the seen key and rethrows, so the retry is counted as a duplicate",
+        "Swallows the error and returns 'billed'"
+      ],
+      "answer": 1,
+      "explanation": "The catch around addSpend calls seen.forget(key) and then rethrows, so a later attempt is not blocked by the marker. It does not return 'duplicate' or 'billed' on that path, and it does not keep the key."
+    },
+    {
+      "prompt": "A payload arrives with costMicros set to 12.5. What is the result?",
+      "choices": [
+        "It is billed after rounding to 13",
+        "The handler throws and the message is retried",
+        "parseClick throws InvalidClickError and handle returns 'rejected'",
+        "It is billed as 12 because costMicros is truncated"
+      ],
+      "answer": 2,
+      "explanation": "Number.isInteger(12.5) is false, so parseClick throws InvalidClickError; handle catches that type, increments clicks.rejected and returns 'rejected' without rethrowing. No rounding or truncation happens."
+    },
+    {
+      "prompt": "Two instances call markIfNew with the same key at the same moment. Assuming markIfNew is an atomic set-if-absent, what is the effect on billing for that key?",
+      "choices": [
+        "Exactly one instance gets true and calls addSpend",
+        "Both get true because the TTL has not yet been applied",
+        "Both get false and the click is never billed",
+        "Both block until the TTL expires"
+      ],
+      "answer": 0,
+      "explanation": "An atomic set-if-absent lets exactly one caller create the key; the other sees it and returns 'duplicate'. The TTL does not affect who wins, neither returns false for both, and the call does not block."
+    }
+  ],
+  "concepts": [
+    "backend.messaging.deduplication",
+    "backend.messaging.at_least_once_delivery",
+    "backend.api.request_validation",
+    "backend.data.money_and_ledgers"
+  ]
+}

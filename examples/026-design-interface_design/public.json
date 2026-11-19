@@ -1,0 +1,49 @@
+{
+  "id": "2310ffed-661c-42ac-bca8-a0e7720019b9",
+  "title": "Notification fallback across channels",
+  "name": "Multi-channel notifier",
+  "createdAt": "2026-11-15T09:41:31.538Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how the channel implementations treat the arguments passed to NotificationChannel.send? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Channels are [push, email, sms]. Push's send throws a network error. What happens next?",
+      "choices": [
+        "notify rejects with the network error",
+        "The attempt is recorded as retryable and Notifier moves on to email",
+        "Notifier retries push until it succeeds",
+        "Push is recorded as rejected and no further channels are tried"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A message with priority \"low\" is sent to a user whose email address is unknown (addressFor returns null). Channels are [email, sms]. What is in the returned report?",
+      "choices": [
+        "channel: \"sms\" with one attempt",
+        "channel: null with one rejected email attempt",
+        "channel: null and an empty attempts list",
+        "It throws because no channel could be used"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The SMS gateway returns status \"failed\" for a submit. How does that surface through the SendOutcome contract?",
+      "choices": [
+        "As { kind: \"retryable\" }, so Notifier tries the next channel",
+        "As { kind: \"rejected\" }, so Notifier stops trying further channels",
+        "As a thrown error that Notifier logs",
+        "As { kind: \"delivered\" } because the gateway accepted the request"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.design.interface_design",
+    "backend.errors.error_propagation"
+  ]
+}

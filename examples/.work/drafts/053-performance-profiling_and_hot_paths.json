@@ -1,0 +1,64 @@
+{
+  "title": "Match tick loop and state broadcast",
+  "name": "Match tick loop",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/matchLoop.ts",
+      "content": "import { performance } from \"node:perf_hooks\";\nimport { Metrics } from \"./metrics\";\n\nexport interface Vec2 { x: number; y: number }\n\nexport interface PlayerState {\n  id: string;\n  pos: Vec2;\n  vel: Vec2;\n  hp: number;\n  lastInputSeq: number;\n}\n\nexport interface Connection {\n  playerId: string;\n  send(payload: string): void;\n}\n\nconst TICK_MS = 50;\nconst VIEW_RADIUS = 600;\n\nexport class MatchLoop {\n  private players = new Map<string, PlayerState>();\n  private conns = new Map<string, Connection>();\n  private tickNo = 0;\n  private timer?: NodeJS.Timeout;\n\n  constructor(private readonly matchId: string, private readonly metrics: Metrics) {}\n\n  join(conn: Connection, spawn: Vec2): void {\n    this.conns.set(conn.playerId, conn);\n    this.players.set(conn.playerId, {\n      id: conn.playerId, pos: { ...spawn }, vel: { x: 0, y: 0 }, hp: 100, lastInputSeq: 0,\n    });\n  }\n\n  leave(playerId: string): void {\n    this.conns.delete(playerId);\n    this.players.delete(playerId);\n  }\n\n  applyInput(playerId: string, seq: number, vel: Vec2): void {\n    const p = this.players.get(playerId);\n    if (!p || seq <= p.lastInputSeq) return;\n    p.lastInputSeq = seq;\n    p.vel = vel;\n  }\n\n  start(): void {\n    this.timer = setInterval(() => this.tick(), TICK_MS);\n  }\n\n  stop(): void {\n    if (this.timer) clearInterval(this.timer);\n  }\n\n  private tick(): void {\n    const t0 = performance.now();\n    this.tickNo++;\n    const dt = TICK_MS / 1000;\n    for (const p of this.players.values()) {\n      p.pos.x += p.vel.x * dt;\n      p.pos.y += p.vel.y * dt;\n    }\n    const t1 = performance.now();\n    this.broadcast();\n    const t2 = performance.now();\n    this.metrics.observe(\"tick_simulate_ms\", t1 - t0, { match: this.matchId });\n    this.metrics.observe(\"tick_broadcast_ms\", t2 - t1, { match: this.matchId });\n    if (t2 - t0 > TICK_MS) {\n      this.metrics.increment(\"tick_overrun_total\", { match: this.matchId });\n    }\n  }\n\n  private broadcast(): void {\n    for (const [id, conn] of this.conns) {\n      const self = this.players.get(id);\n      if (!self) continue;\n      const snapshot = this.buildSnapshot();\n      const visible = snapshot.players.filter(\n        (o) => o.id === id || dist2(o.pos, self.pos) <= VIEW_RADIUS * VIEW_RADIUS,\n      );\n      conn.send(JSON.stringify({ tick: snapshot.tick, ack: self.lastInputSeq, players: visible }));\n    }\n  }\n\n  private buildSnapshot(): { tick: number; players: PlayerState[] } {\n    return {\n      tick: this.tickNo,\n      players: [...this.players.values()]\n        .map((p) => structuredClone(p))\n        .sort((a, b) => a.id.localeCompare(b.id)),\n    };\n  }\n}\n\nfunction dist2(a: Vec2, b: Vec2): number {\n  const dx = a.x - b.x;\n  const dy = a.y - b.y;\n  return dx * dx + dy * dy;\n}\n"
+    },
+    {
+      "path": "src/metrics.ts",
+      "content": "export interface Metrics {\n  observe(name: string, value: number, labels: Record<string, string>): void;\n  increment(name: string, labels: Record<string, string>): void;\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/matchLoop.ts",
+    "snippet": "      const snapshot = this.buildSnapshot();"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how the per-tick hot path scales with the number of players in a match? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "buildSnapshot() is called inside the per-connection loop in broadcast(). Each call clones every player with structuredClone and sorts the whole list, so a tick does O(n^2 log n) work and allocates n^2 cloned objects for n players. With small matches this is invisible, but larger lobbies push tick_broadcast_ms past the 50 ms budget and GC pressure spikes. The snapshot should be built once per tick, before the loop, and only filtered per recipient."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "An operator sees tick_overrun_total climbing in a large match while tick_simulate_ms stays near zero. What does that tell them?",
+      "choices": [
+        "The movement integration is too slow and should be vectorized",
+        "The time is being spent in broadcast(), measured between t1 and t2",
+        "setInterval is drifting, so overruns are a timer artifact",
+        "applyInput is blocking the tick because it runs on the same loop"
+      ],
+      "answer": 1,
+      "explanation": "tick_simulate_ms covers only t0 to t1 (the position update loop); tick_broadcast_ms covers t1 to t2. An overrun with negligible simulate time means the cost is in broadcast(). Vectorizing movement would not help, timer drift does not change the measured t2 - t0, and applyInput runs between ticks and is not inside the measured window."
+    },
+    {
+      "prompt": "A client sends inputs with seq 7, then 5, then 8 (5 arrives late). What velocity is the player left with?",
+      "choices": [
+        "The velocity from seq 5, because it arrived most recently before 8",
+        "The velocity from seq 7, and seq 8 is rejected",
+        "The velocity from seq 8; seq 5 is ignored",
+        "An average of all three inputs"
+      ],
+      "answer": 2,
+      "explanation": "applyInput drops any input whose seq is not greater than lastInputSeq. After 7, the late 5 is ignored, and 8 is accepted, so the velocity from seq 8 wins. Nothing averages inputs, and 8 > 7 so it is not rejected."
+    },
+    {
+      "prompt": "Why does the per-recipient message compare squared distance against VIEW_RADIUS * VIEW_RADIUS instead of computing a real distance?",
+      "choices": [
+        "It avoids a square root per pair, which matters because this comparison runs for every recipient-player pair each tick",
+        "It is required because Math.sqrt is inaccurate for large coordinates",
+        "It makes the view region a square instead of a circle",
+        "It lets JSON.stringify skip players outside the radius automatically"
+      ],
+      "answer": 0,
+      "explanation": "dist2 returns dx*dx + dy*dy; comparing it to the squared radius gives the same circular test without Math.sqrt, a common hot-path saving for pairwise checks. sqrt is accurate, the region is still a circle, and filtering is done by .filter, not by JSON.stringify."
+    }
+  ],
+  "concepts": [
+    "backend.performance.profiling_and_hot_paths",
+    "backend.observability.metrics",
+    "backend.realtime.connection_fanout"
+  ]
+}

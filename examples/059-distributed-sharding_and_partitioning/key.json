@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/hashRing.ts",
+        "startLine": 45,
+        "endLine": 45
+      }
+    },
+    2,
+    0,
+    3
+  ],
+  "explanations": [
+    "When a key hashes past the highest virtual node, a consistent-hash ring must wrap around to the first vnode (index 0). locate() instead returns the last vnode. Placement is still deterministic, but the arc above the last point is owned by the wrong node, so adding or removing nodes moves those keys inconsistently with the intended ring and skews load toward whichever node owns the highest point.",
+    "homeTimeline groups followed authors by the node returned from locate() and issues one recentPosts call per group, so it is bounded by the number of distinct owning nodes (at most 6, possibly fewer). It does not call per author, does not route by the reader's id, and skips nodes that own none of the followed authors.",
+    "Virtual nodes split each physical node's share of the hash space into many arcs, evening out load and distributing a removed node's keys across the remaining nodes. They are routing points only; no data is replicated, locate() is a binary search (O(log n)), and each key still maps to one node.",
+    "remove() only drops C's vnodes. Authors that hashed to C now locate() to another node, and recentPosts is sent there, but their earlier posts still live only on C. Other authors' routing is unchanged, so not everything breaks, and new posts would be found because they are written to the new owner."
+  ]
+}

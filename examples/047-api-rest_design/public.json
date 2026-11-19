@@ -1,0 +1,50 @@
+{
+  "id": "502db57c-f9e3-4515-85eb-eff2c49aef2f",
+  "title": "Ad campaign REST endpoints",
+  "name": "Ad campaign API",
+  "createdAt": "2026-11-15T09:41:31.565Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how these endpoints map operations onto HTTP methods and resources? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends DELETE /campaigns/:id twice for the same existing campaign. What responses does it get?",
+      "choices": [
+        "204 then 204, because DELETE is idempotent",
+        "204 then 404, because the second archive call can't find a non-archived campaign",
+        "404 then 404, because archive never removes the row from the map",
+        "204 then 409, because the campaign is already archived"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "After a campaign is archived via DELETE, which call still returns it?",
+      "choices": [
+        "GET /advertisers/:advertiserId/campaigns?status=archived",
+        "GET /campaigns/:id",
+        "PATCH /campaigns/:id with a valid budget",
+        "None of these; archived campaigns are filtered out everywhere these routes read them"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What does the POST that creates a campaign tell the client about the new resource?",
+      "choices": [
+        "201 with a Location header pointing at /campaigns/{id} and the campaign body",
+        "200 with only the new id",
+        "202 Accepted, since creation is asynchronous",
+        "201 with a Location under /advertisers/:advertiserId/campaigns/{id}"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.rest_design",
+    "backend.api.status_codes_and_error_responses",
+    "backend.api.request_validation"
+  ]
+}

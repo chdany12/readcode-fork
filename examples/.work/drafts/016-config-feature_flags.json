@@ -1,0 +1,63 @@
+{
+  "title": "Tenant-aware feature flags for login policy",
+  "name": "Login policy flags",
+  "language": "TypeScript",
+  "durationMinutes": 11,
+  "files": [
+    {
+      "path": "src/flags.ts",
+      "content": "import { createHash } from \"crypto\";\n\nexport interface FlagRule {\n  key: string;\n  enabled: boolean;\n  rolloutPercent: number;\n  allowTenants: string[];\n  denyTenants: string[];\n}\n\nexport interface EvalContext {\n  userId: string;\n  tenantId: string;\n}\n\nexport class FlagEvaluator {\n  private rules = new Map<string, FlagRule>();\n\n  load(rules: FlagRule[]): void {\n    const next = new Map<string, FlagRule>();\n    for (const r of rules) {\n      if (r.rolloutPercent < 0 || r.rolloutPercent > 100) {\n        throw new RangeError(`flag ${r.key}: rolloutPercent out of range`);\n      }\n      next.set(r.key, r);\n    }\n    this.rules = next;\n  }\n\n  isEnabled(key: string, ctx: EvalContext): boolean {\n    const flag = this.rules.get(key);\n    if (!flag || !flag.enabled) return false;\n    if (flag.denyTenants.includes(ctx.tenantId)) return false;\n    if (flag.allowTenants.includes(ctx.tenantId)) return true;\n    const bucket = this.bucketFor(flag.key, ctx.userId);\n    return bucket <= flag.rolloutPercent;\n  }\n\n  private bucketFor(flagKey: string, userId: string): number {\n    const digest = createHash(\"sha256\").update(`${flagKey}:${userId}`).digest();\n    return digest.readUInt32BE(0) % 100;\n  }\n}\n"
+    },
+    {
+      "path": "src/loginPolicy.ts",
+      "content": "import { FlagEvaluator } from \"./flags\";\n\nexport interface LoginAttempt {\n  userId: string;\n  tenantId: string;\n  passwordOk: boolean;\n  hasWebAuthn: boolean;\n  hasTotp: boolean;\n}\n\nexport type LoginOutcome =\n  | { status: \"denied\"; reason: string }\n  | { status: \"challenge\"; method: \"webauthn\" | \"totp\" }\n  | { status: \"granted\" };\n\nexport class LoginPolicy {\n  constructor(private readonly flags: FlagEvaluator) {}\n\n  decide(a: LoginAttempt): LoginOutcome {\n    if (!a.passwordOk) return { status: \"denied\", reason: \"invalid_credentials\" };\n    const ctx = { userId: a.userId, tenantId: a.tenantId };\n\n    if (this.flags.isEnabled(\"passkey-first-login\", ctx) && a.hasWebAuthn) {\n      return { status: \"challenge\", method: \"webauthn\" };\n    }\n    if (a.hasTotp) {\n      return { status: \"challenge\", method: \"totp\" };\n    }\n    if (this.flags.isEnabled(\"require-mfa-enrollment\", ctx)) {\n      return { status: \"denied\", reason: \"mfa_enrollment_required\" };\n    }\n    return { status: \"granted\" };\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/flags.ts",
+    "snippet": "    return bucket <= flag.rolloutPercent;"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code decides whether a flag is on for a given user? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "Buckets range 0 to 99, but the comparison is `bucket <= rolloutPercent`. At rolloutPercent 0, every user in bucket 0 (about 1%) still gets the flag, so an enabled flag set to 0% is not actually off; at 10% roughly 11% of users are in. For `require-mfa-enrollment` this means a 'dark' rollout still locks out about 1% of users without MFA. The comparison should be `bucket < rolloutPercent`."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A tenant appears in both `allowTenants` and `denyTenants` for an enabled flag. What does isEnabled return for its users?",
+      "choices": [
+        "true, because allow is checked against the rollout first",
+        "It depends on the user's bucket",
+        "false, because the deny list is checked before the allow list",
+        "It throws during load()"
+      ],
+      "answer": 2,
+      "explanation": "isEnabled returns false on the deny check before it ever looks at allowTenants. Buckets are only consulted after both lists, and load() validates only rolloutPercent."
+    },
+    {
+      "prompt": "Why does bucketFor hash `${flagKey}:${userId}` rather than just the userId?",
+      "choices": [
+        "So that the same users are not always the early cohort for every flag at a given percentage",
+        "So that a user's bucket changes on each login",
+        "To make the hash cheaper to compute",
+        "So that tenants are bucketed instead of users"
+      ],
+      "answer": 0,
+      "explanation": "Including the flag key decorrelates rollouts: a user in the first 5% of one flag is not automatically in the first 5% of every other flag. The bucket is still stable per user and flag, cost is unchanged, and tenantId is not hashed."
+    },
+    {
+      "prompt": "A user has a password, no WebAuthn, and TOTP enrolled; `require-mfa-enrollment` is on for them. What is the outcome?",
+      "choices": [
+        "denied with mfa_enrollment_required",
+        "challenge with totp",
+        "challenge with webauthn",
+        "granted"
+      ],
+      "answer": 1,
+      "explanation": "The passkey branch requires hasWebAuthn, so it is skipped; hasTotp is true, so decide returns the TOTP challenge before the enrollment flag is evaluated. Denial applies only to users with no second factor."
+    }
+  ],
+  "concepts": [
+    "backend.config.feature_flags",
+    "backend.security.authentication"
+  ]
+}

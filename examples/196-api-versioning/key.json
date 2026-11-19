@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/employeeAdapters.ts",
+        "startLine": 58,
+        "endLine": 58
+      }
+    },
+    2,
+    0,
+    2
+  ],
+  "explanations": [
+    "v1 expresses salary in dollars: fromV1Create multiplies body.salary by 100 to store cents. But toV1 returns salary: e.annualSalaryCents without dividing by 100, so every v1 read reports a salary 100 times too large. A v1 client that creates an employee with salary 85000 reads back 8500000, and any v1 integration that writes the value back would inflate pay. toV1 should return e.annualSalaryCents / 100.",
+    "toV1 collapses frequencies v1 does not know: monthly or semimonthly becomes \"monthly\", everything else \"biweekly\". So semimonthly is shown as \"monthly\". v1's type has no \"semimonthly\", and reads never return 422.",
+    "employeeRoutes is mounted with deprecated=true for /v1 only, and its middleware then sets Deprecation and the successor Link header. /v2 gets deprecated=false, so it sets neither. No Sunset header is set anywhere.",
+    "fromV2Create requires Number.isInteger(c.annualSalaryCents), which is false for a fractional value, so it throws RangeError. The POST route catches RangeError and returns 422. Only the v1 path rounds (Math.round(salary * 100)), and RangeError is explicitly handled, so it is not a 500."
+  ]
+}

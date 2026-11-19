@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/flags.ts",
+        "startLine": 36,
+        "endLine": 36
+      }
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "Buckets range 0 to 99, but the comparison is `bucket <= rolloutPercent`. At rolloutPercent 0, every user in bucket 0 (about 1%) still gets the flag, so an enabled flag set to 0% is not actually off; at 10% roughly 11% of users are in. For `require-mfa-enrollment` this means a 'dark' rollout still locks out about 1% of users without MFA. The comparison should be `bucket < rolloutPercent`.",
+    "isEnabled returns false on the deny check before it ever looks at allowTenants. Buckets are only consulted after both lists, and load() validates only rolloutPercent.",
+    "Including the flag key decorrelates rollouts: a user in the first 5% of one flag is not automatically in the first 5% of every other flag. The bucket is still stable per user and flag, cost is unchanged, and tenantId is not hashed.",
+    "The passkey branch requires hasWebAuthn, so it is skipped; hasTotp is true, so decide returns the TOTP challenge before the enrollment flag is evaluated. Denial applies only to users with no second factor."
+  ]
+}

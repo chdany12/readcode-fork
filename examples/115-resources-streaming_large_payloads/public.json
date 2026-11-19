@@ -1,0 +1,51 @@
+{
+  "id": "1846f930-fef4-42fd-8d3b-af07bb8715e3",
+  "title": "Match replay download endpoint",
+  "name": "Match replay download",
+  "createdAt": "2026-11-15T09:41:31.658Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this endpoint delivers replay files, which can be hundreds of megabytes for long matches? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A player who did not take part requests a replay whose visibility is 'participants'. What response do they get?",
+      "choices": [
+        "404 replay_not_found",
+        "401 with an empty body",
+        "403 replay_private",
+        "410 replay_expired"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The metadata row exists but the replay file was deleted by the retention job. What does the client receive?",
+      "choices": [
+        "410 replay_expired",
+        "500 from the error handler",
+        "404 replay_not_found",
+        "200 with an empty body"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "If the replay_downloads INSERT fails, what is the effect on the player?",
+      "choices": [
+        "The download is aborted midway",
+        "The player gets a 500 after the file was sent",
+        "Express logs an unhandled rejection and restarts the request",
+        "None: the response has already been sent and the failure is ignored"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.resources.streaming_large_payloads",
+    "backend.resources.unbounded_buffers",
+    "backend.security.authorization_checks",
+    "backend.api.status_codes_and_error_responses"
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "id": "cdb29316-85e4-4acf-9e27-9bfe827a2e82",
+  "title": "CI pipeline run history endpoint",
+  "name": "Pipeline run history",
+  "createdAt": "2026-11-15T09:41:31.623Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code loads data for a page of runs? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client requests limit=500. What does the response look like?",
+      "choices": [
+        "Up to 500 runs, with nextCursor set when 500 were returned",
+        "An error, because limit exceeds the maximum",
+        "Up to 100 runs, and nextCursor is set when exactly 100 were returned",
+        "Up to 100 runs, and nextCursor is always null"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "How does the cursor for the next page work?",
+      "choices": [
+        "It is an offset that the next request skips",
+        "It is the smallest run id on this page, and the next query fetches ids strictly lower than it",
+        "It is the largest run id, and the next query fetches ids greater than it",
+        "It is a started_at timestamp"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "If every job in a run still has durationMs null (the run is queued), what is slowestJob?",
+      "choices": [
+        "null",
+        "The first job's name",
+        "The last job's name",
+        "It throws on comparison with null"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.n_plus_one_queries",
+    "backend.data.pagination",
+    "backend.data.connection_pooling"
+  ]
+}

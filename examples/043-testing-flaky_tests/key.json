@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/pushBatcher.test.ts",
+        "startLine": 37,
+        "endLine": 37
+      }
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "In \"flushes a partial batch after the interval\", the test sleeps for exactly 50 ms, the same as flushIntervalMs. The batcher's timer and the test's timer are due at about the same time, and even when the flush timer fires first, sendBatch runs in a chained .then and may not have recorded the batch by the time the test resumes. Under CI load the assertion sometimes sees zero batches. The test should use fake timers or await batcher.drain() / the \"flushed\" event instead of a wall-clock sleep.",
+    "The third enqueue calls flushNow, which clears the timer, sets it to null and empties pending. The 4th enqueue pushes to pending and, because timer is null, schedules a new setTimeout, so the message goes out alone after the interval. It can't join the first batch, which was already spliced off. drain isn't required, and the message sits in the new pending array, so it isn't lost.",
+    "The second argument to .then handles the rejection and emits \"flushError\", so the promise stored in inFlight resolves and the next .then still runs. inFlight never rejects, so drain resolves normally. Nothing re-queues the failed batch.",
+    "flushNow schedules sendBatch via inFlight.then(...), which runs in a later microtask, so gateway.batches is still empty right after enqueue returns. Awaiting drain waits for the chain to finish. enqueue never throws, the full-batch flush already happened inside enqueue, and flushNow already cleared the timer, so cancelling it isn't what drain is for here."
+  ]
+}

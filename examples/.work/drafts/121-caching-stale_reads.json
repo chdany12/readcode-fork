@@ -1,0 +1,68 @@
+{
+  "title": "In-memory campaign state for a real-time bidder",
+  "name": "Campaign state cache",
+  "language": "TypeScript",
+  "durationMinutes": 15,
+  "files": [
+    {
+      "path": "src/types.ts",
+      "content": "export type CampaignStatus = \"active\" | \"paused\" | \"exhausted\";\n\nexport interface CampaignState {\n  campaignId: string;\n  status: CampaignStatus;\n  bidCpmMicros: number;\n  dailyBudgetMicros: number;\n  version: number;\n}\n\nexport interface CampaignChangedEvent {\n  type: \"campaign.changed\";\n  state: CampaignState;\n}\n\nexport interface CampaignSource {\n  loadAll(): Promise<CampaignState[]>;\n}\n"
+    },
+    {
+      "path": "src/campaignCache.ts",
+      "content": "import type { CampaignChangedEvent, CampaignSource, CampaignState } from \"./types\";\n\nexport interface Metrics {\n  increment(name: string, tags?: Record<string, string>): void;\n  gauge(name: string, value: number): void;\n}\n\nexport class CampaignStateCache {\n  private readonly entries = new Map<string, CampaignState>();\n  private loadedAt = 0;\n\n  constructor(\n    private readonly source: CampaignSource,\n    private readonly metrics: Metrics,\n    private readonly now: () => number = Date.now,\n  ) {}\n\n  async warm(): Promise<void> {\n    const all = await this.source.loadAll();\n    for (const state of all) {\n      this.apply(state, \"snapshot\");\n    }\n    this.loadedAt = this.now();\n    this.metrics.gauge(\"campaign_cache.size\", this.entries.size);\n  }\n\n  onEvent(evt: CampaignChangedEvent): void {\n    this.apply(evt.state, \"event\");\n  }\n\n  private apply(incoming: CampaignState, origin: \"snapshot\" | \"event\"): void {\n    const existing = this.entries.get(incoming.campaignId);\n    if (existing && existing.version === incoming.version) {\n      this.metrics.increment(\"campaign_cache.skipped\", { origin });\n      return;\n    }\n    this.entries.set(incoming.campaignId, incoming);\n    this.metrics.increment(\"campaign_cache.applied\", { origin });\n  }\n\n  isServable(campaignId: string): CampaignState | null {\n    const state = this.entries.get(campaignId);\n    if (!state || state.status !== \"active\") {\n      return null;\n    }\n    return state;\n  }\n\n  snapshotAgeMs(): number {\n    return this.loadedAt === 0 ? Infinity : this.now() - this.loadedAt;\n  }\n}\n"
+    },
+    {
+      "path": "src/bidder.ts",
+      "content": "import type { CampaignStateCache } from \"./campaignCache\";\n\nexport interface BidRequest {\n  requestId: string;\n  candidateCampaignIds: string[];\n  floorCpmMicros: number;\n}\n\nexport interface Bid {\n  requestId: string;\n  campaignId: string;\n  cpmMicros: number;\n}\n\nconst MAX_SNAPSHOT_AGE_MS = 10 * 60 * 1000;\n\nexport class Bidder {\n  constructor(private readonly cache: CampaignStateCache) {}\n\n  bid(req: BidRequest): Bid | null {\n    if (this.cache.snapshotAgeMs() > MAX_SNAPSHOT_AGE_MS) {\n      return null;\n    }\n    let best: Bid | null = null;\n    for (const id of req.candidateCampaignIds) {\n      const state = this.cache.isServable(id);\n      if (!state || state.bidCpmMicros < req.floorCpmMicros) {\n        continue;\n      }\n      if (!best || state.bidCpmMicros > best.cpmMicros) {\n        best = { requestId: req.requestId, campaignId: id, cpmMicros: state.bidCpmMicros };\n      }\n    }\n    return best;\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/campaignCache.ts",
+    "snippet": "    if (existing && existing.version === incoming.version) {"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how the cache decides which campaign state to keep? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "apply only skips an incoming state whose version equals the cached one; any other version, including an older one, overwrites the entry. If a pause event (v8) arrives and then a delayed event or a warm() snapshot taken earlier delivers v7 (active), the cache reverts to active and the bidder keeps spending on a paused campaign until another change arrives. The check should be existing.version >= incoming.version."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "warm() has never completed successfully on this instance. What does Bidder.bid return?",
+      "choices": [
+        "null for every request",
+        "The highest bid among cached campaigns, since the map may contain event-applied entries",
+        "It throws because loadedAt is 0",
+        "The first candidate campaign regardless of status"
+      ],
+      "answer": 0,
+      "explanation": "snapshotAgeMs returns Infinity when loadedAt is 0, which exceeds MAX_SNAPSHOT_AGE_MS, so bid returns null before looking at any entry. Nothing throws, and status checks are never bypassed."
+    },
+    {
+      "prompt": "Candidates A (active, 2,000,000 micros), B (paused, 5,000,000) and C (active, 900,000) are offered with a floor of 1,000,000. What is the result?",
+      "choices": [
+        "B at 5,000,000",
+        "C at 900,000",
+        "A at 2,000,000",
+        "null, because one candidate is paused"
+      ],
+      "answer": 2,
+      "explanation": "isServable returns null for B because it is paused; C is below the floor and skipped. A is the only remaining candidate. A paused candidate only excludes itself, not the whole request."
+    },
+    {
+      "prompt": "The event stream is down for 20 minutes but warm() last succeeded 2 minutes ago. Which is true?",
+      "choices": [
+        "The bidder stops bidding after 10 minutes of missing events",
+        "The bidder keeps bidding using whatever states it holds, since only the snapshot age is checked",
+        "Each lookup triggers loadAll to refresh the entry",
+        "isServable returns null for entries older than 10 minutes"
+      ],
+      "answer": 1,
+      "explanation": "The only freshness guard is snapshotAgeMs, which measures time since the last warm(), not since the last event. Entries carry no timestamp, isServable checks only status, and nothing calls loadAll on lookup."
+    }
+  ],
+  "concepts": [
+    "backend.caching.stale_reads",
+    "backend.messaging.message_ordering",
+    "backend.caching.ttls_and_expiry"
+  ]
+}

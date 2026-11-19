@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/flags.ts",
+        "startLine": 38,
+        "endLine": 38
+      }
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "In FlagEvaluator.bucket, a random jitter is added to the hash-derived value. Bucketing is supposed to be deterministic per (flag, user), but with the jitter the same user lands in a different bucket on every call. A user can see flex prices during search and then fail the stillFlex check in confirmOffer (\"pricing changed\"), and the effective rollout is not sticky, making metrics and support cases inconsistent. The bucket should depend only on the hash.",
+    "isEnabled returns true as soon as allowUserIds includes the user, before denyMarkets or the percentage are looked at. The deny list only applies to users not explicitly allowed, and percentage 0 only affects the bucket comparison, which is never reached. Nothing validates percentage.",
+    "confirmOffer re-evaluates the flag and compares it to the saved offer's bundle. Saved bundle is flex, stillFlex is now false, so it throws the pricing-changed error. It does not reprice or delete anything, and it does not accept the stale flex offer.",
+    "Including the flag name in the hash input makes each flag's buckets independent; hashing only the user ID would put the same users first in line for every rollout. It has no effect on hash length or speed, disabled flags return before bucket() is called, and the modulo keeps buckets in 0-99 regardless."
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/profileService.ts",
+        "startLine": 57,
+        "endLine": 57
+      }
+    },
+    3,
+    0,
+    1
+  ],
+  "explanations": [
+    "rename() deletes the name-index entry for the new name, but the entry that is actually stale is the one for the old name (current.displayName). For up to NAME_TTL (an hour) getByName(oldName) still resolves to this player's id. Worse, if another player then claims the freed old name, lookups for that name keep returning the first player's profile until the entry expires. The delete should target nameKey(current.displayName) (deleting the new name's key is harmless but not what matters).",
+    "getByName only caches the name-to-id mapping; it then calls getById, whose profile key was deleted by recordMatchResult after the repo update. The next read misses, reloads from the repo and returns the new rating. The name entry is untouched and still valid, and no error path is involved.",
+    "Storing just the id means profile fields (rating, region) live in exactly one cached place, profile:<id>, so recordMatchResult can invalidate with one DEL. The code stores JSON under profile keys, so Redis supports it; getByName still reads Redis; and the model has one profile per id.",
+    "getById is plain cache-aside with no versioning: a read that loaded before updateRating committed can SET its result after recordMatchResult's DEL ran, and that stale value then lives for up to PROFILE_TTL (600s). Nothing serializes readers and writers, and Redis writes do not cause the repo update to fail."
+  ]
+}

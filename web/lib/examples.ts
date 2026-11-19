@@ -10,9 +10,19 @@ export const EXAMPLES_ROOT = path.resolve(/*turbopackIgnore: true*/ process.env.
 
 export type LoadedExample = { name: string; public: ExamplePublic; key: ExampleKey; files: SourceFile[] };
 
+// One row of the example list. `topic` is the example's target concept (the first of its concepts).
+export type ExampleSummary = {
+    name: string;        // folder, e.g. "examples/001-integrations-third_party_adapters"
+    title: string;
+    shortName: string;   // public.name, or the title for older examples without one
+    topic: string;
+    concepts: string[];
+    questionCount: number;
+};
+
 // Direct child folders of EXAMPLES_ROOT (and EXAMPLES_ROOT/examples) that contain a non-empty public.json.
-export async function listExamples(): Promise<{ name: string; title: string }[]> {
-    const found: { name: string; title: string }[] = [];
+export async function listExamples(): Promise<ExampleSummary[]> {
+    const found: ExampleSummary[] = [];
     for (const base of ["", "examples"]) {
         const dir = path.join(/*turbopackIgnore: true*/ EXAMPLES_ROOT, base);
         const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
@@ -20,7 +30,16 @@ export async function listExamples(): Promise<{ name: string; title: string }[]>
             if (!e.isDirectory() || e.name.startsWith(".") || e.name === "node_modules") continue;
             const name = base ? `${base}/${e.name}` : e.name;
             const pub = await readJson<ExamplePublic>(path.join(/*turbopackIgnore: true*/ EXAMPLES_ROOT, name, "public.json"));
-            if (pub) found.push({ name, title: pub.title });
+            if (pub) {
+                found.push({
+                    name,
+                    title: pub.title,
+                    shortName: pub.name ?? pub.title,
+                    topic: pub.concepts?.[0] ?? "(none)",
+                    concepts: pub.concepts ?? [],
+                    questionCount: pub.questions?.length ?? 0,
+                });
+            }
         }
     }
     return found.sort((a, b) => a.name.localeCompare(b.name));

@@ -1,0 +1,21 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.testing.integration_tests",
+      "count": 6
+    },
+    {
+      "label": "backend.design.interface_design",
+      "count": 6
+    },
+    {
+      "label": "backend.integrations.third_party_adapters",
+      "count": 6
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "count": 2
+    }
+  ]
+}

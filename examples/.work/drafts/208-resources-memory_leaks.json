@@ -1,0 +1,64 @@
+{
+  "title": "Waiting for restocks during order reservation",
+  "name": "Restock reservation waiter",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/inventoryWaiter.ts",
+      "content": "import { EventEmitter } from \"events\";\n\nexport interface StockRepo {\n  available(sku: string): Promise<number>;\n  decrement(sku: string, qty: number): Promise<boolean>;\n}\n\nexport class StockUnavailableError extends Error {\n  constructor(public readonly sku: string, public readonly qty: number) {\n    super(`stock unavailable for ${sku} x${qty}`);\n  }\n}\n\nexport class InventoryWaiter {\n  private readonly events = new EventEmitter();\n\n  constructor(private readonly repo: StockRepo) {\n    this.events.setMaxListeners(0);\n  }\n\n  notifyRestock(sku: string): void {\n    this.events.emit(`restock:${sku}`);\n  }\n\n  async reserve(sku: string, qty: number, waitMs: number): Promise<void> {\n    if (await this.repo.decrement(sku, qty)) return;\n\n    await new Promise<void>((resolve, reject) => {\n      const channel = `restock:${sku}`;\n      let settled = false;\n\n      const onRestock = async () => {\n        if (settled) return;\n        try {\n          if (await this.repo.decrement(sku, qty)) {\n            settled = true;\n            clearTimeout(timer);\n            this.events.off(channel, onRestock);\n            resolve();\n          }\n        } catch (err) {\n          settled = true;\n          clearTimeout(timer);\n          this.events.off(channel, onRestock);\n          reject(err);\n        }\n      };\n\n      const timer = setTimeout(() => {\n        settled = true;\n        reject(new StockUnavailableError(sku, qty));\n      }, waitMs);\n\n      this.events.on(channel, onRestock);\n    });\n  }\n\n  pendingWaiters(sku: string): number {\n    return this.events.listenerCount(`restock:${sku}`);\n  }\n}\n"
+    },
+    {
+      "path": "src/orderReservationService.ts",
+      "content": "import { InventoryWaiter, StockUnavailableError } from \"./inventoryWaiter\";\n\nexport interface OrderLine {\n  sku: string;\n  qty: number;\n}\n\nexport interface OrderStore {\n  markReserved(orderId: string): Promise<void>;\n  markBackordered(orderId: string, sku: string): Promise<void>;\n}\n\nexport class OrderReservationService {\n  constructor(\n    private readonly waiter: InventoryWaiter,\n    private readonly orders: OrderStore,\n    private readonly holdMs = 30_000,\n  ) {}\n\n  async reserveOrder(orderId: string, lines: OrderLine[]): Promise<boolean> {\n    for (const line of lines) {\n      try {\n        await this.waiter.reserve(line.sku, line.qty, this.holdMs);\n      } catch (err) {\n        if (err instanceof StockUnavailableError) {\n          await this.orders.markBackordered(orderId, err.sku);\n          return false;\n        }\n        throw err;\n      }\n    }\n    await this.orders.markReserved(orderId);\n    return true;\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/inventoryWaiter.ts",
+    "snippet": "      const timer = setTimeout(() => {\n        settled = true;\n        reject(new StockUnavailableError(sku, qty));\n      }, waitMs);"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code manages the lifetime of objects it registers or allocates per reservation? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The timeout callback in reserve() sets settled and rejects but never calls this.events.off(channel, onRestock). Every reservation that times out leaves its listener (and its closure over sku, qty, resolve/reject) attached to the long-lived emitter. For a SKU that stays out of stock, listeners pile up forever; setMaxListeners(0) silences the warning that would normally flag this, and each later restock event invokes every dead listener (they return early, but are still retained and called). The fix is to remove the listener in the timeout path too."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A SKU is out of stock and three reservations for it are waiting. A restock adds enough units for exactly one of them, and notifyRestock is called once. What happens?",
+      "choices": [
+        "All three listeners run; each tries repo.decrement, one succeeds and resolves, the other two keep waiting",
+        "Only the first listener registered runs, because emit stops after the first handler that resolves",
+        "All three reservations resolve, because the restock event is broadcast to every waiter",
+        "None resolve until the next call to reserve() for that SKU"
+      ],
+      "answer": 0,
+      "explanation": "EventEmitter.emit calls every listener on the channel. Each onRestock calls repo.decrement; only the one whose decrement returns true resolves and removes itself, the others stay registered. emit does not stop after one handler, waiters are not resolved without a successful decrement, and there is no dependence on a later reserve() call."
+    },
+    {
+      "prompt": "Why does the constructor call this.events.setMaxListeners(0)?",
+      "choices": [
+        "It makes emit synchronous",
+        "It removes the default 10-listener warning so many concurrent waiters on one SKU do not log MaxListenersExceededWarning",
+        "It limits each channel to a single listener",
+        "It causes listeners to be removed automatically after they fire once"
+      ],
+      "answer": 1,
+      "explanation": "Node warns when more than 10 listeners attach to one event name; setMaxListeners(0) disables that limit, allowing many waiters per SKU without warnings. It does not change emit timing, does not cap listeners at one, and does not make listeners one-shot (that is once())."
+    },
+    {
+      "prompt": "In OrderReservationService.reserveOrder, an order has lines A and B. A is reserved immediately; B waits and then fails with StockUnavailableError. What is the state afterwards?",
+      "choices": [
+        "Both A and B are decremented and the order is marked reserved",
+        "Neither line is decremented because reserveOrder runs in a transaction",
+        "A's stock remains decremented, B is not, and the order is marked backordered on B",
+        "The StockUnavailableError propagates to the caller and the order is not updated"
+      ],
+      "answer": 2,
+      "explanation": "Lines are reserved one by one; nothing releases A's decrement when B fails. The catch block handles StockUnavailableError by calling markBackordered(orderId, err.sku) and returning false. There is no transaction, B is never decremented, and the error is not rethrown."
+    }
+  ],
+  "concepts": [
+    "backend.resources.memory_leaks",
+    "backend.errors.cleanup_on_error_paths",
+    "backend.resilience.timeouts"
+  ]
+}

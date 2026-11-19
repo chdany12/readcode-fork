@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    3,
+    0,
+    1
+  ],
+  "explanations": [
+    "There is none. Clients that send no version header get the oldest version, so existing integrations are not silently moved to the new shape. Every new status and the new \"urgent\" priority are mapped into values that v1 clients already understand (V1_STATUS is a total Record over TicketStatusV2, so the compiler forces a mapping for any new status). Unknown versions get an explicit 400 rather than a guess, the response echoes the resolved version, and Vary: Support-Api-Version prevents a shared cache from serving one version's body to another version's client. Deprecation, Sunset, and Link headers tell old clients where to migrate.",
+    "With no header the version defaults to 2023-06-01, so render uses toV1. V1_STATUS maps on_hold to \"pending\", and toV1 maps \"urgent\" to \"high\". The raw values only appear in v2, the 400 is only for unknown versions, and neither \"open\" nor \"normal\" comes from these inputs.",
+    "Both versions share the same URL, and GET /tickets/:id sets Cache-Control max-age=30. Vary tells caches that the response depends on the Support-Api-Version header, so cached entries are separated by version. Vary performs no validation, does not affect redirects, and has nothing to do with Sunset.",
+    "V1_STATUS is typed Record<TicketStatusV2, TicketV1[\"status\"]>, which requires a key for every member of the union. Adding \"escalated\" without a mapping fails to compile, forcing a deliberate v1 translation. It does not compile and silently leak, there is no runtime throw path, and DEFAULT_VERSION is a constant unaffected by the model."
+  ]
+}

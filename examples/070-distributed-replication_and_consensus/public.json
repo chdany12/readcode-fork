@@ -1,0 +1,49 @@
+{
+  "id": "2d9b6ddd-2547-4de4-9295-1ae08743d035",
+  "title": "Leader lease for settlement runs",
+  "name": "Settlement leader lease",
+  "createdAt": "2026-11-15T09:41:31.596Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this node decides how long it may act as leader? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "If tryAcquire throws on one tick (for example a network error), what is the node's leadership status right after that tick?",
+      "choices": [
+        "It immediately stops being leader because leaseExpiresAt is reset",
+        "The scheduler stops renewing because the error escapes tick()",
+        "It remains leader until the previously computed expiry minus the safety margin passes, and the next attempt is scheduled normally",
+        "The process crashes from an unhandled rejection"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two nodes both believe they are leader and both call ledger.settle for the same batch. What prevents a double settlement in this design?",
+      "choices": [
+        "isLeader() is checked before each batch, so only one node can reach settle()",
+        "pendingBatches never returns the same batch to two nodes",
+        "SettlementScheduler caches settled batch ids",
+        "The ledger receives the fencing token and can reject the older one with \"stale_token\", and it reports \"already_settled\" for repeats"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What does the constructor check ensure?",
+      "choices": [
+        "That the lease cannot be acquired by two holders",
+        "That the node renews before its own considered-valid window ends, so a healthy leader does not flap",
+        "That the safety margin is larger than the lease",
+        "That stop() always releases the lease"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.distributed.replication_and_consensus",
+    "backend.resilience.graceful_shutdown"
+  ]
+}

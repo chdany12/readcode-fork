@@ -1,0 +1,69 @@
+{
+  "title": "Support ticket assignment endpoint",
+  "name": "Ticket assignment endpoint",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/ticketRepository.ts",
+      "content": "import { Pool } from \"pg\";\n\nexport interface Ticket {\n  id: string;\n  tenantId: string;\n  subject: string;\n  status: \"open\" | \"pending\" | \"solved\";\n  assigneeId: string | null;\n}\n\nexport class TicketRepository {\n  constructor(private readonly pool: Pool) {}\n\n  async findById(tenantId: string, ticketId: string): Promise<Ticket | null> {\n    try {\n      const { rows } = await this.pool.query(\n        `SELECT id, tenant_id, subject, status, assignee_id\n           FROM tickets WHERE tenant_id = $1 AND id = $2`,\n        [tenantId, ticketId],\n      );\n      if (rows.length === 0) return null;\n      const r = rows[0];\n      return {\n        id: r.id,\n        tenantId: r.tenant_id,\n        subject: r.subject,\n        status: r.status,\n        assigneeId: r.assignee_id,\n      };\n    } catch (err) {\n      console.error(\"ticket lookup failed\", { tenantId, ticketId, err });\n      return null;\n    }\n  }\n\n  async assign(tenantId: string, ticketId: string, agentId: string): Promise<void> {\n    const res = await this.pool.query(\n      `UPDATE tickets SET assignee_id = $3, updated_at = now()\n        WHERE tenant_id = $1 AND id = $2`,\n      [tenantId, ticketId, agentId],\n    );\n    if (res.rowCount === 0) {\n      throw new Error(`ticket ${ticketId} vanished during assignment`);\n    }\n  }\n}\n"
+    },
+    {
+      "path": "src/assignmentService.ts",
+      "content": "import { Ticket, TicketRepository } from \"./ticketRepository\";\n\nexport class NotFoundError extends Error {\n  readonly status = 404;\n}\nexport class ConflictError extends Error {\n  readonly status = 409;\n}\n\nexport interface AgentDirectory {\n  isActiveAgent(tenantId: string, agentId: string): Promise<boolean>;\n}\n\nexport class AssignmentService {\n  constructor(\n    private readonly tickets: TicketRepository,\n    private readonly agents: AgentDirectory,\n  ) {}\n\n  async assign(tenantId: string, ticketId: string, agentId: string): Promise<Ticket> {\n    const ticket = await this.tickets.findById(tenantId, ticketId);\n    if (!ticket) {\n      throw new NotFoundError(`ticket ${ticketId} not found`);\n    }\n    if (ticket.status === \"solved\") {\n      throw new ConflictError(`ticket ${ticketId} is already solved`);\n    }\n    if (!(await this.agents.isActiveAgent(tenantId, agentId))) {\n      throw new ConflictError(`agent ${agentId} cannot take tickets`);\n    }\n    await this.tickets.assign(tenantId, ticketId, agentId);\n    return { ...ticket, assigneeId: agentId };\n  }\n}\n"
+    },
+    {
+      "path": "src/assignmentRouter.ts",
+      "content": "import express, { NextFunction, Request, Response } from \"express\";\nimport { AssignmentService } from \"./assignmentService\";\n\nexport function assignmentRouter(service: AssignmentService) {\n  const router = express.Router();\n\n  router.post(\n    \"/tenants/:tenantId/tickets/:ticketId/assignee\",\n    async (req: Request, res: Response, next: NextFunction) => {\n      const agentId = typeof req.body?.agentId === \"string\" ? req.body.agentId : \"\";\n      if (!agentId) {\n        res.status(400).json({ error: \"agentId is required\" });\n        return;\n      }\n      try {\n        const ticket = await service.assign(req.params.tenantId, req.params.ticketId, agentId);\n        res.status(200).json(ticket);\n      } catch (err) {\n        next(err);\n      }\n    },\n  );\n\n  router.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {\n    const status = typeof (err as { status?: unknown }).status === \"number\"\n      ? (err as { status: number }).status\n      : 500;\n    const message = status < 500 && err instanceof Error ? err.message : \"internal error\";\n    res.status(status).json({ error: message });\n  });\n\n  return router;\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/ticketRepository.ts",
+    "snippet": "    } catch (err) {\n      console.error(\"ticket lookup failed\", { tenantId, ticketId, err });\n      return null;\n    }"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how failures propagate from the database layer up to the HTTP response? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "Yes. findById catches every query error and returns null, which is indistinguishable from 'no such row'. AssignmentService then throws NotFoundError and the router answers 404 'ticket not found' during a database outage or connection-pool exhaustion. Clients and agents are told the ticket doesn't exist, retries are discouraged, and 5xx alerting never fires. The repository should let the error propagate (optionally wrapped) so the error handler returns 500."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Between findById and tickets.assign, another request deletes the ticket. What does the client receive?",
+      "choices": [
+        "404 with 'ticket ... not found'",
+        "200 with the ticket showing the new assignee",
+        "409 because the ticket changed",
+        "500 with the body 'internal error'"
+      ],
+      "answer": 3,
+      "explanation": "assign throws a plain Error when rowCount is 0; it has no numeric status, so the error handler uses 500 and hides the message. It is not a NotFoundError or ConflictError, and the 200 path is never reached because the throw happens first."
+    },
+    {
+      "prompt": "The agent directory call rejects because the directory service is down. What happens to the request?",
+      "choices": [
+        "The ticket is assigned anyway because the check is skipped",
+        "The rejection propagates to next(err) and the client gets 500 'internal error'",
+        "The client gets 409 'agent cannot take tickets'",
+        "The request hangs because the rejection is unhandled"
+      ],
+      "answer": 1,
+      "explanation": "isActiveAgent is awaited inside assign, so its rejection propagates out of service.assign into the route's catch, which calls next(err); the handler maps a status-less error to 500. The `!` check never runs on a rejection, so there is no 409, and the try/catch prevents an unhandled rejection."
+    },
+    {
+      "prompt": "Why does the error handler only send err.message to the client when status is below 500?",
+      "choices": [
+        "To avoid leaking internal details such as SQL or hostnames from unexpected errors",
+        "Because Express cannot serialise messages of 5xx errors",
+        "So that clients retry 4xx errors automatically",
+        "Because ConflictError has no message"
+      ],
+      "answer": 0,
+      "explanation": "Expected domain errors (404/409) carry messages written for clients; anything that falls to 500 may contain internal details, so a generic message is returned. Express can serialise any string, the choice has nothing to do with retries, and ConflictError is constructed with a message."
+    }
+  ],
+  "concepts": [
+    "backend.errors.error_propagation",
+    "backend.errors.swallowed_errors",
+    "backend.api.status_codes_and_error_responses",
+    "backend.design.layering"
+  ]
+}

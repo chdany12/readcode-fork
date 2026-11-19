@@ -1,0 +1,53 @@
+{
+  "id": "615d369c-8811-4df6-a613-8984f458fdc5",
+  "title": "SMS provider adapter behind a send port",
+  "name": "SMS provider adapter",
+  "createdAt": "2026-11-15T09:41:31.499Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how the adapter classifies provider responses and protects against duplicate sends? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The provider responds 503 with header Retry-After: 3600. When does the worker schedule the next attempt?",
+      "choices": [
+        "In 30 seconds, the default",
+        "In 15 minutes, because the delay is capped",
+        "In 1 hour, as the header requests",
+        "Never; the message is marked failed"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The provider's callback later reports a new status string \"scheduled\" that this adapter doesn't know. What does mapStatus return, and why does that matter?",
+      "choices": [
+        "\"queued\", which keeps the message non-terminal so later updates can still move it forward",
+        "\"failed\", which stops further retries",
+        "\"sent\", which assumes the provider accepted it",
+        "It throws, so the callback handler returns an error"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The provider rejects the request with HTTP 401 because the auth token was rotated. What happens to the message?",
+      "choices": [
+        "Marked permanently failed with reason 'http 401'",
+        "Retried immediately in a tight loop",
+        "Rescheduled 15 minutes out with reason 'provider auth rejected'",
+        "Accepted with an empty provider message id"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.integrations.third_party_adapters",
+    "backend.api.idempotency",
+    "backend.resilience.retries_and_backoff",
+    "backend.resilience.timeouts",
+    "backend.design.interface_design",
+    "backend.api.status_codes_and_error_responses"
+  ]
+}

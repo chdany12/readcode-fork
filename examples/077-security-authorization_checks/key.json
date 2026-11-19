@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/shipmentRouter.ts",
+        "startLine": 53,
+        "endLine": 56
+      }
+    },
+    0,
+    2,
+    1
+  ],
+  "explanations": [
+    "The status route checks that the caller is a carrier but never checks that this carrier is the one assigned to the shipment (shipment.carrierId === principal.orgId), unlike canSee in the GET route. Any carrier can mark another carrier's shipment as delivered or exception just by knowing its ID, which corrupts tracking and can trigger payouts or customer notifications.",
+    "canSee returns s.shipperOrgId === p.orgId for dispatchers, which is false here, and the route answers 404 just as it does for a missing shipment, so the shipment's existence is not revealed. The caller is authenticated, so not 401, and the route never returns 403 for a visibility failure.",
+    "Both read version N and both transitions are allowed from in_transit. updateStatus only applies when the stored version still equals N, so the first write bumps the version and the second gets null, which the route turns into 409 concurrent_update. There is no last-write-wins and no blocking row lock.",
+    "CARRIER_TRANSITIONS.created is an empty list, so allowed.includes(\"in_transit\") is false and the route returns 409 with from and to. The role check passes for a carrier, and the body has a status, so it is neither 403 nor 400."
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "title": "Tracing CI pipeline jobs and their steps",
+  "name": "CI job tracer",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/runJob.ts",
+      "content": "import { context, propagation, ROOT_CONTEXT, SpanStatusCode, trace, type Link, type Span } from \"@opentelemetry/api\";\nimport { runStep, type StepResult } from \"./steps\";\n\nconst tracer = trace.getTracer(\"ci-runner\", \"4.1.0\");\n\nexport interface PipelineJob {\n  jobId: string;\n  repo: string;\n  commitSha: string;\n  steps: { name: string; command: string; timeoutSec: number }[];\n  triggerHeaders: Record<string, string>;\n  coalescedTriggers: Record<string, string>[];\n}\n\nfunction linksFor(triggers: Record<string, string>[]): Link[] {\n  const links: Link[] = [];\n  for (const headers of triggers) {\n    const sc = trace.getSpanContext(propagation.extract(ROOT_CONTEXT, headers));\n    if (sc && trace.isSpanContextValid(sc)) {\n      links.push({ context: sc, attributes: { \"ci.link.reason\": \"coalesced_push\" } });\n    }\n  }\n  return links;\n}\n\nexport async function runJob(job: PipelineJob): Promise<\"passed\" | \"failed\"> {\n  const parent = propagation.extract(ROOT_CONTEXT, job.triggerHeaders);\n\n  return context.with(parent, () =>\n    tracer.startActiveSpan(\n      \"ci.job\",\n      {\n        links: linksFor(job.coalescedTriggers),\n        attributes: { \"ci.job.id\": job.jobId, \"vcs.repository\": job.repo, \"vcs.revision\": job.commitSha },\n      },\n      async (jobSpan: Span) => {\n        let outcome: \"passed\" | \"failed\" = \"passed\";\n        try {\n          for (const step of job.steps) {\n            const result: StepResult = await tracer.startActiveSpan(\n              `ci.step ${step.name}`,\n              { attributes: { \"ci.step.timeout_sec\": step.timeoutSec } },\n              async (stepSpan) => {\n                try {\n                  const r = await runStep(step.command, step.timeoutSec * 1000);\n                  stepSpan.setAttribute(\"process.exit.code\", r.exitCode);\n                  if (r.exitCode !== 0) {\n                    stepSpan.setStatus({ code: SpanStatusCode.ERROR, message: `exit ${r.exitCode}` });\n                  }\n                  return r;\n                } catch (err) {\n                  stepSpan.recordException(err as Error);\n                  stepSpan.setStatus({ code: SpanStatusCode.ERROR });\n                  throw err;\n                } finally {\n                  stepSpan.end();\n                }\n              },\n            );\n            if (result.exitCode !== 0) {\n              outcome = \"failed\";\n              break;\n            }\n          }\n        } catch (err) {\n          outcome = \"failed\";\n          jobSpan.recordException(err as Error);\n        } finally {\n          jobSpan.setAttribute(\"ci.job.outcome\", outcome);\n          if (outcome === \"failed\") jobSpan.setStatus({ code: SpanStatusCode.ERROR });\n          jobSpan.end();\n        }\n        return outcome;\n      },\n    ),\n  );\n}\n"
+    },
+    {
+      "path": "src/steps.ts",
+      "content": "import { spawn } from \"node:child_process\";\nimport { context, propagation } from \"@opentelemetry/api\";\n\nexport interface StepResult {\n  exitCode: number;\n  durationMs: number;\n}\n\nexport function runStep(command: string, timeoutMs: number): Promise<StepResult> {\n  const env: Record<string, string> = { ...(process.env as Record<string, string>) };\n  const carrier: Record<string, string> = {};\n  propagation.inject(context.active(), carrier);\n  if (carrier.traceparent) env.TRACEPARENT = carrier.traceparent;\n  if (carrier.tracestate) env.TRACESTATE = carrier.tracestate;\n\n  const started = Date.now();\n  return new Promise((resolve, reject) => {\n    const child = spawn(\"/bin/sh\", [\"-c\", command], { env, stdio: \"inherit\" });\n    const timer = setTimeout(() => child.kill(\"SIGKILL\"), timeoutMs);\n\n    child.once(\"error\", (err) => {\n      clearTimeout(timer);\n      reject(err);\n    });\n    child.once(\"exit\", (code, signal) => {\n      clearTimeout(timer);\n      resolve({ exitCode: code ?? (signal ? 137 : 1), durationMs: Date.now() - started });\n    });\n  });\n}\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code builds the trace for a CI job (parenting, links, context propagation to subprocesses, or ending spans)? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is no defect. The job span is parented on the triggering push via extract into ROOT_CONTEXT and context.with, and coalesced pushes are attached as links (only valid span contexts) rather than as competing parents. Each step span is active while runStep runs, so the TRACEPARENT handed to the subprocess names that step span. Every span is ended in a finally, step failures by exit code and by exception are both marked ERROR, and the job's status and outcome attribute are set in finally before the span ends."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Three pushes are coalesced into one job. How do they appear in the trace?",
+      "choices": [
+        "The job span has three parents, one per push",
+        "The job span is a child of the triggering push and carries links to the coalesced pushes' spans",
+        "Three separate job spans are created, one in each push's trace",
+        "The coalesced pushes are recorded only as span events with no trace references"
+      ],
+      "answer": 1,
+      "explanation": "A span can only have one parent, which here comes from job.triggerHeaders. linksFor extracts a span context from each coalesced trigger and adds it as a Link, so the other traces are referenced without being parents. Only one job span is created, and links (not events) carry the references."
+    },
+    {
+      "prompt": "A build tool launched by a step reads TRACEPARENT and creates its own spans. Where do they attach?",
+      "choices": [
+        "Under the ci.job span",
+        "Under the triggering push span",
+        "Under the ci.step span for that step",
+        "They start a new trace because environment variables are not a supported carrier"
+      ],
+      "answer": 2,
+      "explanation": "runStep is called inside the step's startActiveSpan callback, so context.active() is the step span when propagation.inject fills the carrier, and TRACEPARENT holds the step span's ID. The job span is the step's parent, not the active span at that moment. TRACEPARENT is a common convention that tools honour, so they join rather than start a new trace."
+    },
+    {
+      "prompt": "A step exceeds its timeout. What does the job report?",
+      "choices": [
+        "The child is killed with SIGKILL, exit code 137 is reported, the step span is ERROR and the job fails without running later steps",
+        "runStep rejects with a timeout error, which is recorded on the job span as an exception",
+        "The step hangs until the process ends on its own because the timer is cleared",
+        "The step is treated as passed because the exit code is null"
+      ],
+      "answer": 0,
+      "explanation": "The timer sends SIGKILL; the exit handler sees code null and a signal, so exitCode becomes 137. The step span is set to ERROR because exitCode is non-zero, and the loop sets outcome to failed and breaks. runStep resolves rather than rejects in this case, the timer is only cleared after exit, and a null code maps to a non-zero value."
+    }
+  ],
+  "concepts": [
+    "backend.observability.tracing",
+    "backend.resilience.timeouts"
+  ]
+}

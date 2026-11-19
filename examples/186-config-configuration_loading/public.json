@@ -1,0 +1,49 @@
+{
+  "id": "a2877159-b638-4b05-9b65-579ab3a7a617",
+  "title": "Hot-reloadable notifier configuration",
+  "name": "Notifier config loader",
+  "createdAt": "2026-11-15T09:44:42.001Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code combines defaults, the config file, and environment variables? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The config file does not exist. What does loadNotifierConfig do?",
+      "choices": [
+        "Throws ConfigLoadError",
+        "Returns defaults with environment overrides applied",
+        "Returns an empty config",
+        "Retries the read until the file appears"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "During reload(), the file contains invalid JSON. What do callers of get() see?",
+      "choices": [
+        "The previous config, unchanged",
+        "The defaults",
+        "undefined until the next successful reload",
+        "A config with only env overrides"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "SMTP_PORT is set to \"25a\". What happens?",
+      "choices": [
+        "The port falls back to 587",
+        "parseInt-style parsing makes the port 25",
+        "Number() gives NaN and check() rejects it with \"email.port invalid\"",
+        "The SMTP client fails later, at connect time"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.configuration_loading",
+    "backend.config.defaults_and_validation"
+  ]
+}

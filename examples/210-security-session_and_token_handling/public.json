@@ -1,0 +1,51 @@
+{
+  "id": "d16ca6ca-e33b-4f19-94be-826da597a98a",
+  "title": "Cached session resolution for a search API",
+  "name": "Search session resolver",
+  "createdAt": "2026-11-15T09:44:42.032Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code decides whether a session is still valid? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The service runs as several instances behind a load balancer, each with its own SessionResolver. A user logs out through instance A. What happens to requests with the same session id that reach instance B?",
+      "choices": [
+        "They are rejected immediately, because revoke deletes from the shared store",
+        "They are rejected, because logout clears the cookie on all instances",
+        "They fail with a 500 because B's cache and the store disagree",
+        "They may still be accepted for up to the cache TTL if B had the session cached"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "When the cache holds MAX_CACHED entries and a new session is remembered, which entry is evicted?",
+      "choices": [
+        "The entry that was inserted earliest still present in the Map",
+        "The least recently used entry",
+        "The entry closest to its expiresAt",
+        "A random entry"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A user whose principal.indexes is [\"products\"] calls search with index \"orders\". What prevents them from reading another tenant's data if they had access to \"orders\"?",
+      "choices": [
+        "Nothing; the index name alone determines which documents are returned",
+        "The backend query is always passed principal.tenantId, so results are scoped to the caller's tenant",
+        "The limit cap of 100 bounds how much data can leak",
+        "The session cookie encodes the tenant and the backend reads it"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.security.session_and_token_handling",
+    "backend.caching.ttls_and_expiry",
+    "backend.security.multi_tenant_isolation",
+    "backend.security.authorization_checks"
+  ]
+}

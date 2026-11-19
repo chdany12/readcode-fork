@@ -1,0 +1,49 @@
+{
+  "id": "a5fafe7e-456f-402d-8ce2-42809c972c63",
+  "title": "CI build-minute billing with charge reversals",
+  "name": "Build minute billing",
+  "createdAt": "2026-11-15T09:41:31.590Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code records reversals of build charges in the ledger? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A 'large' runner build lasts 61 seconds. What does priceMicros return?",
+      "choices": [
+        "32_533n",
+        "32_000n",
+        "64_000n",
+        "0n"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "chargeBuild is called twice concurrently for the same buildId. Assuming repo.insert enforces a unique txnId, what happens?",
+      "choices": [
+        "Both inserts succeed, double-charging the org",
+        "One insert succeeds and the other call fails with a unique-constraint error from insert",
+        "The second call returns the existing txn because getTxn always sees it",
+        "post() rejects the second txn as unbalanced"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "invoiceCents is given 25_001n micros. What does it return and why?",
+      "choices": [
+        "2n, because integer division truncates",
+        "3n, because adding MICROS_PER_CENT - 1 before dividing rounds up",
+        "2.5001n, because bigint keeps fractions",
+        "3n, because bigint division rounds to nearest"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.money_and_ledgers",
+    "backend.api.idempotency"
+  ]
+}

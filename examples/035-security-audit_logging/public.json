@@ -1,0 +1,50 @@
+{
+  "id": "e6434c0b-d86c-40eb-873e-58c6fb650b7d",
+  "title": "Audited firmware rollout endpoint for an IoT fleet",
+  "name": "Firmware rollout handler",
+  "createdAt": "2026-11-15T09:41:31.550Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in what this code records in the audit trail? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "An operator from tenant A requests a firmware update for a device owned by tenant B. What does the caller see, and is anything recorded?",
+      "choices": [
+        "403 Forbidden, and nothing is recorded",
+        "404 Not Found, and a 'denied' entry is recorded",
+        "202 Accepted, because the role check passes",
+        "404 Not Found, and nothing is recorded because the device is not theirs"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "In AuditLog, each entry includes the previous entry's hash. What does this chain let an auditor detect?",
+      "choices": [
+        "That an entry was edited or removed in the middle of the log, because later hashes would stop matching",
+        "Who wrote each entry, because the hash is a signature",
+        "That the sink lost an entry during a network outage, before append() returned",
+        "Nothing useful, because SHA-256 hashes are not unique"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "scheduleFirmware() succeeds, but the audit sink then rejects. What does the client receive?",
+      "choices": [
+        "202, because the job was already scheduled",
+        "404, because the catch block treats every error as a missing device",
+        "500 with no audit entries attempted",
+        "An error, after the catch block tries to record a 'failed' entry, even though the job exists"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.security.audit_logging",
+    "backend.security.authorization_checks",
+    "backend.security.multi_tenant_isolation"
+  ]
+}

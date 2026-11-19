@@ -1,0 +1,64 @@
+{
+  "title": "Audited firmware rollout endpoint for an IoT fleet",
+  "name": "Firmware rollout handler",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/auditLog.ts",
+      "content": "import { createHash } from \"node:crypto\";\n\nexport interface AuditEvent {\n  at: string;\n  actor: string;\n  action: string;\n  resource: string;\n  outcome: \"allowed\" | \"denied\" | \"failed\";\n  details: Record<string, unknown>;\n}\n\nexport interface AuditSink {\n  append(line: string): Promise<void>;\n}\n\nexport class AuditLog {\n  private lastHash = \"genesis\";\n\n  constructor(private readonly sink: AuditSink) {}\n\n  async record(event: Omit<AuditEvent, \"at\">): Promise<void> {\n    const entry = { ...event, at: new Date().toISOString(), prev: this.lastHash };\n    const serialized = JSON.stringify(entry);\n    const hash = createHash(\"sha256\").update(serialized).digest(\"hex\");\n    await this.sink.append(JSON.stringify({ ...entry, hash }));\n    this.lastHash = hash;\n  }\n}\n"
+    },
+    {
+      "path": "src/firmwareRolloutHandler.ts",
+      "content": "import { AuditLog } from \"./auditLog\";\n\nexport interface Principal {\n  userId: string;\n  tenantId: string;\n  roles: string[];\n}\n\nexport interface FirmwareRequest {\n  principal: Principal;\n  params: { deviceId: string };\n  body: { firmwareVersion: string; requestedBy: string; reason?: string };\n}\n\nexport interface DeviceRegistry {\n  find(deviceId: string): Promise<{ id: string; tenantId: string; firmware: string } | null>;\n  scheduleFirmware(deviceId: string, version: string): Promise<string>;\n}\n\nexport interface HttpResult {\n  status: number;\n  body: unknown;\n}\n\nexport class FirmwareRolloutHandler {\n  constructor(\n    private readonly devices: DeviceRegistry,\n    private readonly audit: AuditLog,\n  ) {}\n\n  async handle(req: FirmwareRequest): Promise<HttpResult> {\n    const { deviceId } = req.params;\n    const { firmwareVersion, requestedBy, reason } = req.body;\n    const device = await this.devices.find(deviceId);\n\n    if (!device || device.tenantId !== req.principal.tenantId) {\n      await this.audit.record({\n        actor: requestedBy,\n        action: \"device.firmware.schedule\",\n        resource: deviceId,\n        outcome: \"denied\",\n        details: { firmwareVersion, cause: \"not_found_or_foreign_tenant\" },\n      });\n      return { status: 404, body: { error: \"device not found\" } };\n    }\n\n    if (!req.principal.roles.includes(\"fleet-operator\")) {\n      await this.audit.record({\n        actor: requestedBy,\n        action: \"device.firmware.schedule\",\n        resource: deviceId,\n        outcome: \"denied\",\n        details: { firmwareVersion, cause: \"missing_role\" },\n      });\n      return { status: 403, body: { error: \"forbidden\" } };\n    }\n\n    try {\n      const jobId = await this.devices.scheduleFirmware(deviceId, firmwareVersion);\n      await this.audit.record({\n        actor: requestedBy,\n        action: \"device.firmware.schedule\",\n        resource: deviceId,\n        outcome: \"allowed\",\n        details: { from: device.firmware, to: firmwareVersion, jobId, reason },\n      });\n      return { status: 202, body: { jobId } };\n    } catch (err) {\n      await this.audit.record({\n        actor: requestedBy,\n        action: \"device.firmware.schedule\",\n        resource: deviceId,\n        outcome: \"failed\",\n        details: { firmwareVersion, error: (err as Error).message },\n      });\n      throw err;\n    }\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/firmwareRolloutHandler.ts",
+    "snippet": "    const { firmwareVersion, requestedBy, reason } = req.body;"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in what this code records in the audit trail? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "Every audit entry uses `requestedBy` from the request body as the actor. The client supplies that value, so any authenticated operator can schedule firmware while the trail names someone else, and denied attempts can be blamed on another user. The actor should come from the authenticated principal (req.principal.userId, possibly with tenantId); requestedBy could at most go into details."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "An operator from tenant A requests a firmware update for a device owned by tenant B. What does the caller see, and is anything recorded?",
+      "choices": [
+        "403 Forbidden, and nothing is recorded",
+        "404 Not Found, and a 'denied' entry is recorded",
+        "202 Accepted, because the role check passes",
+        "404 Not Found, and nothing is recorded because the device is not theirs"
+      ],
+      "answer": 1,
+      "explanation": "The tenant mismatch falls into the first branch, which records a denied event with cause not_found_or_foreign_tenant and returns 404 so device existence is not leaked. The role check is never reached, and the attempt is logged."
+    },
+    {
+      "prompt": "In AuditLog, each entry includes the previous entry's hash. What does this chain let an auditor detect?",
+      "choices": [
+        "That an entry was edited or removed in the middle of the log, because later hashes would stop matching",
+        "Who wrote each entry, because the hash is a signature",
+        "That the sink lost an entry during a network outage, before append() returned",
+        "Nothing useful, because SHA-256 hashes are not unique"
+      ],
+      "answer": 0,
+      "explanation": "Each hash covers the previous hash, so changing or deleting an earlier line breaks verification for everything after it. A plain hash is not a signature and proves nothing about authorship, and it says nothing about appends that never happened."
+    },
+    {
+      "prompt": "scheduleFirmware() succeeds, but the audit sink then rejects. What does the client receive?",
+      "choices": [
+        "202, because the job was already scheduled",
+        "404, because the catch block treats every error as a missing device",
+        "500 with no audit entries attempted",
+        "An error, after the catch block tries to record a 'failed' entry, even though the job exists"
+      ],
+      "answer": 3,
+      "explanation": "The success record() call is inside the try, so its rejection goes to the catch, which tries to write a 'failed' entry and then rethrows. The client sees an error even though the rollout was scheduled, a real tradeoff of tying the response to audit durability. Nothing maps it to 404, and a second audit write is attempted."
+    }
+  ],
+  "concepts": [
+    "backend.security.audit_logging",
+    "backend.security.authorization_checks",
+    "backend.security.multi_tenant_isolation"
+  ]
+}

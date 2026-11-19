@@ -1,0 +1,25 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.integrations.third_party_adapters",
+      "count": 8
+    },
+    {
+      "label": "backend.api.rest_design",
+      "count": 3
+    },
+    {
+      "label": "backend.config.feature_flags",
+      "count": 3
+    },
+    {
+      "label": "backend.config.environment_specific_behaviour",
+      "count": 3
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "count": 3
+    }
+  ]
+}

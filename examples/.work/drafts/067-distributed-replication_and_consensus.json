@@ -1,0 +1,59 @@
+{
+  "title": "Raft-style follower for replicated match state",
+  "name": "Match state replica",
+  "language": "TypeScript",
+  "durationMinutes": 16,
+  "files": [
+    {
+      "path": "src/matchStateReplica.ts",
+      "content": "export interface MatchEvent {\n  matchId: string;\n  seq: number;\n  payload: { type: string; playerId: string; data: unknown };\n}\n\nexport interface LogEntry {\n  term: number;\n  index: number;\n  event: MatchEvent;\n}\n\nexport interface AppendRequest {\n  term: number;\n  leaderId: string;\n  prevLogIndex: number;\n  prevLogTerm: number;\n  entries: LogEntry[];\n  leaderCommit: number;\n}\n\nexport interface AppendResponse {\n  term: number;\n  success: boolean;\n  matchIndex: number;\n}\n\nexport interface PersistentState {\n  save(state: { currentTerm: number; votedFor: string | null; log: LogEntry[] }): Promise<void>;\n}\n\nexport class MatchStateReplica {\n  currentTerm = 0;\n  votedFor: string | null = null;\n  leaderId: string | null = null;\n  log: LogEntry[] = [];\n  commitIndex = 0;\n  lastApplied = 0;\n  private electionDeadline = 0;\n\n  constructor(\n    readonly nodeId: string,\n    private readonly storage: PersistentState,\n    private readonly apply: (event: MatchEvent) => void,\n    private readonly electionTimeoutMs: () => number,\n  ) {\n    this.resetElectionTimer();\n  }\n\n  private termAt(index: number): number {\n    if (index === 0) return 0;\n    return this.log[index - 1]?.term ?? -1;\n  }\n\n  private resetElectionTimer(): void {\n    this.electionDeadline = Date.now() + this.electionTimeoutMs();\n  }\n\n  electionDue(now: number): boolean {\n    return this.leaderId !== this.nodeId && now >= this.electionDeadline;\n  }\n\n  async handleAppend(req: AppendRequest): Promise<AppendResponse> {\n    if (req.term > this.currentTerm) {\n      this.currentTerm = req.term;\n      this.votedFor = null;\n    }\n    this.leaderId = req.leaderId;\n    this.resetElectionTimer();\n\n    if (this.termAt(req.prevLogIndex) !== req.prevLogTerm) {\n      return { term: this.currentTerm, success: false, matchIndex: 0 };\n    }\n\n    let changed = false;\n    for (const entry of req.entries) {\n      const existingTerm = this.termAt(entry.index);\n      if (existingTerm !== -1 && existingTerm !== entry.term) {\n        this.log.length = entry.index - 1;\n      }\n      if (this.log.length < entry.index) {\n        this.log.push(entry);\n        changed = true;\n      }\n    }\n    if (changed || req.term !== this.currentTerm) {\n      await this.storage.save({ currentTerm: this.currentTerm, votedFor: this.votedFor, log: this.log });\n    }\n\n    const lastNew = req.prevLogIndex + req.entries.length;\n    if (req.leaderCommit > this.commitIndex) {\n      this.commitIndex = Math.min(req.leaderCommit, lastNew);\n    }\n    this.applyCommitted();\n    return { term: this.currentTerm, success: true, matchIndex: lastNew };\n  }\n\n  private applyCommitted(): void {\n    while (this.lastApplied < this.commitIndex) {\n      this.lastApplied++;\n      this.apply(this.log[this.lastApplied - 1].event);\n    }\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/matchStateReplica.ts",
+    "snippet": "    if (req.term > this.currentTerm) {\n      this.currentTerm = req.term;\n      this.votedFor = null;\n    }\n    this.leaderId = req.leaderId;"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this replica decides whether to accept entries from a leader? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "handleAppend never rejects a request whose term is lower than currentTerm. A deposed leader from an old term (e.g. after a network partition heals) is accepted: the replica records it as leader, resets its election timer, and can truncate entries and append its stale log, overwriting entries the new leader may already have committed. It must return success: false with its currentTerm when req.term < this.currentTerm, before touching leaderId or the log."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "The local log has entries at indexes 1-5 (terms 1,1,2,2,2). A request arrives with prevLogIndex 3, prevLogTerm 2, and one entry {index 4, term 3}. What is the log afterwards?",
+      "choices": [
+        "Indexes 1-5, unchanged",
+        "Indexes 1-4 with index 4 at term 3",
+        "Indexes 1-3 only",
+        "Indexes 1-6 with the new entry appended at the end"
+      ],
+      "answer": 1,
+      "explanation": "termAt(3) = 2 matches prevLogTerm. For index 4 the existing term 2 conflicts with 3, so the log is truncated to length 3, then the entry is pushed, giving 1-4 with index 4 at term 3; the old index 5 is discarded. Nothing is appended at index 6."
+    },
+    {
+      "prompt": "Why does commitIndex use Math.min(req.leaderCommit, lastNew) rather than just leaderCommit?",
+      "choices": [
+        "To avoid applying entries the leader has not committed",
+        "Because this replica only knows its log matches the leader's up to lastNew; entries beyond that may be stale or missing",
+        "To slow down application under load",
+        "Because leaderCommit is always larger than the log length"
+      ],
+      "answer": 1,
+      "explanation": "The consistency check only verifies the log through prevLogIndex plus the entries just received. Entries after lastNew might be leftovers from an old leader, so committing them would apply unverified data. Option 1 is the opposite concern (leaderCommit is already committed by the leader); it's not a throttling device, and leaderCommit is not always larger."
+    },
+    {
+      "prompt": "storage.save throws (disk full) partway through handleAppend after new entries were pushed. What does the caller observe and what state is left in memory?",
+      "choices": [
+        "A success response, with the entries in memory but not on disk",
+        "The promise rejects; the in-memory log already contains the new entries, but commitIndex has not been advanced by this call",
+        "The promise rejects and the in-memory log is rolled back",
+        "A failure response with matchIndex 0"
+      ],
+      "answer": 1,
+      "explanation": "The log is mutated before await storage.save; when save throws the exception propagates out of handleAppend, so no response object is returned and the commitIndex/apply code after it does not run. Nothing rolls back the pushed entries, and no success:false response is built."
+    }
+  ],
+  "concepts": [
+    "backend.distributed.replication_and_consensus",
+    "backend.errors.cleanup_on_error_paths"
+  ]
+}

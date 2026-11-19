@@ -1,0 +1,21 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.testing.integration_tests",
+      "count": 10
+    },
+    {
+      "label": "backend.testing.flaky_tests",
+      "count": 6
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "count": 2
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "count": 2
+    }
+  ]
+}

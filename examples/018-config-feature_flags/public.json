@@ -1,0 +1,48 @@
+{
+  "id": "2ac2b4ab-837f-43ba-bf2f-a58b82248396",
+  "title": "Flex bundle pricing behind a percentage rollout",
+  "name": "Flex fare rollout",
+  "createdAt": "2026-11-15T09:41:31.521Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code decides which users get the flex_bundle_pricing flag? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "An operator sets flex_bundle_pricing to enabled with percentage 0 but adds user u-42 to allowUserIds. u-42 searches from a market listed in denyMarkets. What does isEnabled return for u-42?",
+      "choices": [
+        "false, because denyMarkets is checked before percentage",
+        "true, because the allow list is checked before the market deny list",
+        "false, because percentage 0 disables everyone",
+        "It throws because percentage 0 is invalid"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "An operator flips flex_bundle_pricing from enabled to disabled (via replaceRules) between a user's search and their confirmOffer call. What happens to a user who was shown a flex offer?",
+      "choices": [
+        "They are charged the saved flex total without any check",
+        "confirmOffer silently converts the offer to standard pricing",
+        "confirmOffer throws \"pricing changed\" and the user must search again",
+        "The saved offers are deleted from the QuoteStore"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does bucket() hash the flag name together with the user ID rather than hashing only the user ID?",
+      "choices": [
+        "So that different flags at the same percentage roll out to different subsets of users",
+        "So that the hash is shorter and faster to compute",
+        "So that a disabled flag always produces bucket 0",
+        "So that the rollout percentage can exceed 100"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.feature_flags"
+  ]
+}

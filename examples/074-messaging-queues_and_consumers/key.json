@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    3,
+    0,
+    1
+  ],
+  "explanations": [
+    "There is no defect. Each message is received with a 120 s visibility timeout, and a heartbeat extends it every 45 s while transcoding, so long jobs are not redelivered to another worker mid-flight. The heartbeat is cleared on both success and failure. The message is deleted only after the rendition exists. Failures get a growing visibility delay, and after MAX_RECEIVES the message is dead-lettered. If a duplicate delivery does occur, the exists() check plus the transcoder's atomic rename make reprocessing safe.",
+    "The heartbeat calls changeVisibility(receiptHandle, 120) every 45 s, so the message's visibility deadline keeps moving forward while the transcode runs. waitTimeSeconds only controls long-polling. inFlight is a local field and is not shared between processes. Without the heartbeat the message would reappear after 120 s, but the heartbeat prevents that.",
+    "The JSON.parse failure is caught and the message goes straight to moveToDeadLetter with reason \"unparseable body\". A malformed body will never parse, so retrying would be pointless. The retry path in the later try/catch is never reached, the error does not escape, and the message is dead-lettered rather than deleted.",
+    "free is 0, so the loop sleeps 250 ms and continues without calling receive. As soon as any process() promise settles, its finally decrements inFlight and the next iteration receives min(free, 10) messages. It never calls receive with 0, never buffers extra messages, and does not wait for the whole group to finish."
+  ]
+}

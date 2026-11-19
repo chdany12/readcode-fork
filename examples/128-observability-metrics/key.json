@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    2,
+    1,
+    0
+  ],
+  "explanations": [
+    "There is no defect. Both metrics are recorded in the finally block, so every call (match, no drivers, rider cancel, timeout or thrown error) is counted and timed exactly once. Label values are bounded: region is collapsed to five known codes or \"other\", and outcome is a fixed union, so series count cannot grow with riders or rides. Latency uses a monotonic clock (hrtime.bigint), and the timeout and abort listener are cleaned up in the same finally block.",
+    "regionLabel trims and lowercases to \"pdx\", but that is not in KNOWN_REGIONS, so it returns \"other\". No new series is created and nothing is dropped. Region is never used raw, so \" PDX \" cannot appear.",
+    "In the catch block riderSignal is not aborted, so outcome becomes \"error\" and the error is rethrown. The finally block still runs and records latency and the counter. Null is only returned on rider cancellation.",
+    "hrtime is a monotonic high-resolution clock, so clock steps cannot distort durations. Histogram.observe accepts any number; the code converts nanoseconds to seconds itself by dividing by 1e9; and the measurement deliberately includes the matcher await."
+  ]
+}

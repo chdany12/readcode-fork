@@ -1,0 +1,64 @@
+{
+  "title": "Write-sharded ad campaign counters",
+  "name": "Campaign spend counters",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/campaignCounterStore.ts",
+      "content": "import {\n  DynamoDBDocumentClient,\n  UpdateCommand,\n  BatchGetCommand,\n} from \"@aws-sdk/lib-dynamodb\";\n\nconst TABLE = process.env.AD_COUNTERS_TABLE ?? \"ad-counters\";\nexport const SHARD_COUNT = 16;\n\nexport type Metric = \"impressions\" | \"clicks\" | \"spendMicros\";\n\nfunction dayKey(ts: Date): string {\n  return ts.toISOString().slice(0, 10);\n}\n\nfunction shardPk(campaignId: string, day: string, shard: number): string {\n  return `CAMP#${campaignId}#D#${day}#S#${shard}`;\n}\n\nexport class CampaignCounterStore {\n  constructor(private readonly db: DynamoDBDocumentClient) {}\n\n  async record(campaignId: string, at: Date, deltas: Partial<Record<Metric, number>>): Promise<void> {\n    const shard = Math.floor(Math.random() * SHARD_COUNT);\n    const names: Record<string, string> = {};\n    const values: Record<string, number> = {};\n    const parts: string[] = [];\n    for (const [metric, delta] of Object.entries(deltas)) {\n      if (!delta) continue;\n      names[`#${metric}`] = metric;\n      values[`:${metric}`] = delta;\n      parts.push(`#${metric} :${metric}`);\n    }\n    if (parts.length === 0) return;\n    await this.db.send(\n      new UpdateCommand({\n        TableName: TABLE,\n        Key: { pk: shardPk(campaignId, dayKey(at), shard), sk: \"TOTALS\" },\n        UpdateExpression: `ADD ${parts.join(\", \")}`,\n        ExpressionAttributeNames: names,\n        ExpressionAttributeValues: values,\n      }),\n    );\n  }\n\n  async dailyTotals(campaignId: string, day: string): Promise<Record<Metric, number>> {\n    const keys = [];\n    for (let s = 1; s < SHARD_COUNT; s++) {\n      keys.push({ pk: shardPk(campaignId, day, s), sk: \"TOTALS\" });\n    }\n    const totals: Record<Metric, number> = { impressions: 0, clicks: 0, spendMicros: 0 };\n    let request: Record<string, any> | undefined = { [TABLE]: { Keys: keys } };\n    let attempts = 0;\n    while (request && Object.keys(request).length > 0 && attempts < 5) {\n      const out = await this.db.send(new BatchGetCommand({ RequestItems: request }));\n      for (const item of out.Responses?.[TABLE] ?? []) {\n        totals.impressions += item.impressions ?? 0;\n        totals.clicks += item.clicks ?? 0;\n        totals.spendMicros += item.spendMicros ?? 0;\n      }\n      request = out.UnprocessedKeys;\n      attempts++;\n    }\n    if (request && Object.keys(request).length > 0) {\n      throw new Error(`incomplete counter read for ${campaignId} on ${day}`);\n    }\n    return totals;\n  }\n}\n"
+    },
+    {
+      "path": "src/pacingService.ts",
+      "content": "import { CampaignCounterStore } from \"./campaignCounterStore\";\n\nexport interface PacingResult {\n  campaignId: string;\n  day: string;\n  spentMicros: number;\n  budgetMicros: number;\n  ctr: number;\n  shouldThrottle: boolean;\n}\n\nexport class PacingService {\n  constructor(\n    private readonly counters: CampaignCounterStore,\n    private readonly throttleAt = 0.95,\n  ) {}\n\n  async evaluate(campaignId: string, budgetMicros: number, now = new Date()): Promise<PacingResult> {\n    const day = now.toISOString().slice(0, 10);\n    const t = await this.counters.dailyTotals(campaignId, day);\n    const ctr = t.impressions > 0 ? t.clicks / t.impressions : 0;\n    return {\n      campaignId,\n      day,\n      spentMicros: t.spendMicros,\n      budgetMicros,\n      ctr,\n      shouldThrottle: t.spendMicros >= budgetMicros * this.throttleAt,\n    };\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/campaignCounterStore.ts",
+    "snippet": "    for (let s = 1; s < SHARD_COUNT; s++) {"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code writes or reads the sharded campaign counters? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "record() picks a shard in 0..15 (Math.floor(Math.random() * SHARD_COUNT)), but dailyTotals reads shards 1..15 only. Shard 0 receives about 1/16 of all increments and is never summed, so impressions, clicks and spend are undercounted by roughly 6%. Pacing then lets campaigns overspend their budget. The loop should start at 0."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Why does record() spread a campaign's daily counters across 16 partition keys instead of one?",
+      "choices": [
+        "To keep each item under DynamoDB's 400 KB item size limit",
+        "Because ADD cannot be used twice on the same item",
+        "To avoid a hot partition: a single key has a per-partition write throughput ceiling that a busy campaign could exceed",
+        "So that each shard can have a different TTL"
+      ],
+      "answer": 2,
+      "explanation": "Write sharding distributes heavy increments for one logical counter across many partition keys, each with its own throughput. A counter item is tiny, ADD can be repeated freely, and no TTLs are used here."
+    },
+    {
+      "prompt": "Two ad servers call record() for the same campaign at the same instant and happen to choose the same shard. What happens to the counts?",
+      "choices": [
+        "Both increments are applied, because ADD is an atomic server-side update",
+        "One increment is lost because the second write overwrites the first",
+        "The second call fails with a conditional check error",
+        "The increments are applied to two separate copies of the item"
+      ],
+      "answer": 0,
+      "explanation": "UpdateCommand with ADD is applied atomically by DynamoDB on the stored value, so concurrent increments both land. There is no read-modify-write to lose updates, no condition expression, and an item key maps to one item."
+    },
+    {
+      "prompt": "BatchGet returns some keys in UnprocessedKeys on every attempt (heavy throttling). What does dailyTotals do?",
+      "choices": [
+        "Returns totals with the unprocessed shards counted as zero",
+        "Retries indefinitely until all keys are read",
+        "Retries up to 5 calls total, then throws rather than returning partial totals",
+        "Falls back to reading each shard with GetItem"
+      ],
+      "answer": 2,
+      "explanation": "The loop stops after 5 attempts, and if UnprocessedKeys is still non-empty it throws 'incomplete counter read'. It doesn't silently return partial results, doesn't loop forever, and has no GetItem fallback. (Note there is no backoff between retries.)"
+    }
+  ],
+  "concepts": [
+    "backend.data.nosql_modeling",
+    "backend.distributed.sharding_and_partitioning",
+    "backend.concurrency.atomic_operations"
+  ]
+}

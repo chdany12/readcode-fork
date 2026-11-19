@@ -1,0 +1,61 @@
+{
+  "title": "Locked migration runner for CI metadata",
+  "name": "Schema migration runner",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/migrations/runner.ts",
+      "content": "import { Pool, PoolClient } from \"pg\";\nimport { createHash } from \"crypto\";\n\nexport interface Migration {\n  id: string;\n  up: (client: PoolClient) => Promise<void>;\n  transactional?: boolean;\n}\n\nconst LOCK_KEY = 72_410_993;\n\nexport class MigrationRunner {\n  constructor(private readonly pool: Pool, private readonly log = console) {}\n\n  async run(migrations: Migration[]): Promise<string[]> {\n    const client = await this.pool.connect();\n    try {\n      await client.query(\"SELECT pg_advisory_lock($1)\", [LOCK_KEY]);\n      try {\n        await client.query(\n          `CREATE TABLE IF NOT EXISTS schema_migrations (\n             id text PRIMARY KEY,\n             checksum text NOT NULL,\n             applied_at timestamptz NOT NULL DEFAULT now()\n           )`,\n        );\n        const { rows } = await client.query<{ id: string; checksum: string }>(\n          \"SELECT id, checksum FROM schema_migrations\",\n        );\n        const applied = new Map(rows.map((r) => [r.id, r.checksum]));\n        const ran: string[] = [];\n\n        for (const m of [...migrations].sort((a, b) => a.id.localeCompare(b.id))) {\n          const checksum = createHash(\"sha256\").update(m.up.toString()).digest(\"hex\");\n          const prior = applied.get(m.id);\n          if (prior !== undefined) {\n            if (prior !== checksum) {\n              throw new Error(`migration ${m.id} was modified after being applied`);\n            }\n            continue;\n          }\n          await this.applyOne(client, m, checksum);\n          ran.push(m.id);\n        }\n        return ran;\n      } finally {\n        await client.query(\"SELECT pg_advisory_unlock($1)\", [LOCK_KEY]);\n      }\n    } finally {\n      client.release();\n    }\n  }\n\n  private async applyOne(client: PoolClient, m: Migration, checksum: string) {\n    const record = () =>\n      client.query(\"INSERT INTO schema_migrations (id, checksum) VALUES ($1, $2)\", [m.id, checksum]);\n\n    if (m.transactional === false) {\n      this.log.info(`applying ${m.id} (non-transactional)`);\n      await m.up(client);\n      await record();\n      return;\n    }\n\n    this.log.info(`applying ${m.id}`);\n    await client.query(\"BEGIN\");\n    try {\n      await client.query(\"SET LOCAL lock_timeout = '5s'\");\n      await m.up(client);\n      await record();\n      await client.query(\"COMMIT\");\n    } catch (err) {\n      await client.query(\"ROLLBACK\");\n      throw new Error(`migration ${m.id} failed: ${(err as Error).message}`);\n    }\n  }\n}\n"
+    },
+    {
+      "path": "src/migrations/list.ts",
+      "content": "import { PoolClient } from \"pg\";\nimport { Migration } from \"./runner\";\n\nexport const migrations: Migration[] = [\n  {\n    id: \"20261002_01_add_pipeline_runs_triggered_by\",\n    up: async (c: PoolClient) => {\n      await c.query(\"ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS triggered_by text\");\n    },\n  },\n  {\n    id: \"20261002_02_index_pipeline_runs_triggered_by\",\n    transactional: false,\n    up: async (c: PoolClient) => {\n      await c.query(\n        \"CREATE INDEX CONCURRENTLY IF NOT EXISTS pipeline_runs_triggered_by_idx ON pipeline_runs (triggered_by)\",\n      );\n    },\n  },\n  {\n    id: \"20261002_03_backfill_triggered_by\",\n    transactional: false,\n    up: async (c: PoolClient) => {\n      for (;;) {\n        const { rowCount } = await c.query(\n          `UPDATE pipeline_runs SET triggered_by = COALESCE(actor_login, 'system')\n             WHERE id IN (\n               SELECT id FROM pipeline_runs\n                WHERE triggered_by IS NULL\n                ORDER BY id\n                LIMIT 5000\n             )`,\n        );\n        if (!rowCount) break;\n      }\n    },\n  },\n];\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code applies and records schema migrations? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is none. A session advisory lock serialises runners across deploy replicas, and the same pooled client holds it and releases it in a finally. Transactional migrations record themselves inside the same transaction, so a failure rolls back both the change and the record. CREATE INDEX CONCURRENTLY cannot run in a transaction, so it is correctly marked non-transactional and uses IF NOT EXISTS so a rerun after a crash is safe. The backfill is batched and idempotent (it only touches rows still NULL), so if it is interrupted before being recorded it simply resumes."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Two deploy pods start the runner at the same moment against the same database. What happens?",
+      "choices": [
+        "Both apply pending migrations concurrently, and the second fails on a duplicate key",
+        "The second blocks on pg_advisory_lock, then finds the migrations already recorded and runs nothing",
+        "The second fails immediately because the lock is taken",
+        "Each pod applies a disjoint half of the pending migrations"
+      ],
+      "answer": 1,
+      "explanation": "pg_advisory_lock blocks (it is not the try_ variant) until the first runner unlocks. The second then reads schema_migrations, sees every id with a matching checksum, and skips them. They never run concurrently, it does not fail fast, and work is not split."
+    },
+    {
+      "prompt": "Migration 01's up() is edited after it was applied in production, and the runner starts. What happens?",
+      "choices": [
+        "It reapplies 01 with the new code",
+        "It skips 01 silently and applies the rest",
+        "It throws before applying any later pending migration",
+        "It applies later migrations, then reports the mismatch"
+      ],
+      "answer": 2,
+      "explanation": "Migrations are processed in sorted order, and for 01 the stored checksum differs from the hash of the new function source, so run() throws at that point. Later migrations come after it in the loop and are never reached. Nothing is reapplied or silently skipped."
+    },
+    {
+      "prompt": "The process is killed halfway through the backfill (migration 03). What is the state on the next run?",
+      "choices": [
+        "03 is not recorded, so it runs again and only updates rows still NULL",
+        "03 is recorded, so the remaining NULL rows are never filled",
+        "All backfilled rows are rolled back and 03 starts from scratch",
+        "The runner refuses to start until 03 is manually cleaned up"
+      ],
+      "answer": 0,
+      "explanation": "Because 03 is non-transactional, each batch UPDATE commits on its own, and record() only runs after up() finishes. So committed batches persist, 03 has no row in schema_migrations, and the next run repeats it, touching only rows where triggered_by IS NULL. Nothing is rolled back, and no manual step is needed."
+    }
+  ],
+  "concepts": [
+    "backend.data.migrations",
+    "backend.concurrency.locking_and_lock_ordering",
+    "backend.data.transactions_and_isolation_levels"
+  ]
+}

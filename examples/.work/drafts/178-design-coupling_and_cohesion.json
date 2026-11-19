@@ -1,0 +1,67 @@
+{
+  "title": "Flight booking with loyalty pricing",
+  "name": "Flight fare booking",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/pricingEngine.ts",
+      "content": "export interface FareQuote {\n  routeKey: string;\n  baseFareCents: number;\n  taxesCents: number;\n  totalCents: number;\n  currency: string;\n  computedAt: number;\n}\n\nexport interface FareSource {\n  fetchBaseFare(origin: string, destination: string, date: string): Promise<{ cents: number; currency: string }>;\n}\n\nconst QUOTE_TTL_MS = 60_000;\nconst TAX_RATE = 0.12;\n\nexport class PricingEngine {\n  private readonly quotes = new Map<string, FareQuote>();\n\n  constructor(private readonly source: FareSource, private readonly now: () => number = Date.now) {}\n\n  async quote(origin: string, destination: string, date: string): Promise<FareQuote> {\n    const routeKey = `${origin}:${destination}:${date}`;\n    const cached = this.quotes.get(routeKey);\n    if (cached && this.now() - cached.computedAt < QUOTE_TTL_MS) {\n      return cached;\n    }\n\n    const base = await this.source.fetchBaseFare(origin, destination, date);\n    const taxesCents = Math.round(base.cents * TAX_RATE);\n    const fresh: FareQuote = {\n      routeKey,\n      baseFareCents: base.cents,\n      taxesCents,\n      totalCents: base.cents + taxesCents,\n      currency: base.currency,\n      computedAt: this.now(),\n    };\n    this.quotes.set(routeKey, fresh);\n    return fresh;\n  }\n\n  invalidate(routeKey: string): void {\n    this.quotes.delete(routeKey);\n  }\n}\n"
+    },
+    {
+      "path": "src/loyalty.ts",
+      "content": "export type LoyaltyTier = \"none\" | \"silver\" | \"gold\" | \"platinum\";\n\nconst DISCOUNTS: Record<LoyaltyTier, number> = {\n  none: 0,\n  silver: 0.03,\n  gold: 0.07,\n  platinum: 0.1,\n};\n\nexport interface TravelerProfile {\n  travelerId: string;\n  tier: LoyaltyTier;\n}\n\nexport function discountRate(profile: TravelerProfile): number {\n  return DISCOUNTS[profile.tier] ?? 0;\n}\n"
+    },
+    {
+      "path": "src/bookingService.ts",
+      "content": "import { FareQuote, PricingEngine } from \"./pricingEngine\";\nimport { TravelerProfile, discountRate } from \"./loyalty\";\n\nexport interface BookingRepository {\n  insert(record: BookingRecord): Promise<void>;\n}\n\nexport interface PaymentGateway {\n  charge(travelerId: string, amountCents: number, currency: string, reference: string): Promise<{ chargeId: string }>;\n}\n\nexport interface BookingRequest {\n  bookingId: string;\n  origin: string;\n  destination: string;\n  date: string;\n  traveler: TravelerProfile;\n}\n\nexport interface BookingRecord {\n  bookingId: string;\n  travelerId: string;\n  routeKey: string;\n  chargedCents: number;\n  currency: string;\n  chargeId: string;\n}\n\nexport class BookingService {\n  constructor(\n    private readonly pricing: PricingEngine,\n    private readonly payments: PaymentGateway,\n    private readonly bookings: BookingRepository,\n  ) {}\n\n  async book(req: BookingRequest): Promise<BookingRecord> {\n    const quote = await this.pricing.quote(req.origin, req.destination, req.date);\n    const priced = this.applyLoyalty(quote, req.traveler);\n\n    if (priced.totalCents <= 0) {\n      throw new Error(`invalid fare for ${priced.routeKey}: ${priced.totalCents}`);\n    }\n\n    const { chargeId } = await this.payments.charge(\n      req.traveler.travelerId,\n      priced.totalCents,\n      priced.currency,\n      req.bookingId,\n    );\n\n    const record: BookingRecord = {\n      bookingId: req.bookingId,\n      travelerId: req.traveler.travelerId,\n      routeKey: priced.routeKey,\n      chargedCents: priced.totalCents,\n      currency: priced.currency,\n      chargeId,\n    };\n    await this.bookings.insert(record);\n    return record;\n  }\n\n  private applyLoyalty(quote: FareQuote, traveler: TravelerProfile): FareQuote {\n    const rate = discountRate(traveler);\n    if (rate === 0) {\n      return quote;\n    }\n    const discount = Math.round(quote.baseFareCents * rate);\n    quote.baseFareCents -= discount;\n    quote.totalCents = quote.baseFareCents + quote.taxesCents;\n    return quote;\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/bookingService.ts",
+    "snippet": "    quote.baseFareCents -= discount;\n    quote.totalCents = quote.baseFareCents + quote.taxesCents;"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how the booking service and the pricing engine share fare data? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "In BookingService.applyLoyalty, the discount is applied by mutating the FareQuote object that PricingEngine.quote returned. That object is the same instance stored in the engine's private quotes map, so the discount is written into the cache. For up to 60 seconds every later caller for that route (including travelers with no loyalty tier) gets the discounted price, and further loyalty bookings stack discounts on top of it, so the fare keeps dropping. Taxes are also left at the pre-discount amount. The booking service is coupled to the engine's internal caching without knowing it; applyLoyalty should build a new object (e.g. { ...quote, baseFareCents, totalCents }) or the engine should hand out copies."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Two requests for the same route and date arrive 10 seconds apart, and the first fetch succeeded. How many times does PricingEngine call FareSource.fetchBaseFare?",
+      "choices": [
+        "Twice, because each booking needs a fresh fare",
+        "Once, because the second call returns the cached FareQuote while it is younger than QUOTE_TTL_MS",
+        "Zero, because quotes are pre-loaded",
+        "Once per traveler tier, because the cache key includes the tier"
+      ],
+      "answer": 1,
+      "explanation": "quote() builds routeKey from origin, destination and date and returns the cached entry when now - computedAt < 60_000 ms. 10 seconds is inside that window, so only the first request fetches. Nothing pre-loads quotes, and the key does not include the traveler or tier."
+    },
+    {
+      "prompt": "The payment gateway call succeeds but bookings.insert throws. What does BookingService.book do?",
+      "choices": [
+        "Refunds the charge and rethrows",
+        "Retries the insert until it succeeds",
+        "Lets the error propagate, leaving a charge with no booking record",
+        "Returns the record anyway because the charge succeeded"
+      ],
+      "answer": 2,
+      "explanation": "book() awaits payments.charge and then bookings.insert with no try/catch, so an insert failure propagates to the caller after money was taken. There is no refund, retry, or swallowing of the error in this code."
+    },
+    {
+      "prompt": "Which statement best describes how the loyalty module is coupled to the rest of the code?",
+      "choices": [
+        "It depends on PricingEngine to read cached quotes",
+        "BookingService depends on it only through discountRate and the TravelerProfile type; it knows nothing about fares",
+        "PricingEngine calls discountRate when computing totals",
+        "It writes discounted fares into the BookingRepository"
+      ],
+      "answer": 1,
+      "explanation": "loyalty.ts exports a type and a pure function mapping a tier to a rate; it imports nothing. Only bookingService.ts imports it. PricingEngine never references loyalty, and loyalty never touches the repository."
+    }
+  ],
+  "concepts": [
+    "backend.design.coupling_and_cohesion",
+    "backend.caching.stale_reads"
+  ]
+}

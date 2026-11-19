@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/documentWriter.ts",
+        "startLine": 44,
+        "endLine": 46
+      }
+    },
+    2,
+    1,
+    0
+  ],
+  "explanations": [
+    "In DocumentWriter.save, the catch block releases the client without issuing ROLLBACK. When StaleDocumentError (or any failed query) is thrown, the connection goes back to the pool still inside an open, possibly aborted transaction. The next request that checks out that connection runs its statements inside that transaction: they either fail with 'current transaction is aborted' or silently join it and are committed or lost with someone else's work. The catch must run ROLLBACK before releasing, as OutboxRelay.runOnce does.",
+    "FOR UPDATE OF o SKIP LOCKED makes each worker lock its batch and skip rows already locked by another, so batches do not overlap. Without SKIP LOCKED they would block; there is no duplicate processing of locked rows, and READ COMMITTED does not raise serialization errors here.",
+    "The DELETE is uncommitted when the crash happens, so the database rolls it back and releases the locks; the next run picks the rows up and upserts them again (at-least-once delivery, made harmless by upserting by id with a revision). The search index is not transactional with the database, and locks die with the connection.",
+    "Writing the outbox row in the same transaction ties the two together: both commit or neither does, so a crash cannot leave a saved document that is never indexed or an index entry for a change that rolled back. It is not about handler restrictions or speed, and no reader sees uncommitted rows."
+  ]
+}

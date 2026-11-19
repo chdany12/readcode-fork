@@ -1,0 +1,63 @@
+{
+  "title": "Parcel rating function and its unit tests",
+  "name": "Parcel rate quoting",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/rating.ts",
+      "content": "export type ServiceLevel = \"ground\" | \"express\" | \"overnight\";\n\nexport interface Parcel {\n  weightGrams: number;\n  lengthCm: number;\n  widthCm: number;\n  heightCm: number;\n}\n\nexport interface Shipment {\n  originZone: number;\n  destinationZone: number;\n  serviceLevel: ServiceLevel;\n  parcels: Parcel[];\n  surcharges: string[];\n}\n\nconst BASE_RATE_CENTS: Record<ServiceLevel, number> = { ground: 650, express: 1450, overnight: 2900 };\nconst PER_KG_CENTS: Record<ServiceLevel, number> = { ground: 90, express: 180, overnight: 320 };\nconst VOLUMETRIC_DIVISOR = 5000;\nconst OVERSIZE_CM = 120;\n\nexport function billableWeightKg(p: Parcel): number {\n  const actualKg = p.weightGrams / 1000;\n  const volumetricKg = (p.lengthCm * p.widthCm * p.heightCm) / VOLUMETRIC_DIVISOR;\n  return Math.ceil(Math.max(actualKg, volumetricKg));\n}\n\nexport function quoteShipment(s: Shipment): { totalCents: number; lines: string[] } {\n  if (s.parcels.length === 0) throw new Error(\"shipment has no parcels\");\n  const zoneDistance = Math.abs(s.destinationZone - s.originZone);\n  const zoneMultiplier = 1 + 0.15 * zoneDistance;\n  const lines: string[] = [];\n  let total = 0;\n\n  for (const p of s.parcels) {\n    const kg = billableWeightKg(p);\n    let cents = Math.round((BASE_RATE_CENTS[s.serviceLevel] + kg * PER_KG_CENTS[s.serviceLevel]) * zoneMultiplier);\n    if (Math.max(p.lengthCm, p.widthCm, p.heightCm) > OVERSIZE_CM) {\n      cents += 2500;\n      if (!s.surcharges.includes(\"oversize\")) s.surcharges.push(\"oversize\");\n    }\n    lines.push(`${kg}kg ${s.serviceLevel}: ${cents}`);\n    total += cents;\n  }\n  return { totalCents: total, lines };\n}\n"
+    },
+    {
+      "path": "src/rating.test.ts",
+      "content": "import { quoteShipment, billableWeightKg, Shipment } from \"./rating\";\n\ndescribe(\"billableWeightKg\", () => {\n  it(\"uses actual weight for dense parcels\", () => {\n    expect(billableWeightKg({ weightGrams: 4200, lengthCm: 20, widthCm: 20, heightCm: 10 })).toBe(5);\n  });\n\n  it(\"uses volumetric weight for bulky parcels\", () => {\n    expect(billableWeightKg({ weightGrams: 500, lengthCm: 50, widthCm: 40, heightCm: 30 })).toBe(12);\n  });\n});\n\ndescribe(\"quoteShipment\", () => {\n  let shipment: Shipment;\n\n  beforeAll(() => {\n    shipment = {\n      originZone: 2,\n      destinationZone: 2,\n      serviceLevel: \"ground\",\n      parcels: [{ weightGrams: 1000, lengthCm: 10, widthCm: 10, heightCm: 10 }],\n      surcharges: [],\n    };\n  });\n\n  it(\"prices a single same-zone ground parcel\", () => {\n    expect(quoteShipment(shipment).totalCents).toBe(740);\n  });\n\n  it(\"applies the zone multiplier\", () => {\n    shipment.destinationZone = 6;\n    expect(quoteShipment(shipment).totalCents).toBe(1184);\n  });\n\n  it(\"adds an oversize surcharge for long parcels\", () => {\n    shipment.parcels = [{ weightGrams: 1000, lengthCm: 130, widthCm: 10, heightCm: 10 }];\n    const quote = quoteShipment(shipment);\n    expect(shipment.surcharges).toEqual([\"oversize\"]);\n    expect(quote.lines).toHaveLength(1);\n  });\n\n  it(\"does not add an oversize surcharge for normal parcels\", () => {\n    shipment.parcels = [{ weightGrams: 2000, lengthCm: 30, widthCm: 20, heightCm: 20 }];\n    quoteShipment(shipment);\n    expect(shipment.surcharges).not.toContain(\"oversize\");\n  });\n\n  it(\"prices express higher than ground\", () => {\n    const ground = quoteShipment({ ...shipment, serviceLevel: \"ground\" }).totalCents;\n    const express = quoteShipment({ ...shipment, serviceLevel: \"express\" }).totalCents;\n    expect(express).toBeGreaterThan(ground);\n  });\n\n  it(\"rejects an empty shipment\", () => {\n    expect(() => quoteShipment({ ...shipment, parcels: [] })).toThrow(\"no parcels\");\n  });\n});\n"
+    }
+  ],
+  "defect": {
+    "path": "src/rating.test.ts",
+    "snippet": "  beforeAll(() => {"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how the quoteShipment tests set up and isolate their fixtures? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The `shipment` fixture is built once in `beforeAll` and then mutated by several tests (destinationZone, parcels), while quoteShipment itself pushes into `shipment.surcharges`. State leaks between tests: the 'does not add an oversize surcharge' test fails because the earlier oversize test already pushed \"oversize\" into the shared array, and the tests only pass or fail depending on run order (running one with `.only` or reordering changes results). It should be `beforeEach` so every test gets a fresh shipment."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A parcel weighs 500 g and measures 50 x 40 x 30 cm. What billable weight does billableWeightKg return?",
+      "choices": [
+        "1 kg, because actual weight rounds up",
+        "0.5 kg, the actual weight",
+        "12 kg, the volumetric weight rounded up",
+        "60 kg, the raw volume divided by 1000"
+      ],
+      "answer": 2,
+      "explanation": "Volumetric weight is 60000 / 5000 = 12 kg, which exceeds the 0.5 kg actual weight, and Math.ceil leaves 12. The other choices ignore the max() or use the wrong divisor."
+    },
+    {
+      "prompt": "What side effect does quoteShipment have on its input when a parcel is longer than 120 cm?",
+      "choices": [
+        "It removes the oversize parcel from `parcels`",
+        "It appends \"oversize\" to the caller's `surcharges` array if not already present",
+        "It sets `serviceLevel` to \"express\"",
+        "None; it only returns a new lines array"
+      ],
+      "answer": 1,
+      "explanation": "The function mutates `s.surcharges` with push when the longest side exceeds OVERSIZE_CM and the entry is missing. It never alters parcels or serviceLevel, so it is not side-effect free."
+    },
+    {
+      "prompt": "In the 'prices express higher than ground' test, why can the spread `{ ...shipment, serviceLevel: \"express\" }` still affect other tests?",
+      "choices": [
+        "It cannot; spreading deep-copies parcels and surcharges",
+        "Spreading changes serviceLevel on the original object",
+        "Spreading triggers the beforeAll hook again",
+        "The spread is shallow, so `surcharges` and `parcels` arrays are shared with the original and any push into them is visible elsewhere"
+      ],
+      "answer": 3,
+      "explanation": "Object spread copies top-level properties only; array properties still reference the same arrays, so quoteShipment pushing into surcharges would touch the original. It does not deep-copy, does not change the original's serviceLevel, and does not run hooks."
+    }
+  ],
+  "concepts": [
+    "backend.testing.unit_test_design",
+    "backend.testing.flaky_tests"
+  ]
+}

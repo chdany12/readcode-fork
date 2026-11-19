@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/pushService.ts",
+        "startLine": 31,
+        "endLine": 32
+      }
+    },
+    3,
+    1,
+    2
+  ],
+  "explanations": [
+    "installId is optional and handleDirectPush never checks it. In TypeORM, a where property whose value is undefined is dropped from the query, so findOneBy({ installId: undefined, disabledAt: IsNull() }) matches any active device and returns an arbitrary one. A request without installId pushes the message to some random user's phone and returns 202. The handler must reject a missing installId (or the service must guard before querying).",
+    "deliver calls update({ id }, { disabledAt: new Date() }), and notifyUser filters with disabledAt: IsNull(), so the device is excluded afterwards. It is not deleted and the token is not cleared.",
+    "find uses order createdAt DESC with take: 10, so the 10 newest active devices are tried. take limits the result; find returns many rows, not one.",
+    "The relation is declared eager: false and find passes no relations, so user is not joined and device.user is undefined; userId is a plain column and is loaded. TypeORM does not lazy-load unless the property is typed as a Promise with lazy: true."
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "id": "602363ea-092e-4e3f-aeb8-826139b407a2",
+  "title": "Applying file sync changes from a leased work queue",
+  "name": "Sync change applier",
+  "createdAt": "2026-11-15T09:41:31.603Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this consumer acknowledges, releases, or dead-letters changes? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A change with revision 7 arrives for a path whose index entry is already at revision 9. What does applyOne do?",
+      "choices": [
+        "Overwrites the index entry with revision 7",
+        "Releases the message so it is retried later",
+        "Acks it and makes no change to the index",
+        "Dead-letters it as a conflict"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "How many changes can the applier work on at the same time, and when does it pull more?",
+      "choices": [
+        "Unlimited; it pulls again as soon as each change is handed off",
+        "Up to parallelism (8); it pulls the next batch only after every change in the current batch has settled",
+        "Exactly one at a time, in queue order",
+        "Up to 8 per workspace"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two changes for the same path, revisions 3 and 4, land in the same batch and the index is at revision 2. What ordering guarantee does the code provide?",
+      "choices": [
+        "Revision 4 always wins because the batch is sorted by revision",
+        "Revision 3 always wins because it was enqueued first",
+        "The queue guarantees per-path FIFO, so they are applied in order",
+        "None within a batch: both read revision 2, both pass the guard, and whichever upsert finishes last wins"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.messaging.queues_and_consumers",
+    "backend.messaging.at_least_once_delivery",
+    "backend.messaging.message_ordering",
+    "backend.messaging.dead_letter_queues",
+    "backend.concurrency.race_conditions"
+  ]
+}

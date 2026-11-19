@@ -1,0 +1,51 @@
+{
+  "id": "e3bb2267-599d-414c-9552-4818ea8971a0",
+  "title": "Postgres integration tests for courier dispatch",
+  "name": "Courier dispatch tests",
+  "createdAt": "2026-11-15T09:41:31.681Z",
+  "durationMinutes": 15,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how these integration tests set up and isolate their database state? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "In the concurrency test, why does exactly one of the two assignCourier calls get NO_COURIER rather than both waiting and one getting BAD_STATE?",
+      "choices": [
+        "Because Promise.allSettled runs them one after another",
+        "Because the orders row lock makes the second call wait for the first to commit",
+        "Because FOR UPDATE SKIP LOCKED makes the second transaction skip the courier row locked by the first, so it finds no available courier",
+        "Because pg rejects the second connection while the first is open"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "assignCourier throws DispatchError('NO_COURIER'). What happens to the database transaction and connection?",
+      "choices": [
+        "The transaction is committed with the order still ready_for_pickup",
+        "The catch block rolls back, the error is rethrown, and finally releases the client to the pool",
+        "The client is released without a rollback, leaving the transaction open",
+        "The error is swallowed and the method returns an empty string"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why is this behavior tested against a real Postgres database rather than with a mocked pool?",
+      "choices": [
+        "Mocks cannot return rowCount",
+        "Real databases make tests faster",
+        "The service has no logic outside SQL, so it needs no tests otherwise",
+        "The correctness depends on Postgres row locking semantics (FOR UPDATE, SKIP LOCKED, transactions) that a mock would not reproduce"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.testing.integration_tests",
+    "backend.testing.flaky_tests",
+    "backend.data.optimistic_vs_pessimistic_locking",
+    "backend.data.transactions_and_isolation_levels"
+  ]
+}

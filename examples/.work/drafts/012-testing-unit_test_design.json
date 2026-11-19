@@ -1,0 +1,63 @@
+{
+  "title": "Unit tests for a provider appointment calendar",
+  "name": "Provider calendar tests",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "providerCalendar.ts",
+      "content": "export interface Slot {\n  providerId: string;\n  start: Date;\n  durationMin: number;\n  patientId: string | null;\n}\n\nexport class SlotUnavailableError extends Error {\n  constructor(readonly providerId: string, readonly start: Date) {\n    super(`slot ${providerId}@${start.toISOString()} is not available`);\n    this.name = \"SlotUnavailableError\";\n  }\n}\n\nexport class ProviderCalendar {\n  private readonly slots = new Map<string, Slot>();\n\n  constructor(readonly providerId: string) {}\n\n  private key(start: Date): string {\n    return start.toISOString();\n  }\n\n  openSlot(start: Date, durationMin = 30): void {\n    const k = this.key(start);\n    if (!this.slots.has(k)) {\n      this.slots.set(k, { providerId: this.providerId, start, durationMin, patientId: null });\n    }\n  }\n\n  book(start: Date, patientId: string): Slot {\n    const slot = this.slots.get(this.key(start));\n    if (!slot || slot.patientId !== null) {\n      throw new SlotUnavailableError(this.providerId, start);\n    }\n    slot.patientId = patientId;\n    return { ...slot };\n  }\n\n  cancel(start: Date, patientId: string): boolean {\n    const slot = this.slots.get(this.key(start));\n    if (!slot || slot.patientId !== patientId) return false;\n    slot.patientId = null;\n    return true;\n  }\n\n  available(): Date[] {\n    return [...this.slots.values()]\n      .filter((s) => s.patientId === null)\n      .map((s) => s.start)\n      .sort((a, b) => a.getTime() - b.getTime());\n  }\n}\n"
+    },
+    {
+      "path": "providerCalendar.test.ts",
+      "content": "import { ProviderCalendar, SlotUnavailableError } from \"./providerCalendar\";\n\nconst nineAm = new Date(\"2026-05-04T09:00:00Z\");\nconst nineThirty = new Date(\"2026-05-04T09:30:00Z\");\nconst tenAm = new Date(\"2026-05-04T10:00:00Z\");\n\ndescribe(\"ProviderCalendar\", () => {\n  let calendar: ProviderCalendar;\n\n  beforeAll(() => {\n    calendar = new ProviderCalendar(\"dr-okafor\");\n    calendar.openSlot(tenAm);\n    calendar.openSlot(nineAm);\n    calendar.openSlot(nineThirty);\n  });\n\n  it(\"lists open slots in chronological order\", () => {\n    expect(calendar.available()).toEqual([nineAm, nineThirty, tenAm]);\n  });\n\n  it(\"books an open slot for a patient\", () => {\n    const slot = calendar.book(nineAm, \"pt-100\");\n\n    expect(slot.patientId).toBe(\"pt-100\");\n    expect(calendar.available()).toEqual([nineThirty, tenAm]);\n  });\n\n  it(\"rejects booking a slot that was never opened\", () => {\n    expect(() => calendar.book(new Date(\"2026-05-04T11:00:00Z\"), \"pt-200\")).toThrow(\n      SlotUnavailableError,\n    );\n  });\n\n  it(\"lets the booking patient cancel and frees the slot\", () => {\n    calendar.book(nineThirty, \"pt-300\");\n\n    expect(calendar.cancel(nineThirty, \"pt-999\")).toBe(false);\n    expect(calendar.cancel(nineThirty, \"pt-300\")).toBe(true);\n    expect(calendar.available()).toContainEqual(nineThirty);\n  });\n\n  it(\"returns a copy so callers cannot mutate the stored slot\", () => {\n    const slot = calendar.book(tenAm, \"pt-400\");\n    slot.patientId = null;\n\n    expect(calendar.available()).not.toContainEqual(tenAm);\n  });\n\n  it(\"allows the first patient to book 9:00\", () => {\n    const slot = calendar.book(nineAm, \"pt-500\");\n    expect(slot.start).toEqual(nineAm);\n  });\n});\n"
+    }
+  ],
+  "defect": {
+    "path": "providerCalendar.test.ts",
+    "snippet": "  beforeAll(() => {"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how these unit tests set up and isolate the state they check? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The fixture is built in `beforeAll`, so one ProviderCalendar is shared and mutated by every test. \"books an open slot\" books 9:00 for pt-100, so the last test \"allows the first patient to book 9:00\" throws SlotUnavailableError when the suite runs in file order, yet passes when run alone (e.g. with .only). Likewise the first test passes only because it runs before any booking. The tests are order-dependent; the setup should use `beforeEach` so each test gets a fresh calendar."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "In the \"returns a copy\" test, why does setting `slot.patientId = null` on the returned object not reopen the 10:00 slot?",
+      "choices": [
+        "Because patientId is readonly on Slot",
+        "Because book() returns `{ ...slot }`, a shallow copy separate from the object stored in the map",
+        "Because available() re-reads slots from a database",
+        "Because the Date key changes after booking"
+      ],
+      "answer": 1,
+      "explanation": "book() mutates the stored slot and returns a spread copy, so changing the copy's patientId leaves the stored slot booked and available() still excludes 10:00. patientId is not readonly, there is no database, and the map key is the unchanged ISO string."
+    },
+    {
+      "prompt": "Patient pt-300 holds 9:30. Another caller invokes cancel(nineThirty, \"pt-999\"). What happens?",
+      "choices": [
+        "The slot is freed, since any cancel on a booked slot frees it",
+        "A SlotUnavailableError is thrown",
+        "cancel returns true but the slot stays booked",
+        "cancel returns false and the slot stays booked for pt-300"
+      ],
+      "answer": 3,
+      "explanation": "cancel() returns false without changing anything when `slot.patientId !== patientId`. It never throws, and it only sets patientId to null and returns true for the matching patient."
+    },
+    {
+      "prompt": "openSlot is called for 9:00 with durationMin 60 after pt-100 has already booked the 30-minute 9:00 slot. What is the stored slot's state?",
+      "choices": [
+        "Still 30 minutes and booked by pt-100, because openSlot ignores an existing key",
+        "60 minutes and unbooked, because the slot is replaced",
+        "60 minutes and still booked by pt-100",
+        "Two 9:00 slots exist, one booked and one open"
+      ],
+      "answer": 0,
+      "explanation": "openSlot only inserts when `!this.slots.has(k)`; with the key present, the call is a no-op. The slot is not replaced or updated, and the Map keyed by ISO string cannot hold two entries for the same start."
+    }
+  ],
+  "concepts": [
+    "backend.testing.unit_test_design",
+    "backend.testing.flaky_tests"
+  ]
+}

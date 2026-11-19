@@ -1,0 +1,51 @@
+{
+  "id": "768a91b2-4e55-4cef-bf10-53fbeeb86784",
+  "title": "Updating marketplace listings with a cache and search index",
+  "name": "Listing update service",
+  "createdAt": "2026-11-15T09:41:31.664Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code keeps cached and indexed listings consistent with the database? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client calls update with tags [\"Vintage\", \"vintage\", \"Lamp\"]. What tags end up in the document saved to the primary?",
+      "choices": [
+        "[\"Vintage\", \"vintage\", \"Lamp\"]",
+        "[\"vintage\", \"lamp\"]",
+        "The previous tags, since tags are only replaced when empty",
+        "[\"vintage\", \"vintage\", \"lamp\"]"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does update read the existing listing from primary rather than replica?",
+      "choices": [
+        "The replica does not implement save",
+        "Reads from the primary are cached longer",
+        "So the patch is merged onto the latest committed version, avoiding overwriting a recent write with older fields",
+        "Because the replica throws ListingNotFound for new listings"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The cache is unreachable and cache.get rejects. What happens on a call to get?",
+      "choices": [
+        "It falls back to the replica and returns the document",
+        "It returns null",
+        "It retries the cache once and then reads the primary",
+        "The call rejects with the cache error"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.caching.stale_reads",
+    "backend.caching.cache_invalidation",
+    "backend.distributed.replication_and_consensus",
+    "backend.errors.error_propagation"
+  ]
+}

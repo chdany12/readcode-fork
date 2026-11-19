@@ -1,0 +1,61 @@
+{
+  "title": "Merging paginated feed sources behind one interface",
+  "name": "Merged feed paginator",
+  "language": "TypeScript",
+  "durationMinutes": 15,
+  "files": [
+    {
+      "path": "src/feedSource.ts",
+      "content": "export interface FeedItem {\n  id: string;\n  authorId: string;\n  createdAt: number;\n  kind: \"post\" | \"repost\" | \"ad\";\n}\n\nexport interface FeedPage {\n  items: FeedItem[];\n  nextCursor: string | null;\n}\n\nexport interface FeedSource {\n  readonly key: string;\n  fetchPage(viewerId: string, cursor: string | null, limit: number): Promise<FeedPage>;\n}\n\nexport function compareFeedItems(a: FeedItem, b: FeedItem): number {\n  if (a.createdAt !== b.createdAt) return b.createdAt - a.createdAt;\n  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;\n}\n"
+    },
+    {
+      "path": "src/mergedFeed.ts",
+      "content": "import { FeedItem, FeedPage, FeedSource, compareFeedItems } from \"./feedSource\";\n\ninterface SourceState {\n  cursor: string | null;\n  buffer: FeedItem[];\n  exhausted: boolean;\n}\n\ntype MergedCursor = Record<string, SourceState>;\n\nexport class MergedFeed {\n  constructor(private readonly sources: readonly FeedSource[]) {\n    const keys = new Set(sources.map((s) => s.key));\n    if (keys.size !== sources.length) {\n      throw new Error(\"feed source keys must be unique\");\n    }\n  }\n\n  async fetchPage(viewerId: string, cursor: string | null, limit: number): Promise<FeedPage> {\n    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {\n      throw new RangeError(`limit must be an integer in [1, 100], got ${limit}`);\n    }\n    const state = cursor === null ? this.initialState() : this.decode(cursor);\n\n    await Promise.all(\n      this.sources.map(async (src) => {\n        const s = state[src.key];\n        if (s.exhausted || s.buffer.length >= limit) return;\n        const page = await src.fetchPage(viewerId, s.cursor, limit);\n        s.buffer.push(...page.items);\n        s.buffer.sort(compareFeedItems);\n        s.cursor = page.nextCursor;\n        s.exhausted = page.nextCursor === null;\n      }),\n    );\n\n    const out: FeedItem[] = [];\n    while (out.length < limit) {\n      let pickKey: string | null = null;\n      for (const src of this.sources) {\n        const head = state[src.key].buffer[0];\n        if (head === undefined) continue;\n        if (pickKey === null || compareFeedItems(head, state[pickKey].buffer[0]) < 0) {\n          pickKey = src.key;\n        }\n      }\n      if (pickKey === null) break;\n      out.push(state[pickKey].buffer.shift()!);\n    }\n\n    const done = this.sources.every((s) => state[s.key].exhausted && state[s.key].buffer.length === 0);\n    return { items: out, nextCursor: done ? null : this.encode(state) };\n  }\n\n  private initialState(): MergedCursor {\n    const st: MergedCursor = {};\n    for (const s of this.sources) st[s.key] = { cursor: null, buffer: [], exhausted: false };\n    return st;\n  }\n\n  private encode(state: MergedCursor): string {\n    return Buffer.from(JSON.stringify(state), \"utf8\").toString(\"base64url\");\n  }\n\n  private decode(cursor: string): MergedCursor {\n    let parsed: unknown;\n    try {\n      parsed = JSON.parse(Buffer.from(cursor, \"base64url\").toString(\"utf8\"));\n    } catch {\n      throw new RangeError(\"malformed feed cursor\");\n    }\n    const st = parsed as MergedCursor;\n    for (const s of this.sources) {\n      const entry = st?.[s.key];\n      if (!entry || !Array.isArray(entry.buffer) || typeof entry.exhausted !== \"boolean\") {\n        throw new RangeError(\"feed cursor does not match configured sources\");\n      }\n    }\n    return st;\n  }\n}\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how MergedFeed implements the FeedSource-style pagination contract (cursor handling, ordering, and termination)? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is none. Each source's own cursor and any already-fetched but unreturned items are carried inside the merged cursor, so nothing is skipped or repeated between pages. A source is only refetched when its buffer is below limit, buffers are kept sorted with the same total order (createdAt desc, id tie-break) used for the k-way merge, and nextCursor is null only when every source is exhausted and fully drained. Malformed or mismatched cursors are rejected rather than silently restarting."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "On page 1 (limit 10), source A returns 10 items and source B returns 10 items, all newer from A. What happens to B's 10 items?",
+      "choices": [
+        "They are dropped, because only 10 items fit on the page",
+        "They are refetched from source B on the next call",
+        "They are returned on page 1 by truncating A's items",
+        "They are carried in the encoded cursor and merged first on the next page"
+      ],
+      "answer": 3,
+      "explanation": "Unreturned items remain in state.B.buffer, which encode serializes into nextCursor; on the next call B's buffer already holds 10 so B is not refetched, and those items compete in the merge. They are not dropped, refetched, or forced onto page 1."
+    },
+    {
+      "prompt": "What is a consequence of returning the full SourceState (including buffered items) inside the cursor?",
+      "choices": [
+        "The cursor string can grow to roughly the number of sources times limit items",
+        "Clients can no longer request page 1 again",
+        "Sources must be stateful and remember viewer cursors server-side",
+        "Items can appear twice across pages"
+      ],
+      "answer": 0,
+      "explanation": "Each source can buffer up to about limit (plus one fetched page) items, all serialized as base64 JSON, so cursor size scales with sources and limit. Passing null still starts over, sources stay stateless, and buffered items are removed with shift so they are not repeated."
+    },
+    {
+      "prompt": "A client sends a cursor produced before a new source with key \"trending\" was added to the configuration. What does fetchPage do?",
+      "choices": [
+        "Starts \"trending\" from its first page and continues the others",
+        "Throws a RangeError because the cursor lacks an entry for \"trending\"",
+        "Ignores the cursor and returns page 1",
+        "Returns an empty page with nextCursor null"
+      ],
+      "answer": 1,
+      "explanation": "decode checks every configured source key and throws RangeError when an entry is missing. There is no partial initialization, no silent fallback to page 1, and no empty terminal page."
+    }
+  ],
+  "concepts": [
+    "backend.design.interface_design",
+    "backend.data.pagination",
+    "backend.api.request_validation"
+  ]
+}

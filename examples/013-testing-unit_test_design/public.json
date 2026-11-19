@@ -1,0 +1,51 @@
+{
+  "id": "aaecc3db-1e16-40ad-8baf-59aa6e81766a",
+  "title": "Ledger transfer service and its unit tests",
+  "name": "Ledger transfer tests",
+  "createdAt": "2026-11-15T09:41:31.514Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how these unit tests verify the transfer service's behavior? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "If `transfer` throws AccountFrozenError after locking both accounts, what does InMemoryLedger leave in `ledger.accounts` and `ledger.entries`?",
+      "choices": [
+        "The debit is applied but no entries are recorded",
+        "Nothing changes: the snapshot and pending entries are discarded because the commit lines after `await fn(tx)` never run",
+        "Entries are recorded but balances are unchanged",
+        "Both accounts are marked frozen in the stored map"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does the test suite inject `() => FIXED_NOW` instead of letting TransferService call `new Date()`?",
+      "choices": [
+        "new Date() is unavailable inside withTransaction",
+        "It makes the transfer faster in production",
+        "It lets the test assert the exact `postedAt` value deterministically, by identity",
+        "It forces both accounts to be locked in a consistent order"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The overdraft test calls `ledger.accounts.set(\"acc-b\", ...)` inside the test. Why does this not affect other tests in the file?",
+      "choices": [
+        "beforeEach builds a fresh InMemoryLedger and service for every test",
+        "Jest runs each `it` in a separate process",
+        "The Map is frozen after the first test",
+        "withTransaction restores the original accounts after each transfer"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.testing.unit_test_design",
+    "backend.testing.mocking_and_fakes",
+    "backend.concurrency.async_await_pitfalls",
+    "backend.data.money_and_ledgers"
+  ]
+}

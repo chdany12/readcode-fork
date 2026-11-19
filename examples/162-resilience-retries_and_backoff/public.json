@@ -1,0 +1,51 @@
+{
+  "id": "8f4cc09d-82db-4b82-b48c-b27dbc6e70bc",
+  "title": "Invoice charger retrying a payment gateway",
+  "name": "Invoice charge retrier",
+  "createdAt": "2026-11-15T09:41:31.715Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code retries charge attempts against the gateway? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "With DEFAULT_BACKOFF, the gateway keeps returning 503. How many POSTs are made before charge() returns?",
+      "choices": [
+        "4",
+        "6",
+        "5",
+        "Unbounded until a non-5xx response"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What range can the sleep after the first failed attempt fall in?",
+      "choices": [
+        "100 to 200 ms",
+        "0 to 200 ms",
+        "Exactly 200 ms",
+        "200 to 400 ms"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "How does the charger treat a 429 response compared with a 400?",
+      "choices": [
+        "Both are thrown immediately",
+        "429 is retried with backoff; 400 throws without retrying",
+        "429 is returned as 'declined'; 400 is retried",
+        "Both are retried with backoff"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.resilience.retries_and_backoff",
+    "backend.api.idempotency",
+    "backend.data.money_and_ledgers",
+    "backend.integrations.third_party_adapters"
+  ]
+}

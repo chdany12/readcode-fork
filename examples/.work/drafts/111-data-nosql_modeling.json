@@ -1,0 +1,65 @@
+{
+  "title": "Clinic appointment booking in a single DynamoDB table",
+  "name": "Clinic appointment booking",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/appointmentRepo.ts",
+      "content": "import {\n  DynamoDBDocumentClient,\n  QueryCommand,\n  TransactWriteCommand,\n  PutCommand,\n} from \"@aws-sdk/lib-dynamodb\";\n\nconst TABLE = process.env.SCHEDULING_TABLE ?? \"clinic-scheduling\";\n\nexport interface Appointment {\n  appointmentId: string;\n  clinicId: string;\n  providerId: string;\n  patientId: string;\n  slotStart: string;\n  durationMin: number;\n  reason: string;\n}\n\nconst providerPk = (clinicId: string, providerId: string) => `CLINIC#${clinicId}#PROV#${providerId}`;\nconst slotSk = (slotStart: string) => `SLOT#${slotStart}`;\nconst patientPk = (patientId: string) => `PAT#${patientId}`;\n\nexport class SlotConflictError extends Error {}\n\nexport class AppointmentRepo {\n  constructor(private readonly db: DynamoDBDocumentClient) {}\n\n  async providerDay(clinicId: string, providerId: string, date: string): Promise<Appointment[]> {\n    const out = await this.db.send(\n      new QueryCommand({\n        TableName: TABLE,\n        KeyConditionExpression: \"pk = :pk AND begins_with(sk, :day)\",\n        ExpressionAttributeValues: {\n          \":pk\": providerPk(clinicId, providerId),\n          \":day\": `SLOT#${date}`,\n        },\n      }),\n    );\n    return (out.Items ?? []) as Appointment[];\n  }\n\n  async patientUpcoming(patientId: string, fromIso: string): Promise<Appointment[]> {\n    const out = await this.db.send(\n      new QueryCommand({\n        TableName: TABLE,\n        KeyConditionExpression: \"pk = :pk AND sk >= :from\",\n        ExpressionAttributeValues: { \":pk\": patientPk(patientId), \":from\": `APPT#${fromIso}` },\n      }),\n    );\n    return (out.Items ?? []) as Appointment[];\n  }\n\n  async book(a: Appointment): Promise<void> {\n    try {\n      await this.db.send(\n        new TransactWriteCommand({\n          TransactItems: [\n            {\n              Put: {\n                TableName: TABLE,\n                Item: { pk: providerPk(a.clinicId, a.providerId), sk: slotSk(a.slotStart), ...a },\n              },\n            },\n            {\n              Put: {\n                TableName: TABLE,\n                Item: {\n                  pk: patientPk(a.patientId),\n                  sk: `APPT#${a.slotStart}#${a.appointmentId}`,\n                  ...a,\n                },\n                ConditionExpression: \"attribute_not_exists(pk)\",\n              },\n            },\n          ],\n        }),\n      );\n    } catch (err) {\n      if ((err as { name?: string }).name === \"TransactionCanceledException\") {\n        throw new SlotConflictError(`slot ${a.slotStart} unavailable for ${a.providerId}`);\n      }\n      throw err;\n    }\n  }\n\n  async recordAudit(a: Appointment, actor: string): Promise<void> {\n    await this.db.send(\n      new PutCommand({\n        TableName: TABLE,\n        Item: {\n          pk: `AUDIT#${a.appointmentId}`,\n          sk: `TS#${new Date().toISOString()}`,\n          actor,\n          action: \"BOOKED\",\n        },\n      }),\n    );\n  }\n}\n"
+    },
+    {
+      "path": "src/bookingService.ts",
+      "content": "import { randomUUID } from \"crypto\";\nimport { AppointmentRepo, SlotConflictError } from \"./appointmentRepo\";\n\nexport interface BookingRequest {\n  clinicId: string;\n  providerId: string;\n  patientId: string;\n  slotStart: string;\n  reason: string;\n}\n\nexport type BookingResult =\n  | { ok: true; appointmentId: string }\n  | { ok: false; reason: \"slot_taken\" | \"invalid_slot\" };\n\nexport class BookingService {\n  constructor(private readonly repo: AppointmentRepo) {}\n\n  async book(req: BookingRequest, actor: string): Promise<BookingResult> {\n    const start = new Date(req.slotStart);\n    if (Number.isNaN(start.getTime()) || start.getUTCMinutes() % 15 !== 0) {\n      return { ok: false, reason: \"invalid_slot\" };\n    }\n    const slotStart = start.toISOString();\n    const appointmentId = randomUUID();\n    try {\n      await this.repo.book({\n        appointmentId,\n        clinicId: req.clinicId,\n        providerId: req.providerId,\n        patientId: req.patientId,\n        slotStart,\n        durationMin: 15,\n        reason: req.reason,\n      });\n    } catch (err) {\n      if (err instanceof SlotConflictError) return { ok: false, reason: \"slot_taken\" };\n      throw err;\n    }\n    await this.repo.recordAudit(\n      { appointmentId, slotStart, durationMin: 15, ...req },\n      actor,\n    );\n    return { ok: true, appointmentId };\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/appointmentRepo.ts",
+    "snippet": "                Item: { pk: providerPk(a.clinicId, a.providerId), sk: slotSk(a.slotStart), ...a },"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code models and writes appointment slots? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The provider slot Put has no ConditionExpression. The patient-side item always has a fresh sk (it includes the new appointmentId), so its attribute_not_exists check never fails. Two patients booking the same provider slot concurrently (or one after another) both succeed: the second Put silently overwrites the provider's SLOT item, while both patients keep an appointment record. The slot Put needs ConditionExpression: \"attribute_not_exists(pk)\"."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Why does book() write the appointment twice, once under the provider key and once under the patient key?",
+      "choices": [
+        "To keep a backup copy in case one item is deleted",
+        "Because DynamoDB requires every item to be reachable from two keys",
+        "Because a transaction must touch at least two items",
+        "So both access patterns (a provider's day, a patient's upcoming visits) are single-partition Queries without a scan or secondary index"
+      ],
+      "answer": 3,
+      "explanation": "providerDay queries the provider pk with begins_with(sk, 'SLOT#date'), and patientUpcoming queries the patient pk with sk >= APPT#from. Duplicating items per access pattern is standard NoSQL modeling. It isn't a backup, DynamoDB has no two-key requirement, and single-item transactions are allowed."
+    },
+    {
+      "prompt": "How does providerDay('c1', 'p9', '2026-03-02') select the right appointments?",
+      "choices": [
+        "It scans the table filtering on slotStart",
+        "Slot sort keys are 'SLOT#' + ISO timestamp, so begins_with 'SLOT#2026-03-02' matches every slot that day",
+        "It reads a separate day-index item",
+        "It relies on a GSI keyed by date"
+      ],
+      "answer": 1,
+      "explanation": "BookingService normalizes slotStart with toISOString, so sort keys look like SLOT#2026-03-02T09:15:00.000Z and a prefix match on the date picks up exactly that day. No scan, day item, or GSI is involved."
+    },
+    {
+      "prompt": "The booking transaction succeeds but recordAudit throws (e.g. a throttling error). What does the caller observe?",
+      "choices": [
+        "BookingService.book rejects with the error even though the appointment items were written",
+        "The appointment is rolled back because the audit is part of the transaction",
+        "book returns { ok: false, reason: 'slot_taken' }",
+        "book returns { ok: true } and the audit failure is ignored"
+      ],
+      "answer": 0,
+      "explanation": "recordAudit runs after the transaction, outside the try/catch, so its error propagates to the caller while the appointment is already committed. It isn't in the transaction, isn't a SlotConflictError, and isn't swallowed."
+    }
+  ],
+  "concepts": [
+    "backend.data.nosql_modeling",
+    "backend.concurrency.race_conditions",
+    "backend.data.transactions_and_isolation_levels",
+    "backend.errors.error_propagation"
+  ]
+}

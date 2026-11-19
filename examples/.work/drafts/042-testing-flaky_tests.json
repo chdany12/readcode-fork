@@ -1,0 +1,61 @@
+{
+  "title": "Courier ETA tracker and its tests",
+  "name": "Courier ETA tracker",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/etaTracker.ts",
+      "content": "export interface Clock {\n  now(): number;\n}\n\nexport interface CourierPing {\n  courierId: string;\n  orderId: string;\n  lat: number;\n  lng: number;\n  at: number;\n}\n\nexport interface EtaEstimate {\n  orderId: string;\n  etaMs: number;\n  stale: boolean;\n}\n\nexport class DeliveryEtaTracker {\n  private readonly latest = new Map<string, CourierPing>();\n\n  constructor(\n    private readonly clock: Clock,\n    private readonly speedMetersPerSec = 6,\n    private readonly staleAfterMs = 60_000,\n  ) {}\n\n  ingest(ping: CourierPing): void {\n    const prev = this.latest.get(ping.orderId);\n    if (prev && prev.at >= ping.at) return;\n    this.latest.set(ping.orderId, ping);\n  }\n\n  estimate(orderId: string, dropLat: number, dropLng: number): EtaEstimate | null {\n    const ping = this.latest.get(orderId);\n    if (!ping) return null;\n    const meters = distanceMeters(ping.lat, ping.lng, dropLat, dropLng);\n    const travelMs = (meters / this.speedMetersPerSec) * 1000;\n    const age = this.clock.now() - ping.at;\n    return {\n      orderId,\n      etaMs: Math.max(0, Math.round(travelMs - age)),\n      stale: age > this.staleAfterMs,\n    };\n  }\n\n  complete(orderId: string): void {\n    this.latest.delete(orderId);\n  }\n}\n\nexport function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number): number {\n  const R = 6_371_000;\n  const rad = (d: number) => (d * Math.PI) / 180;\n  const dLat = rad(bLat - aLat);\n  const dLng = rad(bLng - aLng);\n  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;\n  return 2 * R * Math.asin(Math.sqrt(h));\n}\n"
+    },
+    {
+      "path": "test/etaTracker.test.ts",
+      "content": "import { describe, it, expect, beforeEach } from \"vitest\";\nimport { Clock, DeliveryEtaTracker, distanceMeters } from \"../src/etaTracker\";\n\nclass ManualClock implements Clock {\n  constructor(private t: number) {}\n  now(): number {\n    return this.t;\n  }\n  advance(ms: number): void {\n    this.t += ms;\n  }\n}\n\nconst T0 = Date.UTC(2026, 0, 15, 18, 30, 0);\nconst DROP = { lat: 40.7411, lng: -73.9897 };\nconst START = { lat: 40.7484, lng: -73.9857 };\n\ndescribe(\"DeliveryEtaTracker\", () => {\n  let clock: ManualClock;\n  let tracker: DeliveryEtaTracker;\n\n  beforeEach(() => {\n    clock = new ManualClock(T0);\n    tracker = new DeliveryEtaTracker(clock, 6, 60_000);\n  });\n\n  it(\"estimates travel time from the latest ping\", () => {\n    tracker.ingest({ courierId: \"c1\", orderId: \"o1\", ...START, at: T0 });\n    const expected = Math.round((distanceMeters(START.lat, START.lng, DROP.lat, DROP.lng) / 6) * 1000);\n\n    const eta = tracker.estimate(\"o1\", DROP.lat, DROP.lng);\n\n    expect(eta).toEqual({ orderId: \"o1\", etaMs: expected, stale: false });\n  });\n\n  it(\"ignores pings that arrive out of order\", () => {\n    tracker.ingest({ courierId: \"c1\", orderId: \"o1\", lat: DROP.lat, lng: DROP.lng, at: T0 + 5_000 });\n    tracker.ingest({ courierId: \"c1\", orderId: \"o1\", ...START, at: T0 + 1_000 });\n    clock.advance(5_000);\n\n    expect(tracker.estimate(\"o1\", DROP.lat, DROP.lng)?.etaMs).toBe(0);\n  });\n\n  it(\"subtracts time elapsed since the ping\", () => {\n    tracker.ingest({ courierId: \"c1\", orderId: \"o1\", ...START, at: T0 });\n    const fresh = tracker.estimate(\"o1\", DROP.lat, DROP.lng)!.etaMs;\n\n    clock.advance(30_000);\n\n    expect(tracker.estimate(\"o1\", DROP.lat, DROP.lng)!.etaMs).toBe(fresh - 30_000);\n  });\n\n  it(\"flags estimates as stale once the ping is older than the threshold\", () => {\n    tracker.ingest({ courierId: \"c1\", orderId: \"o1\", ...START, at: T0 });\n    clock.advance(60_000);\n    expect(tracker.estimate(\"o1\", DROP.lat, DROP.lng)!.stale).toBe(false);\n\n    clock.advance(1);\n    expect(tracker.estimate(\"o1\", DROP.lat, DROP.lng)!.stale).toBe(true);\n  });\n\n  it(\"forgets an order once it is completed\", () => {\n    tracker.ingest({ courierId: \"c1\", orderId: \"o1\", ...START, at: T0 });\n    tracker.complete(\"o1\");\n    expect(tracker.estimate(\"o1\", DROP.lat, DROP.lng)).toBeNull();\n  });\n});\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in these tests that would make them pass or fail nondeterministically? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is none. Every time-dependent value comes from the injected ManualClock, which starts at a fixed T0 and only moves when a test calls advance(); the tracker never reads Date.now() itself. Expected ETAs are computed with the same distanceMeters and rounding the code uses, the staleness boundary is probed at exactly 60 000 and 60 001 ms, and beforeEach builds a fresh clock and tracker so no state leaks between tests. Nothing is async or depends on real timers, so results are identical on every run."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "In 'subtracts time elapsed since the ping', the fresh ETA is roughly 140 seconds. Why does the test use exact equality with `fresh - 30_000` rather than an approximate comparison?",
+      "choices": [
+        "Because toBe uses approximate comparison for numbers",
+        "Because travelMs is identical in both calls and age changes by exactly 30 000 ms, so the rounded result shifts by exactly that integer",
+        "Because Math.round always rounds to whole seconds",
+        "It is not exact; the test will occasionally be off by 1 ms"
+      ],
+      "answer": 1,
+      "explanation": "travelMs depends only on positions, so it is identical in both calls; age goes from 0 to exactly 30 000. Subtracting an integer before Math.round shifts the rounded result by exactly that integer, and the result stays above 0. toBe is strict equality, and rounding is to milliseconds, not seconds."
+    },
+    {
+      "prompt": "What does ingest() do with a ping whose `at` equals the stored ping's `at`?",
+      "choices": [
+        "Replaces the stored ping",
+        "Averages the two positions",
+        "Throws a duplicate error",
+        "Ignores it and keeps the stored ping"
+      ],
+      "answer": 3,
+      "explanation": "The guard is `prev.at >= ping.at`, so an equal timestamp returns early and the first ping received is kept. There is no averaging or error path."
+    },
+    {
+      "prompt": "If DeliveryEtaTracker read Date.now() directly instead of the injected clock, which test would be most clearly broken?",
+      "choices": [
+        "'flags estimates as stale...', since its boundary assertions rely on time advancing by exactly 60 000 and then 1 ms",
+        "'forgets an order once it is completed', since delete depends on time",
+        "'ignores pings that arrive out of order', since ingest compares against Date.now()",
+        "None; the tests only pass timestamps through ping.at"
+      ],
+      "answer": 0,
+      "explanation": "The staleness test checks a 1 ms boundary that is only reachable because the test controls time; with Date.now() and pings stamped at a past T0, age would be huge and the first assertion would fail. complete() and ingest() do not read the clock, and estimate() does depend on it, so the tests are not clock-independent."
+    }
+  ],
+  "concepts": [
+    "backend.testing.flaky_tests",
+    "backend.testing.unit_test_design",
+    "backend.testing.mocking_and_fakes"
+  ]
+}

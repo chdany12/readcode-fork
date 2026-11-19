@@ -1,0 +1,66 @@
+{
+  "title": "Document writes with a search-index outbox",
+  "name": "Search index outbox",
+  "language": "TypeScript",
+  "durationMinutes": 15,
+  "files": [
+    {
+      "path": "src/documentWriter.ts",
+      "content": "import { Pool, PoolClient } from \"pg\";\n\nexport interface DocumentUpdate {\n  documentId: string;\n  tenantId: string;\n  title: string;\n  body: string;\n  tags: string[];\n}\n\nexport class StaleDocumentError extends Error {\n  constructor(public readonly documentId: string) {\n    super(`document ${documentId} was modified concurrently`);\n  }\n}\n\nexport class DocumentWriter {\n  constructor(private readonly pool: Pool) {}\n\n  async save(update: DocumentUpdate, expectedRevision: number): Promise<number> {\n    const client: PoolClient = await this.pool.connect();\n    try {\n      await client.query(\"BEGIN\");\n      const { rows, rowCount } = await client.query(\n        `UPDATE documents\n            SET title = $3, body = $4, tags = $5, revision = revision + 1, updated_at = now()\n          WHERE id = $1 AND tenant_id = $2 AND revision = $6\n          RETURNING revision`,\n        [update.documentId, update.tenantId, update.title, update.body, update.tags, expectedRevision]\n      );\n      if (rowCount === 0) {\n        throw new StaleDocumentError(update.documentId);\n      }\n      const revision: number = rows[0].revision;\n\n      await client.query(\n        `INSERT INTO index_outbox (tenant_id, document_id, revision, op, enqueued_at)\n         VALUES ($1, $2, $3, 'upsert', now())`,\n        [update.tenantId, update.documentId, revision]\n      );\n      await client.query(\"COMMIT\");\n      client.release();\n      return revision;\n    } catch (err) {\n      client.release();\n      throw err;\n    }\n  }\n}\n"
+    },
+    {
+      "path": "src/outboxRelay.ts",
+      "content": "import { Pool } from \"pg\";\n\nexport interface SearchIndexClient {\n  upsert(tenantId: string, docs: IndexedDoc[]): Promise<void>;\n}\n\nexport interface IndexedDoc {\n  id: string;\n  revision: number;\n  title: string;\n  body: string;\n  tags: string[];\n}\n\nexport class OutboxRelay {\n  constructor(\n    private readonly pool: Pool,\n    private readonly search: SearchIndexClient,\n    private readonly batchSize = 200\n  ) {}\n\n  async runOnce(): Promise<number> {\n    const client = await this.pool.connect();\n    try {\n      await client.query(\"BEGIN\");\n      const { rows } = await client.query(\n        `SELECT o.id AS outbox_id, d.tenant_id, d.id, d.revision, d.title, d.body, d.tags\n           FROM index_outbox o\n           JOIN documents d ON d.id = o.document_id\n          ORDER BY o.id\n          LIMIT $1\n          FOR UPDATE OF o SKIP LOCKED`,\n        [this.batchSize]\n      );\n      if (rows.length === 0) {\n        await client.query(\"COMMIT\");\n        return 0;\n      }\n\n      const byTenant = new Map<string, IndexedDoc[]>();\n      for (const r of rows) {\n        const list = byTenant.get(r.tenant_id) ?? [];\n        list.push({ id: r.id, revision: r.revision, title: r.title, body: r.body, tags: r.tags });\n        byTenant.set(r.tenant_id, list);\n      }\n      for (const [tenantId, docs] of byTenant) {\n        await this.search.upsert(tenantId, docs);\n      }\n\n      await client.query(`DELETE FROM index_outbox WHERE id = ANY($1)`, [\n        rows.map((r) => r.outbox_id),\n      ]);\n      await client.query(\"COMMIT\");\n      return rows.length;\n    } catch (err) {\n      await client.query(\"ROLLBACK\");\n      throw err;\n    } finally {\n      client.release();\n    }\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/documentWriter.ts",
+    "snippet": "    } catch (err) {\n      client.release();\n      throw err;"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code begins, ends, or cleans up its database transactions? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "In DocumentWriter.save, the catch block releases the client without issuing ROLLBACK. When StaleDocumentError (or any failed query) is thrown, the connection goes back to the pool still inside an open, possibly aborted transaction. The next request that checks out that connection runs its statements inside that transaction: they either fail with 'current transaction is aborted' or silently join it and are committed or lost with someone else's work. The catch must run ROLLBACK before releasing, as OutboxRelay.runOnce does."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Two relay workers run runOnce() at the same time. How are outbox rows divided between them?",
+      "choices": [
+        "Both process the same rows, so every document is indexed twice",
+        "The second waits for the first's locks and then processes the same rows again",
+        "Each worker locks a different set of rows, skipping rows the other has locked",
+        "The second worker fails with a serialization error"
+      ],
+      "answer": 2,
+      "explanation": "FOR UPDATE OF o SKIP LOCKED makes each worker lock its batch and skip rows already locked by another, so batches do not overlap. Without SKIP LOCKED they would block; there is no duplicate processing of locked rows, and READ COMMITTED does not raise serialization errors here."
+    },
+    {
+      "prompt": "In runOnce(), search.upsert succeeds but the process crashes before COMMIT. What happens on the next run?",
+      "choices": [
+        "The outbox rows were deleted, so those documents are never indexed",
+        "The rows are still in the outbox and are sent to the search index again",
+        "The search index rolls back the upserts",
+        "The rows remain locked forever and are skipped by all workers"
+      ],
+      "answer": 1,
+      "explanation": "The DELETE is uncommitted when the crash happens, so the database rolls it back and releases the locks; the next run picks the rows up and upserts them again (at-least-once delivery, made harmless by upserting by id with a revision). The search index is not transactional with the database, and locks die with the connection."
+    },
+    {
+      "prompt": "Why does DocumentWriter insert into index_outbox in the same transaction as the document UPDATE, instead of calling the search index directly after saving?",
+      "choices": [
+        "So an index request is recorded if and only if the document change commits",
+        "Because the search index cannot be called from a request handler",
+        "To make the UPDATE faster by batching it with the insert",
+        "So the relay can see the document before it is committed"
+      ],
+      "answer": 0,
+      "explanation": "Writing the outbox row in the same transaction ties the two together: both commit or neither does, so a crash cannot leave a saved document that is never indexed or an index entry for a change that rolled back. It is not about handler restrictions or speed, and no reader sees uncommitted rows."
+    }
+  ],
+  "concepts": [
+    "backend.data.transactions_and_isolation_levels",
+    "backend.errors.cleanup_on_error_paths",
+    "backend.data.connection_pooling",
+    "backend.messaging.at_least_once_delivery",
+    "backend.data.optimistic_vs_pessimistic_locking"
+  ]
+}

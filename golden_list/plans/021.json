@@ -1,0 +1,25 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "count": 9
+    },
+    {
+      "label": "backend.concurrency.thread_and_worker_pools",
+      "count": 5
+    },
+    {
+      "label": "backend.concurrency.race_conditions",
+      "count": 2
+    },
+    {
+      "label": "backend.resources.memory_leaks",
+      "count": 2
+    },
+    {
+      "label": "backend.concurrency.atomic_operations",
+      "count": 2
+    }
+  ]
+}

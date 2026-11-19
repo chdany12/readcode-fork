@@ -1,0 +1,49 @@
+{
+  "id": "4c1540d3-c3fe-41ec-913f-289bd83e3112",
+  "title": "CI job scheduler and its unit tests",
+  "name": "CI job scheduler",
+  "createdAt": "2026-11-15T09:41:31.517Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how these tests verify the scheduler's behavior? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "With maxConcurrent = 1, a priority-3 job fails on its first attempt while a priority-3 job and a priority-1 job are already queued. Where is the failed job placed?",
+      "choices": [
+        "At the front of the queue",
+        "After the other priority-3 job and before the priority-1 job",
+        "At the very end of the queue",
+        "It is not requeued until dispatch is called"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What does `complete(jobId, true)` do for a job that is still in the queued state?",
+      "choices": [
+        "Marks it succeeded and removes it from the queue",
+        "Throws an error",
+        "Nothing; it returns early because the job is not running",
+        "Marks it running then succeeded"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why do tests construct a new JobScheduler in every `it` while sharing the module-level `seq` counter?",
+      "choices": [
+        "The counter only makes ids unique; each scheduler instance holds its own queue and job map so tests cannot see each other's jobs",
+        "Sharing seq makes tests order-dependent because ids must start at job-1",
+        "seq resets automatically between tests",
+        "The scheduler rejects ids it has seen in any previous instance"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.testing.unit_test_design",
+    "backend.messaging.queues_and_consumers"
+  ]
+}

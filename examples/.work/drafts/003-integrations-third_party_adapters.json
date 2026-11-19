@@ -1,0 +1,67 @@
+{
+  "title": "Pickup ETA via a maps routing adapter",
+  "name": "Pickup ETA adapter",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/routing/types.ts",
+      "content": "export interface LatLng {\n  lat: number;\n  lng: number;\n}\n\nexport interface RouteEstimate {\n  durationSeconds: number;\n  distanceMeters: number;\n  trafficAware: boolean;\n}\n\nexport class RoutingUnavailableError extends Error {\n  constructor(message: string, readonly cause?: unknown) {\n    super(message);\n    this.name = \"RoutingUnavailableError\";\n  }\n}\n\nexport class RouteNotFoundError extends Error {\n  constructor(readonly origin: LatLng, readonly destination: LatLng) {\n    super(\"no drivable route between points\");\n    this.name = \"RouteNotFoundError\";\n  }\n}\n"
+    },
+    {
+      "path": "src/routing/mapsRoutingAdapter.ts",
+      "content": "import { LatLng, RouteEstimate, RouteNotFoundError, RoutingUnavailableError } from \"./types\";\n\ninterface MapsApiResponse {\n  status: \"OK\" | \"ZERO_RESULTS\" | \"OVER_QUERY_LIMIT\" | \"INVALID_REQUEST\";\n  routes: Array<{\n    legs: Array<{\n      duration: { value: number };\n      duration_in_traffic?: { value: number };\n      distance: { value: number };\n    }>;\n  }>;\n}\n\nexport interface MapsAdapterConfig {\n  baseUrl: string;\n  apiKey: string;\n  timeoutMs: number;\n  maxAttempts: number;\n}\n\nconst RETRYABLE_HTTP = new Set([429, 502, 503, 504]);\n\nexport class MapsRoutingAdapter {\n  constructor(\n    private readonly config: MapsAdapterConfig,\n    private readonly fetchImpl: typeof fetch = fetch,\n    private readonly sleep: (ms: number) => Promise<void> = (ms) =>\n      new Promise((r) => setTimeout(r, ms)),\n  ) {}\n\n  async estimate(origin: LatLng, destination: LatLng): Promise<RouteEstimate> {\n    const url = new URL(\"/directions/json\", this.config.baseUrl);\n    url.searchParams.set(\"origin\", `${origin.lat},${origin.lng}`);\n    url.searchParams.set(\"destination\", `${destination.lat},${destination.lng}`);\n    url.searchParams.set(\"departure_time\", \"now\");\n\n    let lastError: unknown;\n    for (let attempt = 1; attempt <= this.config.maxAttempts; attempt++) {\n      try {\n        const body = await this.callOnce(url);\n        return this.toEstimate(body, origin, destination);\n      } catch (err) {\n        if (!(err instanceof RetryableError)) throw err;\n        lastError = err;\n        if (attempt < this.config.maxAttempts) {\n          await this.sleep(200 * 2 ** (attempt - 1) + Math.random() * 100);\n        }\n      }\n    }\n    throw new RoutingUnavailableError(\"maps provider unavailable\", lastError);\n  }\n\n  private async callOnce(url: URL): Promise<MapsApiResponse> {\n    const controller = new AbortController();\n    const timer = setTimeout(() => controller.abort(), this.config.timeoutMs);\n    let res: Response;\n    try {\n      res = await this.fetchImpl(url, {\n        headers: { \"X-Goog-Api-Key\": this.config.apiKey },\n        signal: controller.signal,\n      });\n    } catch (err) {\n      throw new RetryableError(\"network error or timeout\", err);\n    } finally {\n      clearTimeout(timer);\n    }\n\n    if (RETRYABLE_HTTP.has(res.status)) {\n      throw new RetryableError(`maps http ${res.status}`);\n    }\n    if (!res.ok) {\n      throw new RoutingUnavailableError(`maps http ${res.status}`);\n    }\n\n    const body = (await res.json()) as MapsApiResponse;\n    if (body.status === \"OVER_QUERY_LIMIT\") {\n      throw new RetryableError(\"maps quota exceeded\");\n    }\n    return body;\n  }\n\n  private toEstimate(body: MapsApiResponse, origin: LatLng, destination: LatLng): RouteEstimate {\n    if (body.status === \"ZERO_RESULTS\" || body.routes.length === 0) {\n      throw new RouteNotFoundError(origin, destination);\n    }\n    if (body.status !== \"OK\") {\n      throw new RoutingUnavailableError(`maps status ${body.status}`);\n    }\n    const legs = body.routes[0].legs;\n    let duration = 0;\n    let distance = 0;\n    let trafficAware = true;\n    for (const leg of legs) {\n      if (leg.duration_in_traffic) {\n        duration += leg.duration_in_traffic.value;\n      } else {\n        duration += leg.duration.value;\n        trafficAware = false;\n      }\n      distance += leg.distance.value;\n    }\n    return { durationSeconds: duration, distanceMeters: distance, trafficAware };\n  }\n}\n\nclass RetryableError extends Error {\n  constructor(message: string, readonly cause?: unknown) {\n    super(message);\n  }\n}\n"
+    },
+    {
+      "path": "src/routing/pickupEtaService.ts",
+      "content": "import { MapsRoutingAdapter } from \"./mapsRoutingAdapter\";\nimport { LatLng, RouteNotFoundError, RoutingUnavailableError } from \"./types\";\n\nexport interface PickupEta {\n  minutes: number;\n  source: \"provider\" | \"fallback\";\n}\n\nconst FALLBACK_SPEED_MPS = 8;\n\nexport class PickupEtaService {\n  constructor(private readonly routing: MapsRoutingAdapter) {}\n\n  async etaForDriver(driver: LatLng, rider: LatLng): Promise<PickupEta> {\n    try {\n      const est = await this.routing.estimate(driver, rider);\n      return { minutes: Math.ceil(est.durationSeconds / 60), source: \"provider\" };\n    } catch (err) {\n      if (err instanceof RouteNotFoundError) throw err;\n      if (err instanceof RoutingUnavailableError) {\n        const meters = haversineMeters(driver, rider) * 1.4;\n        return { minutes: Math.ceil(meters / FALLBACK_SPEED_MPS / 60), source: \"fallback\" };\n      }\n      throw err;\n    }\n  }\n}\n\nfunction haversineMeters(a: LatLng, b: LatLng): number {\n  const R = 6371000;\n  const toRad = (d: number) => (d * Math.PI) / 180;\n  const dLat = toRad(b.lat - a.lat);\n  const dLng = toRad(b.lng - a.lng);\n  const h =\n    Math.sin(dLat / 2) ** 2 +\n    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;\n  return 2 * R * Math.asin(Math.sqrt(h));\n}\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this adapter calls the maps provider and translates its responses and failures? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is no defect. Each attempt gets its own AbortController and timer, cleared in finally. Only network errors, timeouts, 429/502/503/504 and OVER_QUERY_LIMIT are retried, with bounded exponential backoff and jitter; the request is a read, so retrying is safe. Other HTTP errors become RoutingUnavailableError immediately, ZERO_RESULTS becomes RouteNotFoundError, and provider-specific types never leak past the adapter. The service degrades to a haversine estimate only for availability failures, not for unroutable trips."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "With maxAttempts = 3, the provider returns HTTP 400 on the first call. What does estimate() do?",
+      "choices": [
+        "Retries twice with backoff, then throws RoutingUnavailableError",
+        "Throws RoutingUnavailableError immediately without retrying",
+        "Throws RouteNotFoundError immediately",
+        "Returns an estimate with trafficAware = false"
+      ],
+      "answer": 1,
+      "explanation": "400 is not in RETRYABLE_HTTP, so callOnce hits the !res.ok branch and throws RoutingUnavailableError. estimate() rethrows any non-RetryableError at once, so there is no retry. RouteNotFoundError is only for ZERO_RESULTS or empty routes, and no estimate is produced."
+    },
+    {
+      "prompt": "The provider is fully down (every call times out). What does a rider see from PickupEtaService?",
+      "choices": [
+        "An error, because the adapter's errors propagate to the caller",
+        "A provider ETA from a cached previous response",
+        "A fallback ETA computed from straight-line distance, after the adapter exhausts its attempts",
+        "A fallback ETA computed on the first timeout, without further attempts"
+      ],
+      "answer": 2,
+      "explanation": "Timeouts abort fetch, which callOnce wraps as RetryableError. After maxAttempts the adapter throws RoutingUnavailableError, which the service catches and turns into a haversine-based estimate with source 'fallback'. There is no cache, and the fallback happens only after all attempts."
+    },
+    {
+      "prompt": "A two-leg route returns duration_in_traffic on the first leg only. What is reported?",
+      "choices": [
+        "Traffic duration of leg 1 plus plain duration of leg 2, with trafficAware = false",
+        "Only the plain durations of both legs, with trafficAware = false",
+        "Traffic duration of leg 1 plus plain duration of leg 2, with trafficAware = true",
+        "Only leg 1's traffic duration, since leg 2 lacks traffic data"
+      ],
+      "answer": 0,
+      "explanation": "toEstimate sums per leg, using duration_in_traffic when present and duration otherwise, and sets trafficAware to false as soon as any leg lacks traffic data. It never discards a leg or ignores available traffic data."
+    }
+  ],
+  "concepts": [
+    "backend.integrations.third_party_adapters",
+    "backend.resilience.timeouts",
+    "backend.resilience.retries_and_backoff",
+    "backend.resilience.graceful_degradation",
+    "backend.errors.error_wrapping_and_context"
+  ]
+}

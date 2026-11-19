@@ -1,0 +1,51 @@
+{
+  "id": "5d69070b-e122-4137-8d8e-8333ddba5613",
+  "title": "Match scoring with optimistic retries and batch endpoint",
+  "name": "Match score batching",
+  "createdAt": "2026-11-15T09:44:42.006Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how errors propagate from the store through the scoring service to the HTTP reply? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "saveIfRevision rejects with StaleRevisionError on every call for one match. What does a single applyScore call for that match do?",
+      "choices": [
+        "Retries indefinitely until the save succeeds",
+        "Throws after the first failure because persist wraps the error",
+        "Makes three attempts, logging 'score.retry' twice, then throws StaleRevisionError",
+        "Makes three attempts and resolves with the last computed state"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does persist await saveIfRevision inside the try block rather than returning the promise directly?",
+      "choices": [
+        "So that a rejected save is caught there and can be logged and wrapped with the match id",
+        "So that the save runs before the revision number is incremented",
+        "To prevent the returned state from being mutated by the caller",
+        "Because returning a promise from an async function is not allowed"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A batch has three events: the first succeeds, the second targets a finished match, the third hits a StaleRevisionError after all retries. What reply is produced?",
+      "choices": [
+        "207 with three results",
+        "409 with results for the first two events only",
+        "200 because the first event succeeded",
+        "409 with an empty results array"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.errors.error_propagation",
+    "backend.api.status_codes_and_error_responses",
+    "backend.resilience.retries_and_backoff",
+    "backend.data.optimistic_vs_pessimistic_locking"
+  ]
+}

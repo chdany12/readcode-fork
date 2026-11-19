@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/logger.ts",
+        "startLine": 17,
+        "endLine": 17
+      }
+    },
+    3,
+    1,
+    0
+  ],
+  "explanations": [
+    "child() calls Object.assign(this.context, fields), which mutates the parent's context object instead of copying it. Every child shares, and writes into, the root logger's context. With several jobs running concurrently in runAll, job B's child overwrites jobId, repo and commit on the shared object, so job A's later lines are tagged with job B's identifiers; step children also leave a stale 'step' field on the job and root loggers. It should build a new object, e.g. { ...this.context, ...fields }.",
+    "In emit(), the record spreads context and fields first and then assigns ts, level and msg, so the logger's own values win. Object literals cannot hold duplicate keys, and there is no runtime validation of field values.",
+    "The default minLevel is 'info' and child() passes this.minLevel through, so debug (10) is below info (20) and 'step starting' is dropped. warn and info calls pass the check.",
+    "Each worker pushes a result when its job finishes, so faster jobs land earlier regardless of position. shift() controls start order, not finish order; nothing sorts the array, and workers keep looping until the queue is empty."
+  ]
+}

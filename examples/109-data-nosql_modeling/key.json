@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/listingIndexRepo.ts",
+        "startLine": 59,
+        "endLine": 60
+      }
+    },
+    1,
+    3,
+    0
+  ],
+  "explanations": [
+    "onSellerProfileChanged uses updateOne with the filter {\"seller.id\": sellerId}. A seller typically has many listings, but updateOne modifies only the first matching document. All other listings keep the old displayName and rating in search results until each is individually re-indexed. It should be updateMany.",
+    "Embedding read-time data is the classic denormalization tradeoff: search() projects seller.displayName and seller.rating directly, avoiding N extra lookups, but changes to a seller must be fanned out. ObjectId references are fine in subdocuments, embedding doesn't affect the keywords index size, and search() doesn't filter on rating.",
+    "tokenize lowercases and splits both titles and queries, and the filter uses keywords: {$all: terms}, requiring every term. $all is not OR, there's no exact-title match, and lowercasing on both sides removes case sensitivity.",
+    "indexListing uses replaceOne({_id}, doc, {upsert: true}), which is idempotent per _id: the second call replaces the document with the same content. No duplicate is created, upsert on _id doesn't raise duplicate key errors here, and indexedAt is never checked."
+  ]
+}

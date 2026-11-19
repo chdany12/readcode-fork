@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/campaignRoutes.ts",
+        "startLine": 46,
+        "endLine": 46
+      }
+    },
+    1,
+    3,
+    0
+  ],
+  "explanations": [
+    "Launching a campaign changes its status to \"active\" and starts spending budget, but it is exposed as GET /campaigns/:id/launch. GET must be safe: link prefetchers, crawlers, chat link previews, caches and monitoring tools that replay GETs can all launch a draft campaign, or relaunch a paused one, without anyone intending it. It should be a POST (e.g. POST /campaigns/:id/launch) or a PATCH of status.",
+    "archive goes through get(), which hides archived campaigns. The first call archives the campaign and returns true (204). The second sees undefined and returns false (404). Server state is the same after both calls, which is what DELETE idempotency requires, but the status codes differ. The route never returns 409.",
+    "listByAdvertiser excludes status \"archived\" before applying the status filter, so ?status=archived returns an empty list. get() returns undefined for archived rows, so GET returns 404, and update() goes through get(), so PATCH also returns 404.",
+    "The handler calls res.status(201).location(`/campaigns/${created.id}`).json(toDto(created)). The Location uses the top-level /campaigns path, which matches the GET /campaigns/:id route, not a nested advertiser path. The status is neither 200 nor 202, and the body is the full DTO."
+  ]
+}

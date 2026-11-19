@@ -1,0 +1,63 @@
+{
+  "title": "Support ticket change auditing",
+  "name": "Ticket change auditor",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/auditLog.ts",
+      "content": "import { randomUUID } from \"crypto\";\n\nexport type AuditAction =\n  | \"ticket.reassigned\"\n  | \"ticket.status_changed\"\n  | \"ticket.priority_changed\"\n  | \"ticket.merged\";\n\nexport interface AuditEntry {\n  id: string;\n  at: string;\n  actorId: string;\n  actorRole: string;\n  action: AuditAction;\n  ticketId: string;\n  before: Record<string, unknown>;\n  after: Record<string, unknown>;\n  requestId: string;\n}\n\nexport interface AuditSink {\n  append(entry: AuditEntry): Promise<void>;\n}\n\nexport interface AuditContext {\n  actorId: string;\n  actorRole: string;\n  requestId: string;\n}\n\nexport class TicketAuditLogger {\n  constructor(private readonly sink: AuditSink, private readonly now: () => Date = () => new Date()) {}\n\n  async record(\n    ctx: AuditContext,\n    action: AuditAction,\n    ticketId: string,\n    before: Record<string, unknown>,\n    after: Record<string, unknown>,\n  ): Promise<void> {\n    const entry: AuditEntry = {\n      id: randomUUID(),\n      at: this.now().toISOString(),\n      actorId: ctx.actorId,\n      actorRole: ctx.actorRole,\n      action,\n      ticketId,\n      before: pickChanged(before, after),\n      after: pickChanged(after, before),\n      requestId: ctx.requestId,\n    };\n    await this.sink.append(entry);\n  }\n}\n\nfunction pickChanged(a: Record<string, unknown>, b: Record<string, unknown>): Record<string, unknown> {\n  const out: Record<string, unknown> = {};\n  for (const key of Object.keys(a)) {\n    if (JSON.stringify(a[key]) !== JSON.stringify(b[key])) {\n      out[key] = a[key];\n    }\n  }\n  return out;\n}\n"
+    },
+    {
+      "path": "src/ticketService.ts",
+      "content": "import { TicketAuditLogger, AuditContext } from \"./auditLog\";\n\nexport interface Ticket {\n  id: string;\n  status: \"open\" | \"pending\" | \"resolved\" | \"closed\";\n  priority: \"low\" | \"normal\" | \"high\" | \"urgent\";\n  assigneeId: string | null;\n  queue: string;\n  updatedAt: string;\n}\n\nexport interface TicketRepo {\n  findById(id: string): Promise<Ticket | null>;\n  save(ticket: Ticket): Promise<void>;\n}\n\nexport class TicketNotFoundError extends Error {}\nexport class ForbiddenTransitionError extends Error {}\n\nconst ALLOWED: Record<Ticket[\"status\"], Ticket[\"status\"][]> = {\n  open: [\"pending\", \"resolved\"],\n  pending: [\"open\", \"resolved\"],\n  resolved: [\"open\", \"closed\"],\n  closed: [],\n};\n\nexport class TicketService {\n  constructor(private readonly repo: TicketRepo, private readonly audit: TicketAuditLogger) {}\n\n  async changeStatus(ctx: AuditContext, ticketId: string, next: Ticket[\"status\"]): Promise<Ticket> {\n    const ticket = await this.load(ticketId);\n    if (!ALLOWED[ticket.status].includes(next)) {\n      throw new ForbiddenTransitionError(`${ticket.status} -> ${next}`);\n    }\n    return this.apply(ctx, \"ticket.status_changed\", ticket, { status: next });\n  }\n\n  async reassign(ctx: AuditContext, ticketId: string, assigneeId: string, queue?: string): Promise<Ticket> {\n    const ticket = await this.load(ticketId);\n    const patch: Partial<Ticket> = { assigneeId };\n    if (queue) patch.queue = queue;\n    return this.apply(ctx, \"ticket.reassigned\", ticket, patch);\n  }\n\n  async escalate(ctx: AuditContext, ticketId: string): Promise<Ticket> {\n    const ticket = await this.load(ticketId);\n    if (ticket.priority === \"urgent\") return ticket;\n    const order: Ticket[\"priority\"][] = [\"low\", \"normal\", \"high\", \"urgent\"];\n    const next = order[order.indexOf(ticket.priority) + 1];\n    return this.apply(ctx, \"ticket.priority_changed\", ticket, { priority: next });\n  }\n\n  private async apply(\n    ctx: AuditContext,\n    action: \"ticket.status_changed\" | \"ticket.reassigned\" | \"ticket.priority_changed\",\n    ticket: Ticket,\n    patch: Partial<Ticket>,\n  ): Promise<Ticket> {\n    const before = ticket;\n    Object.assign(ticket, patch, { updatedAt: new Date().toISOString() });\n    await this.repo.save(ticket);\n    await this.audit.record(ctx, action, ticket.id, { ...before }, { ...ticket });\n    return ticket;\n  }\n\n  private async load(ticketId: string): Promise<Ticket> {\n    const ticket = await this.repo.findById(ticketId);\n    if (!ticket) throw new TicketNotFoundError(ticketId);\n    return ticket;\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/ticketService.ts",
+    "snippet": "    const before = ticket;\n    Object.assign(ticket, patch, { updatedAt: new Date().toISOString() });"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code records what changed on a ticket in the audit log? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "In TicketService.apply, `const before = ticket` copies only the reference, and `Object.assign(ticket, ...)` then mutates that same object. By the time `{ ...before }` is spread for the audit call, it already holds the new values, so before and after are identical. pickChanged then finds no differing keys and every audit entry is written with empty `before` and `after` objects: the log says a status change happened but not from what to what. The fix is to snapshot first, e.g. `const before = { ...ticket }`, or build a new object instead of mutating."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "If the audit sink's append() rejects after repo.save() has succeeded in apply(), what does the caller of changeStatus observe?",
+      "choices": [
+        "The call resolves normally with the updated ticket and the failure is only logged",
+        "The call rejects, even though the ticket change has already been persisted",
+        "The ticket save is rolled back automatically and the call rejects",
+        "The call resolves, and the audit entry is retried in the background"
+      ],
+      "answer": 1,
+      "explanation": "apply() awaits repo.save() and then awaits audit.record(), which awaits sink.append(). A rejection propagates out of apply, so the caller sees an error, but nothing undoes the save that already happened. There is no try/catch to log-and-continue, no transaction to roll back, and no retry mechanism."
+    },
+    {
+      "prompt": "Which information does an AuditEntry carry that lets an investigator tie it back to a specific inbound API call?",
+      "choices": [
+        "The entry id produced by randomUUID()",
+        "The ticketId field",
+        "The requestId taken from the AuditContext",
+        "The timestamp from this.now()"
+      ],
+      "answer": 2,
+      "explanation": "requestId is copied from the caller-supplied AuditContext and is the only field that correlates with the request. The entry id is generated fresh inside the logger, ticketId identifies the ticket (many requests touch one ticket), and timestamps are not unique per request."
+    },
+    {
+      "prompt": "An agent calls escalate() on a ticket that is already 'urgent'. What is recorded?",
+      "choices": [
+        "An entry with action ticket.priority_changed and identical before/after",
+        "Nothing: the method returns the ticket without saving or auditing",
+        "An entry with action ticket.priority_changed and priority 'urgent' in after",
+        "An error is thrown because order.indexOf returns the last index"
+      ],
+      "answer": 1,
+      "explanation": "escalate() checks `ticket.priority === \"urgent\"` and returns the ticket immediately, before apply() is called, so neither repo.save nor audit.record runs. No entry is produced and no error is thrown."
+    }
+  ],
+  "concepts": [
+    "backend.security.audit_logging",
+    "backend.errors.error_propagation"
+  ]
+}

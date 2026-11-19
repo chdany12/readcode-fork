@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    2,
+    1,
+    0
+  ],
+  "explanations": [
+    "There is none. The poller is time-based, but the tests never depend on real time: the Sleeper is injected, and RecordingSleeper resolves immediately while recording the requested delays. ScriptedTranscoder returns a fixed sequence of states, so the number of polls is deterministic. The order in which the API returns renditions doesn't matter, because waitForRenditions sorts a copy before returning and the test expects the sorted array. Each test builds its own fakes, so no state leaks between tests.",
+    "It sleeps after polls 1, 2 and 3 but skips the sleep after the 4th because attempt < maxPolls is false, then throws TranscodeTimeoutError. That is 3 x 2000 ms = 6 s. 8 s would need a sleep after the last poll, and 2 s and 0 s ignore the loop.",
+    "getStatus uses Math.min(this.calls, this.script.length - 1), so once the script runs out it keeps returning the last entry. Nothing in the fake returns undefined, defaults to \"queued\", or throws.",
+    "With an injected Sleeper, the tests use RecordingSleeper, which returns immediately and records each ms value, so they are fast and deterministic. realSleeper is just setTimeout, so production accuracy is unchanged. This interface provides neither parallel polling nor cancellation."
+  ]
+}

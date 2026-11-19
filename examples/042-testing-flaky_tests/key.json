@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    3,
+    0
+  ],
+  "explanations": [
+    "There is none. Every time-dependent value comes from the injected ManualClock, which starts at a fixed T0 and only moves when a test calls advance(); the tracker never reads Date.now() itself. Expected ETAs are computed with the same distanceMeters and rounding the code uses, the staleness boundary is probed at exactly 60 000 and 60 001 ms, and beforeEach builds a fresh clock and tracker so no state leaks between tests. Nothing is async or depends on real timers, so results are identical on every run.",
+    "travelMs depends only on positions, so it is identical in both calls; age goes from 0 to exactly 30 000. Subtracting an integer before Math.round shifts the rounded result by exactly that integer, and the result stays above 0. toBe is strict equality, and rounding is to milliseconds, not seconds.",
+    "The guard is `prev.at >= ping.at`, so an equal timestamp returns early and the first ping received is kept. There is no averaging or error path.",
+    "The staleness test checks a 1 ms boundary that is only reachable because the test controls time; with Date.now() and pings stamped at a past T0, age would be huge and the first assertion would fail. complete() and ingest() do not read the clock, and estimate() does depend on it, so the tests are not clock-independent."
+  ]
+}

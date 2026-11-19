@@ -1,0 +1,69 @@
+{
+  "title": "Deduplicating video transcode jobs",
+  "name": "Transcode job consumer",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/consumer.ts",
+      "content": "import type { Redis } from \"ioredis\";\nimport { TranscodeJob, TranscodeService } from \"./transcode\";\nimport { Logger } from \"./logger\";\n\nexport interface QueueMessage<T> {\n  id: string;\n  body: T;\n  attempt: number;\n  ack(): Promise<void>;\n  nack(delayMs: number): Promise<void>;\n}\n\nconst DEDUP_TTL_SECONDS = 6 * 60 * 60;\nconst MAX_ATTEMPTS = 8;\n\nexport class TranscodeConsumer {\n  constructor(\n    private readonly redis: Redis,\n    private readonly transcoder: TranscodeService,\n    private readonly log: Logger\n  ) {}\n\n  private dedupKey(job: TranscodeJob): string {\n    return `transcode:seen:${job.assetId}:${job.renditionProfile}`;\n  }\n\n  async handle(msg: QueueMessage<TranscodeJob>): Promise<void> {\n    const job = msg.body;\n    const key = this.dedupKey(job);\n\n    const claimed = await this.redis.set(key, msg.id, \"EX\", DEDUP_TTL_SECONDS, \"NX\");\n    if (claimed === null) {\n      this.log.info({ assetId: job.assetId, profile: job.renditionProfile }, \"duplicate transcode job skipped\");\n      await msg.ack();\n      return;\n    }\n\n    try {\n      const output = await this.transcoder.run(job);\n      await this.transcoder.publishRendition(job.assetId, job.renditionProfile, output);\n      await msg.ack();\n    } catch (err) {\n      this.log.error({ err, assetId: job.assetId, attempt: msg.attempt }, \"transcode failed\");\n      if (msg.attempt >= MAX_ATTEMPTS) {\n        await this.transcoder.markFailed(job.assetId, job.renditionProfile);\n        await msg.ack();\n        return;\n      }\n      await msg.nack(Math.min(60_000, 1000 * 2 ** msg.attempt));\n    }\n  }\n}\n"
+    },
+    {
+      "path": "src/transcode.ts",
+      "content": "export interface TranscodeJob {\n  assetId: string;\n  renditionProfile: \"1080p\" | \"720p\" | \"480p\" | \"audio\";\n  sourceUri: string;\n  requestedAt: string;\n}\n\nexport interface RenditionOutput {\n  uri: string;\n  durationMs: number;\n  bytes: number;\n}\n\nexport interface TranscodeService {\n  run(job: TranscodeJob): Promise<RenditionOutput>;\n  publishRendition(assetId: string, profile: string, output: RenditionOutput): Promise<void>;\n  markFailed(assetId: string, profile: string): Promise<void>;\n}\n"
+    },
+    {
+      "path": "src/worker.ts",
+      "content": "import Redis from \"ioredis\";\nimport { TranscodeConsumer } from \"./consumer\";\nimport { createTranscoder } from \"./ffmpegTranscoder\";\nimport { subscribe } from \"./queue\";\nimport { logger } from \"./logger\";\n\nconst redis = new Redis(process.env.REDIS_URL!);\nconst consumer = new TranscodeConsumer(redis, createTranscoder(), logger);\n\nsubscribe(\"video.transcode.requested\", { concurrency: 4 }, (msg) => consumer.handle(msg));\n\nprocess.on(\"SIGTERM\", async () => {\n  logger.info(\"shutting down transcode worker\");\n  await redis.quit();\n  process.exit(0);\n});\n"
+    }
+  ],
+  "defect": {
+    "path": "src/consumer.ts",
+    "snippet": "      await msg.nack(Math.min(60_000, 1000 * 2 ** msg.attempt));"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this consumer deduplicates transcode jobs? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The dedup key is claimed with SET NX before any work starts, but the failure path nacks the message without deleting that key. When the broker redelivers the message, SET NX returns null, the consumer logs \"duplicate transcode job skipped\" and acks it. One transient failure therefore drops the job for good: the rendition is never produced, and markFailed is never called because the retries never get to MAX_ATTEMPTS. The key should be deleted before nacking (only if it still holds msg.id), or the job should only be marked done after it succeeds."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "The upload service publishes two separate messages (different ids) requesting the 720p rendition of the same asset within a minute. Assuming both succeed, how many times is the 720p rendition transcoded?",
+      "choices": [
+        "Twice, because the message ids differ",
+        "Once, because the dedup key is built from assetId and renditionProfile, not the message id",
+        "Zero times, because both are treated as duplicates",
+        "Once per worker process, so up to four times"
+      ],
+      "answer": 1,
+      "explanation": "dedupKey is `transcode:seen:${assetId}:${renditionProfile}`. The message id is only stored as the value. Whichever message claims the key first does the work, and the second sees SET NX return null and acks without transcoding. One message always wins the claim, so it is not zero, and the claim lives in Redis, which all workers share."
+    },
+    {
+      "prompt": "Why is the claim done with a single `SET key value EX ttl NX` rather than a GET followed by a SET?",
+      "choices": [
+        "Because GET is not supported on keys that have a TTL",
+        "To reduce memory used per key",
+        "So that two workers receiving copies concurrently cannot both see the key as absent and both proceed",
+        "So that the TTL refreshes on every duplicate"
+      ],
+      "answer": 2,
+      "explanation": "SET NX checks and writes in one atomic step, so only one concurrent caller gets OK. With GET then SET, two workers (concurrency is 4, and there may be several processes) could both read nil and both start transcoding. GET works fine on keys with a TTL, memory use is the same either way, and NX does not refresh the TTL when the key already exists."
+    },
+    {
+      "prompt": "An artist re-uploads a corrected source for the same assetId two hours after the first 1080p transcode completed, and a new 1080p job is published. What happens?",
+      "choices": [
+        "It is skipped as a duplicate, since the 6-hour dedup key for that asset/profile still exists",
+        "It is transcoded, because the sourceUri differs",
+        "It is transcoded, because the key expired when the first job acked",
+        "It fails and is sent to markFailed"
+      ],
+      "answer": 0,
+      "explanation": "The key does not include sourceUri or requestedAt, and it stays for DEDUP_TTL_SECONDS (6 hours). It is not removed on ack. So within that window a legitimate new request for the same asset and profile is treated as a duplicate and acked. Nothing fails here, so markFailed is not involved. This is the tradeoff of a coarse dedup key with a long TTL."
+    }
+  ],
+  "concepts": [
+    "backend.messaging.deduplication",
+    "backend.messaging.at_least_once_delivery",
+    "backend.concurrency.atomic_operations",
+    "backend.caching.ttls_and_expiry"
+  ]
+}

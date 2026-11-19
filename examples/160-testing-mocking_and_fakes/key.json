@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/loginService.ts",
+        "startLine": 44,
+        "endLine": 44
+      }
+    },
+    2,
+    1,
+    0
+  ],
+  "explanations": [
+    "PasswordHasher.compare returns Promise<boolean>, but LoginService does not await it. A Promise is always truthy, so `!this.hasher.compare(...)` is always false and any password logs in with the real hasher. The tests don't catch it because the hasher mock uses mockReturnValue (a plain boolean) and is cast through `unknown`, so the double does not honour the async contract of the real interface.",
+    "On each failure failedAttempts is incremented and persisted; on the third, failedAttempts >= maxAttempts so lockedUntil = now + lockMs and the method returns 'locked'. Earlier failures leave lockedUntil undefined, the store never throws, and the injected clock is fixed at NOW.",
+    "The test edits the stored object itself; findByEmail returns a fresh copy of whatever is in the map, so the copy includes the new lockedUntil. It does not hand out the same reference, update isn't called on that path, and the service has no cache.",
+    "Copying means in-place edits by the service won't silently 'persist'; only update() changes stored state, like a real DB. It's unrelated to speed, Maps hold references fine, and case-folding is done by the service's trim().toLowerCase()."
+  ]
+}

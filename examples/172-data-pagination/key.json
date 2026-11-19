@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/telemetryStore.ts",
+        "startLine": 36,
+        "endLine": 36
+      }
+    },
+    3,
+    1,
+    1
+  ],
+  "explanations": [
+    "Pages are ordered by recorded_at alone and the continuation token is only the last timestamp, with the next page asking for `recorded_at > token`. A device reports several metrics per sample, so many rows share a recorded_at. If a page boundary falls inside such a group, the remaining rows with that same timestamp are skipped on the next page, silently losing data from the export (and ordering among ties is not even deterministic). The sort and cursor need a unique tiebreaker such as (recorded_at, metric) or a row id.",
+    "Each full page (length === size) yields a nextToken, so after the second full page a token is still returned. The third call returns zero rows and a null token, ending the loop. So pages = 3: the 'full page means maybe more' heuristic costs one empty request when the total is a multiple of the page size.",
+    "op is '>=' when there is no pageToken and '>' otherwise, and `after` is `from` on the first call. So the window start is inclusive. The lower bound is always present, and later pages use the strict comparison against the token.",
+    "The signal is only checked at the top of each loop iteration; sink.write is not passed the signal. The in-flight write completes, rows and pages update, and if another token exists the next iteration throws. If there is no further token the loop simply ends. Nothing cancels the write or resets counters."
+  ]
+}

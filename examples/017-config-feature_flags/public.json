@@ -1,0 +1,51 @@
+{
+  "id": "b64cdf07-3077-4df0-b504-ca2a78d5c7d7",
+  "title": "Device-targeted feature flags for telemetry ingestion",
+  "name": "Telemetry flag client",
+  "createdAt": "2026-11-15T09:41:31.520Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code loads and evaluates feature flags for devices? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The flag service is unreachable for ten minutes after the client has started successfully. How does isEnabled behave during that time?",
+      "choices": [
+        "It returns the hard-coded defaults for every flag",
+        "It throws until the next successful refresh",
+        "It returns false for every flag",
+        "It keeps answering from the last successfully fetched snapshot"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A flag has `firmwareMin: \"2.10.0\"`. A device reports firmware \"2.9.4\". What does isEnabled return?",
+      "choices": [
+        "true, because \"2.9.4\" > \"2.10.0\" as strings",
+        "false, because 9 < 10 in the second numeric segment",
+        "It depends only on the rollout bucket",
+        "true, because missing segments default to 0"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does start() call `this.timer.unref()` on the refresh interval?",
+      "choices": [
+        "So the refresh timer alone does not keep the Node.js process alive during shutdown",
+        "So refreshes run on a separate thread",
+        "So that refresh failures are not logged",
+        "To make the interval fire immediately"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.feature_flags",
+    "backend.resilience.timeouts",
+    "backend.resilience.graceful_degradation",
+    "backend.config.defaults_and_validation"
+  ]
+}

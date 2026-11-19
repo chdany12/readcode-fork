@@ -1,0 +1,65 @@
+{
+  "title": "Login service with lockout and its test doubles",
+  "name": "Password login service",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/loginService.ts",
+      "content": "export interface User {\n  id: string;\n  email: string;\n  passwordHash: string;\n  failedAttempts: number;\n  lockedUntil?: number;\n}\n\nexport interface UserStore {\n  findByEmail(email: string): Promise<User | undefined>;\n  update(user: User): Promise<void>;\n}\n\nexport interface PasswordHasher {\n  compare(plain: string, hash: string): Promise<boolean>;\n}\n\nexport interface SessionIssuer {\n  issue(userId: string): Promise<string>;\n}\n\nexport type LoginResult =\n  | { ok: true; sessionToken: string }\n  | { ok: false; reason: \"invalid_credentials\" | \"locked\" };\n\nexport class LoginService {\n  constructor(\n    private readonly users: UserStore,\n    private readonly hasher: PasswordHasher,\n    private readonly sessions: SessionIssuer,\n    private readonly now: () => number = Date.now,\n    private readonly maxAttempts = 5,\n    private readonly lockMs = 15 * 60_000,\n  ) {}\n\n  async login(email: string, password: string): Promise<LoginResult> {\n    const user = await this.users.findByEmail(email.trim().toLowerCase());\n    if (!user) return { ok: false, reason: \"invalid_credentials\" };\n\n    if (user.lockedUntil && user.lockedUntil > this.now()) {\n      return { ok: false, reason: \"locked\" };\n    }\n\n    if (!this.hasher.compare(password, user.passwordHash)) {\n      const failedAttempts = user.failedAttempts + 1;\n      const lockedUntil = failedAttempts >= this.maxAttempts ? this.now() + this.lockMs : undefined;\n      await this.users.update({ ...user, failedAttempts, lockedUntil });\n      return { ok: false, reason: lockedUntil ? \"locked\" : \"invalid_credentials\" };\n    }\n\n    if (user.failedAttempts > 0 || user.lockedUntil) {\n      await this.users.update({ ...user, failedAttempts: 0, lockedUntil: undefined });\n    }\n    return { ok: true, sessionToken: await this.sessions.issue(user.id) };\n  }\n}\n"
+    },
+    {
+      "path": "src/loginService.test.ts",
+      "content": "import { LoginService, User, UserStore, PasswordHasher, SessionIssuer } from \"./loginService\";\n\nclass FakeUserStore implements UserStore {\n  readonly rows = new Map<string, User>();\n  async findByEmail(email: string) {\n    const u = this.rows.get(email);\n    return u ? { ...u } : undefined;\n  }\n  async update(user: User) { this.rows.set(user.email, { ...user }); }\n}\n\nconst NOW = 1_700_000_000_000;\n\nfunction build(passwordMatches: boolean) {\n  const store = new FakeUserStore();\n  store.rows.set(\"ana@example.com\", {\n    id: \"u1\", email: \"ana@example.com\", passwordHash: \"$argon2id$stub\", failedAttempts: 0,\n  });\n  const hasher = { compare: jest.fn().mockReturnValue(passwordMatches) } as unknown as PasswordHasher;\n  const sessions: SessionIssuer = { issue: jest.fn().mockResolvedValue(\"sess_abc\") };\n  const svc = new LoginService(store, hasher, sessions, () => NOW, 3, 60_000);\n  return { store, hasher, sessions, svc };\n}\n\ndescribe(\"LoginService\", () => {\n  it(\"issues a session for correct credentials\", async () => {\n    const { svc } = build(true);\n    expect(await svc.login(\" Ana@Example.com \", \"pw\")).toEqual({ ok: true, sessionToken: \"sess_abc\" });\n  });\n\n  it(\"counts failed attempts and locks after the limit\", async () => {\n    const { svc, store } = build(false);\n    expect(await svc.login(\"ana@example.com\", \"bad\")).toEqual({ ok: false, reason: \"invalid_credentials\" });\n    await svc.login(\"ana@example.com\", \"bad\");\n    expect(await svc.login(\"ana@example.com\", \"bad\")).toEqual({ ok: false, reason: \"locked\" });\n    expect(store.rows.get(\"ana@example.com\")?.lockedUntil).toBe(NOW + 60_000);\n  });\n\n  it(\"rejects a locked user without checking the password\", async () => {\n    const { svc, store, hasher } = build(true);\n    store.rows.get(\"ana@example.com\")!.lockedUntil = NOW + 1;\n    expect(await svc.login(\"ana@example.com\", \"pw\")).toEqual({ ok: false, reason: \"locked\" });\n    expect(hasher.compare).not.toHaveBeenCalled();\n  });\n\n  it(\"returns the same error for unknown emails\", async () => {\n    const { svc, sessions } = build(true);\n    expect(await svc.login(\"nobody@example.com\", \"pw\")).toEqual({ ok: false, reason: \"invalid_credentials\" });\n    expect(sessions.issue).not.toHaveBeenCalled();\n  });\n});\n"
+    }
+  ],
+  "defect": {
+    "path": "src/loginService.ts",
+    "snippet": "    if (!this.hasher.compare(password, user.passwordHash)) {"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code and its test doubles handle password verification? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "PasswordHasher.compare returns Promise<boolean>, but LoginService does not await it. A Promise is always truthy, so `!this.hasher.compare(...)` is always false and any password logs in with the real hasher. The tests don't catch it because the hasher mock uses mockReturnValue (a plain boolean) and is cast through `unknown`, so the double does not honour the async contract of the real interface."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "In the lockout test (maxAttempts = 3), why does the third call return 'locked' rather than 'invalid_credentials'?",
+      "choices": [
+        "Because lockedUntil was already set after the second failure",
+        "Because the fake store throws after three updates",
+        "Because the third failure makes failedAttempts reach 3, setting lockedUntil, and the result reflects it",
+        "Because the clock advances between calls"
+      ],
+      "answer": 2,
+      "explanation": "On each failure failedAttempts is incremented and persisted; on the third, failedAttempts >= maxAttempts so lockedUntil = now + lockMs and the method returns 'locked'. Earlier failures leave lockedUntil undefined, the store never throws, and the injected clock is fixed at NOW."
+    },
+    {
+      "prompt": "The 'locked user' test mutates store.rows.get(...)!.lockedUntil directly. Why does the service see that change?",
+      "choices": [
+        "findByEmail returns the same object reference the test mutated",
+        "The test mutates the object stored in the map, and findByEmail copies from that stored object on each call",
+        "update() is called before the check",
+        "The service caches the user from the constructor"
+      ],
+      "answer": 1,
+      "explanation": "The test edits the stored object itself; findByEmail returns a fresh copy of whatever is in the map, so the copy includes the new lockedUntil. It does not hand out the same reference, update isn't called on that path, and the service has no cache."
+    },
+    {
+      "prompt": "Why does the fake store copy users on read and write instead of handing out the stored object?",
+      "choices": [
+        "So that state only persists when the service calls update, as with a real database",
+        "To speed up tests",
+        "Because Map cannot store objects by reference",
+        "To make email lookup case-insensitive"
+      ],
+      "answer": 0,
+      "explanation": "Copying means in-place edits by the service won't silently 'persist'; only update() changes stored state, like a real DB. It's unrelated to speed, Maps hold references fine, and case-folding is done by the service's trim().toLowerCase()."
+    }
+  ],
+  "concepts": [
+    "backend.testing.mocking_and_fakes",
+    "backend.concurrency.async_await_pitfalls",
+    "backend.security.authentication",
+    "backend.design.dependency_injection"
+  ]
+}

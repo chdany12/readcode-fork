@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/listingService.ts",
+        "startLine": 63,
+        "endLine": 63
+      }
+    },
+    1,
+    2,
+    3
+  ],
+  "explanations": [
+    "reindex calls this.get(id) immediately after deleting the cache key. get misses the cache and reads from the replica, which may not have the primary's write yet. The pre-update document is then written back into the cache for an hour and pushed into the search index, so both serve the old title/price even though the update succeeded. reindex should use the `next` document it already has (or read from the primary) and not repopulate the cache from the replica.",
+    "Tags are lower-cased and passed through a Set, which removes the duplicate, giving [\"vintage\", \"lamp\"]. The raw list and the un-deduplicated list ignore the Set; current.tags is used only when patch.tags is absent.",
+    "next is built by spreading current and then the patch; if current came from a lagging replica, saving next would silently revert fields changed by a recent write. Both stores share the same interface, cache TTL is unrelated to source, and ListingNotFound is thrown by the service, not the store.",
+    "get awaits cache.get with no try/catch, so its rejection propagates to the caller. There is no fallback to the replica, no null return path, and no retry."
+  ]
+}

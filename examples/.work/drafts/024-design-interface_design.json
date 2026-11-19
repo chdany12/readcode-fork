@@ -1,0 +1,65 @@
+{
+  "title": "Ride dispatcher built on small pluggable interfaces",
+  "name": "Ride dispatch loop",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/types.ts",
+      "content": "export interface GeoPoint {\n  lat: number;\n  lng: number;\n}\n\nexport interface RideRequest {\n  id: string;\n  riderId: string;\n  pickup: GeoPoint;\n  vehicleClass: \"standard\" | \"xl\" | \"premium\";\n  requestedAt: number;\n}\n\nexport interface DriverCandidate {\n  driverId: string;\n  location: GeoPoint;\n  vehicleClass: RideRequest[\"vehicleClass\"];\n  rating: number;\n  lastTripEndedAt: number | null;\n}\n\nexport type DispatchDecision =\n  | { kind: \"assigned\"; driverId: string; etaSeconds: number }\n  | { kind: \"no_drivers\"; searchedRadiusKm: number }\n  | { kind: \"deferred\"; retryAfterMs: number };\n\nexport interface DriverLocator {\n  findNearby(center: GeoPoint, radiusKm: number): Promise<readonly DriverCandidate[]>;\n}\n\nexport interface MatchingStrategy {\n  choose(request: RideRequest, candidates: readonly DriverCandidate[]): DriverCandidate | null;\n}\n\nexport interface EtaEstimator {\n  etaSeconds(from: GeoPoint, to: GeoPoint): number;\n}\n\nexport interface Clock {\n  now(): number;\n}\n"
+    },
+    {
+      "path": "src/dispatcher.ts",
+      "content": "import {\n  Clock, DispatchDecision, DriverCandidate, DriverLocator,\n  EtaEstimator, MatchingStrategy, RideRequest,\n} from \"./types\";\n\nexport interface DispatcherOptions {\n  radiiKm: readonly number[];\n  maxRequestAgeMs: number;\n  deferMs: number;\n}\n\nexport class Dispatcher {\n  constructor(\n    private readonly locator: DriverLocator,\n    private readonly strategy: MatchingStrategy,\n    private readonly eta: EtaEstimator,\n    private readonly clock: Clock,\n    private readonly opts: DispatcherOptions,\n  ) {\n    if (opts.radiiKm.length === 0) {\n      throw new Error(\"at least one search radius is required\");\n    }\n  }\n\n  async dispatch(request: RideRequest): Promise<DispatchDecision> {\n    let lastRadius = 0;\n    for (const radius of this.opts.radiiKm) {\n      lastRadius = radius;\n      const nearby = await this.locator.findNearby(request.pickup, radius);\n      const eligible = nearby.filter((c) => c.vehicleClass === request.vehicleClass);\n      const chosen = this.strategy.choose(request, eligible);\n      if (chosen !== null) {\n        return {\n          kind: \"assigned\",\n          driverId: chosen.driverId,\n          etaSeconds: this.eta.etaSeconds(chosen.location, request.pickup),\n        };\n      }\n    }\n    const age = this.clock.now() - request.requestedAt;\n    if (age < this.opts.maxRequestAgeMs) {\n      return { kind: \"deferred\", retryAfterMs: this.opts.deferMs };\n    }\n    return { kind: \"no_drivers\", searchedRadiusKm: lastRadius };\n  }\n}\n\nexport function describe(decision: DispatchDecision): string {\n  switch (decision.kind) {\n    case \"assigned\":\n      return `driver ${decision.driverId} arriving in ${Math.round(decision.etaSeconds / 60)} min`;\n    case \"no_drivers\":\n      return `no drivers within ${decision.searchedRadiusKm} km`;\n    case \"deferred\":\n      return `retrying in ${decision.retryAfterMs} ms`;\n    default: {\n      const unreachable: never = decision;\n      throw new Error(`unhandled decision ${JSON.stringify(unreachable)}`);\n    }\n  }\n}\n"
+    },
+    {
+      "path": "src/nearestIdleStrategy.ts",
+      "content": "import { Clock, DriverCandidate, EtaEstimator, MatchingStrategy, RideRequest } from \"./types\";\n\nexport class NearestIdleStrategy implements MatchingStrategy {\n  constructor(\n    private readonly eta: EtaEstimator,\n    private readonly clock: Clock,\n    private readonly minIdleMs: number,\n  ) {}\n\n  choose(request: RideRequest, candidates: readonly DriverCandidate[]): DriverCandidate | null {\n    const now = this.clock.now();\n    let best: DriverCandidate | null = null;\n    let bestEta = Number.POSITIVE_INFINITY;\n    for (const c of candidates) {\n      const idleFor = c.lastTripEndedAt === null ? Number.POSITIVE_INFINITY : now - c.lastTripEndedAt;\n      if (idleFor < this.minIdleMs) continue;\n      const eta = this.eta.etaSeconds(c.location, request.pickup);\n      if (eta < bestEta || (eta === bestEta && best !== null && c.rating > best.rating)) {\n        best = c;\n        bestEta = eta;\n      }\n    }\n    return best;\n  }\n}\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how the Dispatcher and NearestIdleStrategy use the interfaces declared in types.ts (return values, nullability, and the DispatchDecision variants)? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is none. MatchingStrategy.choose returns DriverCandidate | null and the dispatcher checks chosen !== null before using it, widening the radius otherwise. Every exit of dispatch returns a valid DispatchDecision variant, describe switches exhaustively with a never check, candidate arrays are readonly so strategies cannot mutate locator results (filter makes a new array anyway), and both time-based decisions read time through the injected Clock rather than Date.now."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "radiiKm is [2, 5, 10]. No eligible driver is found at any radius and the request is older than maxRequestAgeMs. What does dispatch return?",
+      "choices": [
+        "{ kind: \"deferred\" } with retryAfterMs = deferMs",
+        "{ kind: \"no_drivers\", searchedRadiusKm: 2 }",
+        "It throws because chosen is null",
+        "{ kind: \"no_drivers\", searchedRadiusKm: 10 }"
+      ],
+      "answer": 3,
+      "explanation": "lastRadius is updated on every iteration, so after the loop it is 10; the request is too old to defer, so no_drivers with 10 is returned. Deferral only happens when age < maxRequestAgeMs, 2 would be the first radius not the last, and a null choice just continues the loop."
+    },
+    {
+      "prompt": "A new MatchingStrategy is added that prefers premium-rated drivers. Which candidates can it ever be offered by the Dispatcher?",
+      "choices": [
+        "Only candidates whose vehicleClass matches the request, within the current radius",
+        "All nearby drivers regardless of vehicle class",
+        "Only drivers that have been idle for at least minIdleMs",
+        "Only the single nearest driver per radius"
+      ],
+      "answer": 0,
+      "explanation": "Dispatcher filters nearby by vehicleClass before calling choose, so every strategy sees only matching drivers within the radius being searched. The idle filter lives inside NearestIdleStrategy, not the dispatcher, and the full eligible list is passed, not just the nearest."
+    },
+    {
+      "prompt": "What is the main benefit of NearestIdleStrategy taking a Clock rather than calling Date.now()?",
+      "choices": [
+        "It makes choose asynchronous so it can await the time source",
+        "Tests can fix the current time to check the minIdleMs cutoff deterministically, and it shares one notion of time with the Dispatcher",
+        "It prevents drivers with lastTripEndedAt === null from being chosen",
+        "It lets the strategy cache ETA results between calls"
+      ],
+      "answer": 1,
+      "explanation": "Injecting Clock makes idle-time comparisons deterministic in tests and consistent with the dispatcher's own age check. choose stays synchronous, null lastTripEndedAt is treated as infinitely idle (eligible), and nothing is cached."
+    }
+  ],
+  "concepts": [
+    "backend.design.interface_design",
+    "backend.design.dependency_injection",
+    "backend.testing.unit_test_design"
+  ]
+}

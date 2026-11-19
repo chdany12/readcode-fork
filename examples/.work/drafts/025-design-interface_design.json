@@ -1,0 +1,69 @@
+{
+  "title": "Delivery fee quotes from multiple providers",
+  "name": "Delivery quote selector",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/quote.ts",
+      "content": "export interface CartSummary {\n  restaurantId: string;\n  subtotalCents: number;\n  itemCount: number;\n  distanceKm: number;\n}\n\nexport interface DeliveryQuote {\n  provider: string;\n  feeCents: number;\n  etaMinutes: number;\n  expiresAt: Date;\n}\n\nexport interface DeliveryQuoteProvider {\n  readonly name: string;\n  quote(cart: CartSummary): Promise<DeliveryQuote | null>;\n}\n"
+    },
+    {
+      "path": "src/providers.ts",
+      "content": "import { CartSummary, DeliveryQuote, DeliveryQuoteProvider } from \"./quote\";\n\nexport interface FlatRateConfig {\n  baseFeeDollars: number;\n  perKmCents: number;\n  maxDistanceKm: number;\n  freeDeliveryOverCents: number;\n  prepMinutes: number;\n  kmPerMinute: number;\n}\n\nexport class FlatRateProvider implements DeliveryQuoteProvider {\n  readonly name = \"in_house\";\n\n  constructor(private readonly cfg: FlatRateConfig, private readonly now: () => Date) {}\n\n  async quote(cart: CartSummary): Promise<DeliveryQuote | null> {\n    if (cart.distanceKm > this.cfg.maxDistanceKm) {\n      return null;\n    }\n    const feeCents =\n      cart.subtotalCents >= this.cfg.freeDeliveryOverCents\n        ? 0\n        : this.cfg.baseFeeDollars + Math.ceil(cart.distanceKm * this.cfg.perKmCents);\n    const etaMinutes = this.cfg.prepMinutes + Math.ceil(cart.distanceKm / this.cfg.kmPerMinute);\n    return {\n      provider: this.name,\n      feeCents,\n      etaMinutes,\n      expiresAt: new Date(this.now().getTime() + 5 * 60_000),\n    };\n  }\n}\n\ninterface CourierApiResponse {\n  available: boolean;\n  fee: { amount: number; currency: string };\n  pickup_eta_min: number;\n  dropoff_eta_min: number;\n  valid_until: string;\n}\n\nexport class CourierNetworkProvider implements DeliveryQuoteProvider {\n  readonly name = \"courier_network\";\n\n  constructor(\n    private readonly baseUrl: string,\n    private readonly apiKey: string,\n    private readonly timeoutMs: number,\n  ) {}\n\n  async quote(cart: CartSummary): Promise<DeliveryQuote | null> {\n    const res = await fetch(`${this.baseUrl}/v2/quotes`, {\n      method: \"POST\",\n      headers: { \"content-type\": \"application/json\", authorization: `Bearer ${this.apiKey}` },\n      body: JSON.stringify({ restaurant_id: cart.restaurantId, distance_km: cart.distanceKm }),\n      signal: AbortSignal.timeout(this.timeoutMs),\n    });\n    if (!res.ok) {\n      throw new Error(`courier quote failed: HTTP ${res.status}`);\n    }\n    const body = (await res.json()) as CourierApiResponse;\n    if (!body.available || body.fee.currency !== \"USD\") {\n      return null;\n    }\n    return {\n      provider: this.name,\n      feeCents: body.fee.amount,\n      etaMinutes: body.dropoff_eta_min,\n      expiresAt: new Date(body.valid_until),\n    };\n  }\n}\n"
+    },
+    {
+      "path": "src/quoteSelector.ts",
+      "content": "import { CartSummary, DeliveryQuote, DeliveryQuoteProvider } from \"./quote\";\n\nexport class QuoteSelector {\n  constructor(\n    private readonly providers: readonly DeliveryQuoteProvider[],\n    private readonly log: (event: Record<string, unknown>) => void,\n  ) {}\n\n  async best(cart: CartSummary): Promise<DeliveryQuote | null> {\n    const settled = await Promise.allSettled(this.providers.map((p) => p.quote(cart)));\n    const quotes: DeliveryQuote[] = [];\n    settled.forEach((r, i) => {\n      if (r.status === \"fulfilled\") {\n        if (r.value !== null) quotes.push(r.value);\n      } else {\n        this.log({ msg: \"quote provider failed\", provider: this.providers[i].name, error: String(r.reason) });\n      }\n    });\n    if (quotes.length === 0) {\n      return null;\n    }\n    return quotes.reduce((a, b) =>\n      b.feeCents < a.feeCents || (b.feeCents === a.feeCents && b.etaMinutes < a.etaMinutes) ? b : a,\n    );\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/providers.ts",
+    "snippet": "        : this.cfg.baseFeeDollars + Math.ceil(cart.distanceKm * this.cfg.perKmCents);"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how the providers satisfy the DeliveryQuote contract that QuoteSelector relies on? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "DeliveryQuote.feeCents is in cents, but FlatRateProvider adds cfg.baseFeeDollars (a dollar amount) directly to a cents value. A $3.99 base fee contributes 3.99 instead of 399, so in-house quotes are far too cheap; QuoteSelector compares feeCents across providers and will almost always pick the in-house quote and charge customers almost nothing. The base fee must be converted with Math.round(baseFeeDollars * 100)."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "CourierNetworkProvider's HTTP call times out while FlatRateProvider returns a quote. What does QuoteSelector.best return?",
+      "choices": [
+        "It rejects with the timeout error",
+        "null, because one provider failed",
+        "The FlatRateProvider quote, and the courier failure is logged",
+        "It waits for the courier request to be retried once"
+      ],
+      "answer": 2,
+      "explanation": "Promise.allSettled collects both outcomes; the rejected one is logged with its provider name and the fulfilled quote is still considered. best does not reject on a provider error, does not return null while a quote exists, and has no retry."
+    },
+    {
+      "prompt": "The courier API responds 200 with { available: true, fee: { currency: \"EUR\" } }. What happens to that provider's result?",
+      "choices": [
+        "quote returns null, so the provider is silently skipped by the selector",
+        "quote throws, and the selector logs a provider failure",
+        "The EUR amount is used as feeCents unchanged",
+        "The selector converts it to USD before comparing"
+      ],
+      "answer": 0,
+      "explanation": "The currency check returns null, which QuoteSelector treats as 'no quote' without logging. Only a non-2xx status throws; the amount is never used for EUR; and no conversion exists anywhere."
+    },
+    {
+      "prompt": "What does the DeliveryQuoteProvider contract distinguish by returning null versus throwing?",
+      "choices": [
+        "Null means retry later; throwing means the provider is permanently disabled",
+        "Null means the provider cannot serve this cart (expected); throwing means the provider itself failed, which the selector logs",
+        "Both are treated identically and neither is logged",
+        "Throwing is used for carts over maxDistanceKm; null for HTTP errors"
+      ],
+      "answer": 1,
+      "explanation": "FlatRateProvider returns null for out-of-range carts and the courier returns null when unavailable, while HTTP failures throw; QuoteSelector logs only rejections. Nothing disables providers or retries, the two paths are handled differently, and the distance/HTTP mapping is the reverse."
+    }
+  ],
+  "concepts": [
+    "backend.design.interface_design",
+    "backend.integrations.third_party_adapters",
+    "backend.data.money_and_ledgers",
+    "backend.resilience.graceful_degradation"
+  ]
+}

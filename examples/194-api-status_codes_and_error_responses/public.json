@@ -1,0 +1,49 @@
+{
+  "id": "a1ff8f64-7545-4efb-8209-a0868eeaa0c3",
+  "title": "Shipment API problem responses",
+  "name": "Shipment problem responses",
+  "createdAt": "2026-11-15T09:44:42.012Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this service turns failures into HTTP error responses? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Cancelling a shipment that has already been delivered makes the service throw InvalidStateTransitionError(\"delivered\", \"cancelled\"). What does the client receive?",
+      "choices": [
+        "404 with type /problems/shipment-not-found",
+        "422 with the transition in detail",
+        "409 with detail \"delivered -> cancelled is not allowed\"",
+        "204 with no body"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "An error is thrown after the label route has already started streaming its response. What does problemHandler do?",
+      "choices": [
+        "Passes the error to express's default handler via next(err) without writing a problem body",
+        "Writes a 500 problem+json body after the partial response",
+        "Silently swallows the error",
+        "Retries the route handler"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What is the purpose of the instance field the handler adds to each problem?",
+      "choices": [
+        "It names the error class for clients to switch on",
+        "It identifies the specific request URL the problem occurred on, distinct from the reusable type",
+        "It holds the HTTP status as a string",
+        "It carries the stack trace for debugging"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.status_codes_and_error_responses",
+    "backend.integrations.third_party_adapters"
+  ]
+}

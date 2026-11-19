@@ -1,0 +1,21 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.concurrency.race_conditions",
+      "count": 6
+    },
+    {
+      "label": "backend.concurrency.locking_and_lock_ordering",
+      "count": 6
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "count": 6
+    },
+    {
+      "label": "backend.concurrency.deadlocks",
+      "count": 2
+    }
+  ]
+}

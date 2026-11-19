@@ -1,0 +1,49 @@
+{
+  "id": "9d9f53e7-d968-4bf7-ba72-fb5a52e8ab5c",
+  "title": "Ad campaign budget pacer",
+  "name": "Campaign budget pacer",
+  "createdAt": "2026-11-15T09:41:31.674Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how BudgetPacer handles concurrent impression charges for the same campaign? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A campaign has dailyBudgetMicros 1,000,000, bidMicros 300,000, and 900,000 already spent today. What does a single charge return?",
+      "choices": [
+        "{ ok: true, remainingMicros: 100000 }",
+        "{ ok: true, remainingMicros: -200000 }",
+        "{ ok: false, reason: \"budget_exhausted\" }",
+        "{ ok: false, reason: \"inactive\" }"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "How does spend reset at the start of a new day?",
+      "choices": [
+        "A scheduled job deletes the spend keys at midnight",
+        "The key includes the UTC date, so a new day reads a fresh key that defaults to 0",
+        "The 48 hour TTL expires the previous value before the next day",
+        "It never resets; budgets are cumulative"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The day key is computed from this.now() in UTC. What is a consequence for an advertiser in UTC-8?",
+      "choices": [
+        "Their budget resets at 4pm local time (midnight UTC)",
+        "Their budget resets at local midnight",
+        "Their budget never resets",
+        "Each impression uses a random day key"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.race_conditions",
+    "backend.concurrency.atomic_operations"
+  ]
+}

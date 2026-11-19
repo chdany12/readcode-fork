@@ -1,0 +1,50 @@
+{
+  "id": "5692f2ae-bfac-46f7-8f22-31388732a52b",
+  "title": "Validating sync upload requests",
+  "name": "Sync upload validation",
+  "createdAt": "2026-11-15T09:41:31.725Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code validates the start-upload request before using it? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends path \"/photos//2024/a.jpg\". What is the response?",
+      "choices": [
+        "400, because splitting produces an empty segment that fails min(1)",
+        "201, because the double slash is collapsed during NFC normalization",
+        "201, because only '.' and '..' segments are rejected",
+        "409, because the path does not match the stored revision"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A request includes an extra field \"ownerId\": \"u_123\" alongside otherwise valid fields. What happens?",
+      "choices": [
+        "The field is silently dropped and the upload proceeds",
+        "The field is passed through to createUploadSession",
+        "The request is rejected with 400 because the object schema is strict",
+        "The request is rejected with 409"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A valid request omits conflictPolicy and sets baseRevision to 3, while the stored current revision is 5. What does the handler do?",
+      "choices": [
+        "Creates an upload session, since the policy is undefined",
+        "Returns 409 with currentRevision 5",
+        "Returns 400 because conflictPolicy is required",
+        "Creates an upload session that overwrites revision 5"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.request_validation",
+    "backend.security.input_sanitization",
+    "backend.api.status_codes_and_error_responses"
+  ]
+}

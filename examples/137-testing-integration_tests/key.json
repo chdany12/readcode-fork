@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "test/dispatchService.int.test.ts",
+        "startLine": 20,
+        "endLine": 20
+      }
+    },
+    2,
+    1,
+    3
+  ],
+  "explanations": [
+    "beforeEach truncates only orders, never couriers. Courier rows (and their 'busy' status) leak from one test and one run into the next: on a second run against the same database, seedCourier fails with a duplicate primary key, and within a run any test that reuses a zone sees couriers left behind by earlier tests (for example the concurrency test would pass for the wrong reason or fail depending on leftovers). The reset should truncate both tables, e.g. TRUNCATE orders, couriers.",
+    "Both transactions lock different order rows, so they do not block each other on orders. On couriers, SKIP LOCKED makes the second query skip the row the first already locked, returning zero rows and raising NO_COURIER. allSettled runs both concurrently, and the pool hands out separate clients.",
+    "Any throw inside the try reaches catch, which issues ROLLBACK and rethrows; finally always calls client.release(). No COMMIT runs on that path, and nothing swallows the error.",
+    "The key guarantee, never double-assigning a courier, comes from Postgres locking and transaction behavior. A mock would just return whatever was scripted and could not show that two concurrent transactions interact correctly. Mocks can fake rowCount, real databases are slower, and the service does have branching logic worth testing."
+  ]
+}

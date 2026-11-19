@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/reminderWorker.ts",
+        "startLine": 44,
+        "endLine": 46
+      }
+    },
+    0,
+    2,
+    3
+  ],
+  "explanations": [
+    "track awaits loadAppointment before adding the job's promise to inFlight. A job that has been claimed but is still loading its appointment is invisible to shutdown: the loop exits, inFlight looks empty (or smaller than reality), drain resolves, and pool.end() runs while that query or the subsequent send/complete is still pending. That job then fails mid-way (possibly after the SMS was sent but before complete), so the patient may get a duplicate reminder when the lease expires. The promise should be registered in inFlight immediately when the job is claimed, covering the load too.",
+    "FOR UPDATE SKIP LOCKED makes the second query skip the row the first has locked, so it returns no job. There is no double claim, no blocking wait (that's what SKIP LOCKED avoids), and no serialization error at the default isolation.",
+    "When inFlight.size >= concurrency it awaits Promise.race(this.inFlight), which resolves once any one finishes, then continues. It doesn't claim more, the idle sleep is only for empty queues, and the loop only exits on stopping.",
+    "The catch only logs; status stays 'pending' with locked_until set. claimNext picks rows whose locked_until < now(), so after the lease lapses any worker can retry it. Nothing marks it skipped, retries immediately, or deletes it."
+  ]
+}

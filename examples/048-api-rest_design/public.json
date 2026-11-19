@@ -1,0 +1,51 @@
+{
+  "id": "e347dbac-233f-41c5-90a3-98fbc8209765",
+  "title": "Appointment scheduling REST endpoints",
+  "name": "Appointment scheduling API",
+  "createdAt": "2026-11-15T09:41:31.567Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how these endpoints apply updates to an appointment resource? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two front-desk clients both GET appointment A (ETag \"3\") and then each send a PATCH with `If-Match: \"3\"`. What happens?",
+      "choices": [
+        "Both succeed and the second write silently overwrites the first",
+        "The first succeeds with ETag \"4\"; the second gets 412 because the version no longer matches",
+        "The second gets 409 because the appointment is already being edited",
+        "Both get 412 because If-Match must use weak ETags"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A mobile client retries `POST /appointments/:id/cancellation` after a network timeout, and the first attempt actually succeeded. What does the retry return?",
+      "choices": [
+        "409, because the appointment is no longer booked",
+        "404, because cancelled appointments are hidden",
+        "200 with the cancelled appointment, unchanged",
+        "201, because a new cancellation sub-resource is created"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does the router model cancellation as `POST /appointments/:id/cancellation` instead of letting clients PATCH `status` to \"cancelled\"?",
+      "choices": [
+        "Because Express cannot route PATCH requests with a body",
+        "Because PATCH responses cannot carry an ETag header",
+        "Because cancellation needs to create a new appointment id",
+        "Because status is not in EDITABLE, so the state transition has its own endpoint with its own rules (only from booked, repeat is a no-op)"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.rest_design",
+    "backend.api.status_codes_and_error_responses",
+    "backend.api.idempotency",
+    "backend.data.optimistic_vs_pessimistic_locking"
+  ]
+}

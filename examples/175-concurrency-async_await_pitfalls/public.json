@@ -1,0 +1,50 @@
+{
+  "id": "d1992a63-890f-4c06-a0d8-c84eee3d579a",
+  "title": "Incremental catalog reindexing job",
+  "name": "Catalog reindex job",
+  "createdAt": "2026-11-15T09:41:31.734Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this job sequences indexing work with saving its progress? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "When is the cursor saved relative to listing the page it describes?",
+      "choices": [
+        "Before listChangedSince is called for that page",
+        "Only once, at the end of runOnce",
+        "After indexPage returns for the page, and only when nextCursor is non-null",
+        "After refresh() completes"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "How are the title and description tokenized for one document in buildFields?",
+      "choices": [
+        "Sequentially: title first, then description",
+        "Concurrently, and buildFields waits for both before returning",
+        "Concurrently, but buildFields returns before the description finishes",
+        "Only the title is tokenized; the description is copied"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A run finds no changed documents on the first page. What does runOnce do?",
+      "choices": [
+        "Saves the same cursor and refreshes the index",
+        "Refreshes the index but does not save a cursor",
+        "Returns 0 without saving a cursor or refreshing",
+        "Loops forever re-reading the empty page"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.async_await_pitfalls",
+    "backend.errors.error_propagation",
+    "backend.data.pagination"
+  ]
+}

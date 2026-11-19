@@ -1,0 +1,41 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.config.feature_flags",
+      "count": 3
+    },
+    {
+      "label": "backend.testing.flaky_tests",
+      "count": 3
+    },
+    {
+      "label": "backend.observability.health_checks",
+      "count": 2
+    },
+    {
+      "label": "backend.config.environment_specific_behaviour",
+      "count": 2
+    },
+    {
+      "label": "backend.testing.integration_tests",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.graceful_shutdown",
+      "count": 2
+    },
+    {
+      "label": "backend.data.migrations",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.metrics",
+      "count": 2
+    }
+  ]
+}

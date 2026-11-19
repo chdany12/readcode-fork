@@ -1,0 +1,33 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.design.interface_design",
+      "count": 6
+    },
+    {
+      "label": "backend.resilience.graceful_degradation",
+      "count": 3
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "count": 3
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "count": 2
+    },
+    {
+      "label": "backend.api.versioning",
+      "count": 2
+    },
+    {
+      "label": "backend.security.input_sanitization",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.metrics",
+      "count": 2
+    }
+  ]
+}

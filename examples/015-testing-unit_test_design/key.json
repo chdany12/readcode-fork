@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/scheduler.test.ts",
+        "startLine": 51,
+        "endLine": 51
+      }
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "`s.queue` holds job id strings, but the cancellation test checks `not.toContain(waiting)` with the CiJob object. An array of strings never contains that object, so the assertion passes no matter what cancelPipeline does to the queue. If the queue cleanup loop were removed or broken, this test would still be green. It should assert `not.toContain(waiting.id)`.",
+    "enqueue inserts before the first job with strictly lower priority, so equal-priority jobs keep FIFO order and the retry lands behind the queued priority-3 job but ahead of the priority-1 job. complete() calls enqueue immediately.",
+    "The guard `job.state !== \"running\"` returns early, so a queued job is unchanged, which the last test asserts. It neither throws nor transitions state.",
+    "Jobs and the queue are instance fields, so a fresh scheduler isolates each test. seq only guarantees unique ids; no assertion depends on a specific id value, it does not reset, and duplicate detection is per instance."
+  ]
+}

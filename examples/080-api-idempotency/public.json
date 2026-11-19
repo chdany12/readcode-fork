@@ -1,0 +1,50 @@
+{
+  "id": "d37acb60-9619-49c7-8580-2da70dd41ee5",
+  "title": "Support ticket creation with Idempotency-Key",
+  "name": "Ticket creation endpoint",
+  "createdAt": "2026-11-15T09:41:31.611Z",
+  "durationMinutes": 15,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this endpoint makes ticket creation idempotent? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends a request with key K, gets 201, then 30 hours later sends the identical request with K again. What happens?",
+      "choices": [
+        "The stored 201 response is replayed",
+        "422 idempotency_key_reused",
+        "A new ticket is created and the stored row for K is overwritten",
+        "The INSERT fails on the unique (tenant_id, key) constraint and returns 500"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Tenant A and tenant B both happen to use the Idempotency-Key value \"abc\". What is the effect?",
+      "choices": [
+        "They are independent because lookups and the unique key include tenant_id",
+        "Tenant B receives tenant A's stored ticket response",
+        "Tenant B gets 422 idempotency_key_reused",
+        "Tenant B's save overwrites tenant A's record"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "tickets.create succeeds but the requester notification throws. The client retries with the same key and body. What is the result?",
+      "choices": [
+        "The stored 201 is replayed with no new ticket",
+        "The retry returns 500 until the notifier recovers, with no new ticket",
+        "422 idempotency_key_reused",
+        "A second ticket is created, because the key was never saved"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.idempotency",
+    "backend.concurrency.race_conditions",
+    "backend.caching.ttls_and_expiry"
+  ]
+}

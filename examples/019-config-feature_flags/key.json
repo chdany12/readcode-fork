@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/gameFlags.ts",
+        "startLine": 48,
+        "endLine": 48
+      }
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "GameFlags.isOn defaults unknown flags to true. Before the first successful fetch (or if start() is never awaited, or the flag is deleted from the source), the snapshot is empty and every flag, including the unreleased matchmaking_skill_v2, is treated as on. Flags guarding new behaviour should fail closed (default false) so missing data falls back to the proven path.",
+    "refresh() catches the fetch error, logs a warning, and leaves this.snapshot untouched, so callers keep the last good values. The timer keeps firing, the snapshot is not cleared, and isOn never throws.",
+    "refresh() only assigns next when next.version >= this.snapshot.version, so a lower version is dropped. Nothing throws, and there is no merge logic.",
+    "formMatches reads the flag once into useSkillV2 before iterating regions, and both the ordering and the algorithm label use that local value. formMatches is synchronous, so nothing can change the snapshot mid-call anyway; there is no abort or retry."
+  ]
+}

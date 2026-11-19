@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/providers.ts",
+        "startLine": 24,
+        "endLine": 24
+      }
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "DeliveryQuote.feeCents is in cents, but FlatRateProvider adds cfg.baseFeeDollars (a dollar amount) directly to a cents value. A $3.99 base fee contributes 3.99 instead of 399, so in-house quotes are far too cheap; QuoteSelector compares feeCents across providers and will almost always pick the in-house quote and charge customers almost nothing. The base fee must be converted with Math.round(baseFeeDollars * 100).",
+    "Promise.allSettled collects both outcomes; the rejected one is logged with its provider name and the fulfilled quote is still considered. best does not reject on a provider error, does not return null while a quote exists, and has no retry.",
+    "The currency check returns null, which QuoteSelector treats as 'no quote' without logging. Only a non-2xx status throws; the amount is never used for EUR; and no conversion exists anywhere.",
+    "FlatRateProvider returns null for out-of-range carts and the courier returns null when unavailable, while HTTP failures throw; QuoteSelector logs only rejections. Nothing disables providers or retries, the two paths are handled differently, and the distance/HTTP mapping is the reverse."
+  ]
+}

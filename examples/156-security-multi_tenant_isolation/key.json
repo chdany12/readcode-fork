@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/videoUploadService.ts",
+        "startLine": 37,
+        "endLine": 37
+      }
+    },
+    2,
+    1,
+    2
+  ],
+  "explanations": [
+    "complete checks objectKey.startsWith(tenantId) without the trailing '/'. Tenant ids that are prefixes of each other pass the check: tenant \"acme\" can submit \"acme-studios/raw/<id>.mp4\", a key in another tenant's namespace. Its video row then points at the other tenant's object, and the transcode job reads it, so the other tenant's video ends up in acme's library. The check should be startsWith(`${tenantId}/`), or better, compare against the object_key stored by begin and ignore the client's value.",
+    "The key passes the namespace check, and if the object exists head succeeds. The UPDATE filters on id = $1 AND tenant_id = $2, and B's video doesn't have tenant_id A, so rowCount is 0 and UploadError(409) is thrown. head takes only a key and has no tenant scoping.",
+    "The UPDATE only matches rows WHERE status = 'uploading'. After the first call sets status to 'processing', the second UPDATE affects 0 rows, so it throws 409 before enqueueTranscode runs. Nothing is overwritten, and the object still exists, so it is not a 404.",
+    "The middleware resolves x-api-key with resolveTenant and stores the result in res.locals.tenantId, and both handlers pass that value to the service. The body has no tenantId field, objectKey is only checked against the tenant, and the row lookup filters on a tenant it has already been given."
+  ]
+}

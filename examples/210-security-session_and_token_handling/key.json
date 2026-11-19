@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/sessionResolver.ts",
+        "startLine": 37,
+        "endLine": 39
+      }
+    },
+    3,
+    0,
+    1
+  ],
+  "explanations": [
+    "The cache hit path only checks how long ago the entry was cached, not record.expiresAt. A session cached shortly before it expires keeps authenticating for up to five more minutes after its expiry. The store path checks expiresAt <= t, but the cache path skips it. The cache hit should also require cached.record.expiresAt > t.",
+    "revoke() clears only A's in-memory Map and the store. B's resolve() returns from its own cache while t - cachedAt < CACHE_TTL_MS, without consulting the store. Nothing propagates revocation to other instances, logout does not touch cookies, and there is no consistency check that would cause a 500.",
+    "Map iterates keys in insertion order, so keys().next().value is the oldest insertion. Cache hits do not re-insert, so it is FIFO, not LRU; expiry and randomness play no role.",
+    "search() passes principal.tenantId, taken from the server-side session, into backend.query. Tenant scoping does not depend on the index name or the limit, and the cookie only carries the sid."
+  ]
+}

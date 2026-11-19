@@ -1,0 +1,37 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.data.n_plus_one_queries",
+      "count": 4
+    },
+    {
+      "label": "backend.data.orm_pitfalls",
+      "count": 3
+    },
+    {
+      "label": "backend.security.authorization_checks",
+      "count": 3
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "count": 2
+    },
+    {
+      "label": "backend.security.multi_tenant_isolation",
+      "count": 2
+    },
+    {
+      "label": "backend.data.migrations",
+      "count": 2
+    },
+    {
+      "label": "backend.caching.cache_invalidation",
+      "count": 2
+    },
+    {
+      "label": "backend.api.rest_design",
+      "count": 2
+    }
+  ]
+}

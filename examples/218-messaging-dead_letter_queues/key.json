@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/confirmationConsumer.ts",
+        "startLine": 88,
+        "endLine": 91
+      }
+    },
+    1,
+    2,
+    3
+  ],
+  "explanations": [
+    "In deadLetter, the DLQ publish is not awaited: the promise is started, its failure is only logged, and msg.ack() runs immediately. If the DLQ publish fails (broker hiccup, oversized attributes) or the process dies before it completes, the original message has already been acked and removed, so the confirmation is lost with only a log line. The publish should be awaited and the message acked only after it succeeds (or nacked on failure so the broker redelivers).",
+    "attempt >= MAX_ATTEMPTS (5 >= 5) is true, so deadLetter is called with reason \"exhausted\". Retry republishing only happens for attempts below 5; nack is never used in this code; and the message is routed to the DLQ topic rather than silently dropped.",
+    "The delay is computed and passed to log.warn, but publish() is called right away and the attributes only carry x-attempt. There is no sleep, no nack(delay), and no scheduling attribute, so retries happen back to back.",
+    "The parse block throws NonRetryableError when supplierRef is missing; the surrounding catch calls deadLetter with reason \"malformed\" and returns, so the handler is never invoked and no retries occur."
+  ]
+}

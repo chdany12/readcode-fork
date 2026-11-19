@@ -1,0 +1,65 @@
+{
+  "title": "Driver token authentication for dispatch",
+  "name": "Driver token middleware",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/requireDriver.ts",
+      "content": "import jwt, { JwtPayload, TokenExpiredError } from \"jsonwebtoken\";\nimport type { Request, Response, NextFunction } from \"express\";\nimport { DriverDirectory } from \"./driverDirectory\";\n\nexport interface DriverTokenConfig {\n  publicKey: string;\n  issuer: string;\n  audience: string;\n  clockToleranceSec: number;\n}\n\nexport interface DriverPrincipal {\n  driverId: string;\n  sessionId: string;\n}\n\nexport interface DriverRequest extends Request {\n  driver?: DriverPrincipal;\n}\n\nfunction bearerToken(req: Request): string | null {\n  const header = req.header(\"authorization\");\n  if (!header) return null;\n  const [scheme, value] = header.split(\" \");\n  if (scheme?.toLowerCase() !== \"bearer\" || !value) return null;\n  return value;\n}\n\nexport function requireDriver(cfg: DriverTokenConfig, directory: DriverDirectory) {\n  return async (req: DriverRequest, res: Response, next: NextFunction) => {\n    const token = bearerToken(req);\n    if (!token) {\n      res.setHeader(\"WWW-Authenticate\", \"Bearer\");\n      return res.status(401).json({ error: \"missing_token\" });\n    }\n\n    let claims: JwtPayload;\n    try {\n      claims = jwt.verify(token, cfg.publicKey, {\n        algorithms: [\"RS256\"],\n        issuer: cfg.issuer,\n        audience: cfg.audience,\n        clockTolerance: cfg.clockToleranceSec,\n      }) as JwtPayload;\n    } catch (err) {\n      const code = err instanceof TokenExpiredError ? \"token_expired\" : \"invalid_token\";\n      res.setHeader(\"WWW-Authenticate\", `Bearer error=\"invalid_token\"`);\n      return res.status(401).json({ error: code });\n    }\n\n    if (claims.typ !== \"driver\" || typeof claims.sub !== \"string\" || typeof claims.sid !== \"string\") {\n      return res.status(401).json({ error: \"invalid_token\" });\n    }\n\n    try {\n      const status = await directory.sessionStatus(claims.sub, claims.sid);\n      if (status !== \"active\") {\n        return res.status(401).json({ error: \"session_revoked\" });\n      }\n    } catch (err) {\n      req.log?.warn({ err }, \"driver directory unavailable\");\n      return res.status(503).json({ error: \"auth_unavailable\" });\n    }\n\n    req.driver = { driverId: claims.sub, sessionId: claims.sid };\n    next();\n  };\n}\n"
+    },
+    {
+      "path": "src/driverDirectory.ts",
+      "content": "import type { Redis } from \"ioredis\";\n\nexport type SessionStatus = \"active\" | \"revoked\" | \"unknown\";\n\nexport class DriverDirectory {\n  constructor(private readonly redis: Redis) {}\n\n  async sessionStatus(driverId: string, sessionId: string): Promise<SessionStatus> {\n    const value = await this.redis.get(`driver:${driverId}:session:${sessionId}`);\n    if (value === null) return \"unknown\";\n    return value === \"active\" ? \"active\" : \"revoked\";\n  }\n\n  async revoke(driverId: string, sessionId: string): Promise<void> {\n    await this.redis.set(`driver:${driverId}:session:${sessionId}`, \"revoked\", \"EX\", 86400);\n  }\n}\n"
+    },
+    {
+      "path": "src/server.ts",
+      "content": "import express from \"express\";\nimport { readFileSync } from \"fs\";\nimport Redis from \"ioredis\";\nimport { requireDriver, DriverRequest } from \"./requireDriver\";\nimport { DriverDirectory } from \"./driverDirectory\";\nimport { dispatch } from \"./dispatch\";\n\nconst cfg = {\n  publicKey: readFileSync(process.env.DRIVER_JWT_PUBLIC_KEY_PATH!, \"utf8\"),\n  issuer: \"https://auth.rides.internal\",\n  audience: \"dispatch-api\",\n  clockToleranceSec: 30,\n};\n\nconst directory = new DriverDirectory(new Redis(process.env.REDIS_URL!));\nconst app = express();\napp.use(express.json());\n\napp.post(\"/v1/trips/:tripId/accept\", requireDriver(cfg, directory), async (req: DriverRequest, res) => {\n  const result = await dispatch.acceptTrip(req.params.tripId, req.driver!.driverId);\n  if (!result.ok) return res.status(409).json({ error: result.reason });\n  res.json(result.trip);\n});\n\napp.post(\"/v1/drivers/me/logout\", requireDriver(cfg, directory), async (req: DriverRequest, res) => {\n  await directory.revoke(req.driver!.driverId, req.driver!.sessionId);\n  res.status(204).end();\n});\n\nexport default app;\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this service authenticates drivers? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is none. jwt.verify pins the algorithm to RS256, so tokens with alg=none or tokens HMAC-signed with the public key are rejected. It also checks issuer, audience and expiry, with only 30 seconds of clock tolerance. The middleware then requires typ=driver and string sub/sid claims, and checks the session in Redis. Sessions that are revoked or unknown are rejected, so logout takes effect right away. If Redis fails, the middleware returns 503 and never calls next()."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A rider's access token, issued by the same auth server with the same key and audience but with typ='rider', is sent to /v1/trips/:tripId/accept. What happens?",
+      "choices": [
+        "Accepted, because signature, issuer and audience all verify",
+        "Rejected by jwt.verify with token_expired",
+        "Accepted only if a matching session key exists in Redis",
+        "Rejected with 401 invalid_token by the typ check, before Redis is consulted"
+      ],
+      "answer": 3,
+      "explanation": "After jwt.verify succeeds, the middleware checks `claims.typ !== \"driver\"` and returns 401 invalid_token right away, before calling the directory. A valid signature alone is not enough. The token has not expired, so it is not token_expired, and Redis is never queried, so session state cannot affect the result."
+    },
+    {
+      "prompt": "A driver logs out and then reuses the same, unexpired access token 10 seconds later. What happens?",
+      "choices": [
+        "It works until the JWT's exp passes, since JWTs are stateless",
+        "401 session_revoked, because logout set the session key to 'revoked' and every request checks it",
+        "503, because the revoked key confuses the directory",
+        "It works for up to clockToleranceSec seconds"
+      ],
+      "answer": 1,
+      "explanation": "logout calls directory.revoke, which sets the session key to 'revoked'. On the next request, sessionStatus returns 'revoked', which is not 'active', so the middleware returns 401 session_revoked. That per-request lookup is what makes revocation take effect before exp. The clock tolerance only applies to time-based claims, and nothing here produces a 503."
+    },
+    {
+      "prompt": "What is the tradeoff of treating a missing Redis session key ('unknown') the same as 'revoked'?",
+      "choices": [
+        "Valid tokens are rejected if session keys are evicted or expire before the JWT does, so availability is traded for strict revocation",
+        "Revoked drivers can keep accepting trips for 24 hours",
+        "Every request needs two Redis round trips",
+        "Expired JWTs are accepted while Redis is down"
+      ],
+      "answer": 0,
+      "explanation": "Only 'active' passes. If the session key is gone (evicted under memory pressure, or never written), a token with a good signature is still rejected. That fails closed: drivers may have to log in again, but revocation is never silently lost. Revoked keys are rejected immediately, sessionStatus makes a single GET, and when Redis is down the middleware returns 503 rather than accepting anything."
+    }
+  ],
+  "concepts": [
+    "backend.security.authentication",
+    "backend.security.session_and_token_handling",
+    "backend.api.status_codes_and_error_responses"
+  ]
+}

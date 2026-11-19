@@ -1,0 +1,64 @@
+{
+  "title": "Notification send metrics",
+  "name": "Notification dispatcher",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/metrics.ts",
+      "content": "export type Labels = Record<string, string>;\n\nfunction key(name: string, labels: Labels): string {\n  const parts = Object.keys(labels).sort().map((k) => `${k}=\"${labels[k]}\"`);\n  return `${name}{${parts.join(\",\")}}`;\n}\n\nexport class Counter {\n  private values = new Map<string, number>();\n  constructor(readonly name: string) {}\n  inc(labels: Labels, by = 1): void {\n    const k = key(this.name, labels);\n    this.values.set(k, (this.values.get(k) ?? 0) + by);\n  }\n  snapshot(): Map<string, number> {\n    return new Map(this.values);\n  }\n}\n\nexport class Gauge {\n  private values = new Map<string, number>();\n  constructor(readonly name: string) {}\n  inc(labels: Labels): void {\n    const k = key(this.name, labels);\n    this.values.set(k, (this.values.get(k) ?? 0) + 1);\n  }\n  dec(labels: Labels): void {\n    const k = key(this.name, labels);\n    this.values.set(k, (this.values.get(k) ?? 0) - 1);\n  }\n  snapshot(): Map<string, number> {\n    return new Map(this.values);\n  }\n}\n\nexport class Histogram {\n  private series = new Map<string, { buckets: number[]; sum: number; count: number }>();\n  constructor(readonly name: string, readonly bounds: number[]) {}\n  observe(labels: Labels, value: number): void {\n    const k = key(this.name, labels);\n    let s = this.series.get(k);\n    if (!s) {\n      s = { buckets: this.bounds.map(() => 0), sum: 0, count: 0 };\n      this.series.set(k, s);\n    }\n    this.bounds.forEach((b, i) => {\n      if (value <= b) s!.buckets[i] += 1;\n    });\n    s.sum += value;\n    s.count += 1;\n  }\n  seriesCount(): number {\n    return this.series.size;\n  }\n}\n"
+    },
+    {
+      "path": "src/notificationDispatcher.ts",
+      "content": "import { Counter, Gauge, Histogram } from \"./metrics\";\n\nexport type Channel = \"sms\" | \"email\" | \"push\";\n\nexport interface Notification {\n  id: string;\n  userId: string;\n  channel: Channel;\n  body: string;\n}\n\nexport interface ChannelProvider {\n  send(n: Notification): Promise<{ providerMessageId: string }>;\n}\n\nexport class ProviderRejectedError extends Error {\n  constructor(readonly code: string, message: string) {\n    super(message);\n  }\n}\n\nconst inFlight = new Gauge(\"notifications_in_flight\");\nconst sendLatency = new Histogram(\"notification_send_seconds\", [0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]);\nconst sendResults = new Counter(\"notification_send_total\");\n\nexport class NotificationDispatcher {\n  constructor(private readonly providers: Record<Channel, ChannelProvider>) {}\n\n  async deliver(n: Notification): Promise<string> {\n    const provider = this.providers[n.channel];\n    const labels = { channel: n.channel };\n    const started = performance.now();\n\n    inFlight.inc(labels);\n    try {\n      const { providerMessageId } = await provider.send(n);\n      inFlight.dec(labels);\n      sendResults.inc({ channel: n.channel, result: \"sent\" });\n      return providerMessageId;\n    } catch (err) {\n      const result = err instanceof ProviderRejectedError ? \"rejected\" : \"failed\";\n      sendResults.inc({ channel: n.channel, result });\n      throw err;\n    } finally {\n      sendLatency.observe(labels, (performance.now() - started) / 1000);\n    }\n  }\n\n  async deliverAll(batch: Notification[], concurrency = 8): Promise<PromiseSettledResult<string>[]> {\n    const results: PromiseSettledResult<string>[] = new Array(batch.length);\n    let next = 0;\n    const worker = async () => {\n      while (next < batch.length) {\n        const i = next++;\n        try {\n          results[i] = { status: \"fulfilled\", value: await this.deliver(batch[i]) };\n        } catch (reason) {\n          results[i] = { status: \"rejected\", reason };\n        }\n      }\n    };\n    await Promise.all(Array.from({ length: Math.min(concurrency, batch.length) }, worker));\n    return results;\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/notificationDispatcher.ts",
+    "snippet": "      const { providerMessageId } = await provider.send(n);\n      inFlight.dec(labels);"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how NotificationDispatcher maintains its send metrics? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "inFlight.dec is only called after a successful provider.send. When send throws (rejected or failed), the catch and finally blocks never decrement the gauge, so notifications_in_flight drifts upward by one per failure and never returns to zero. During a provider outage the gauge climbs steadily, triggering false saturation alerts and hiding the real concurrency. The decrement belongs in the finally block."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "The email provider throws a ProviderRejectedError. Which value of the result label is counted?",
+      "choices": [
+        "\"failed\"",
+        "\"rejected\"",
+        "\"sent\"",
+        "None; rejections are not counted"
+      ],
+      "answer": 1,
+      "explanation": "The catch block checks err instanceof ProviderRejectedError and uses \"rejected\". \"failed\" is for other errors, and \"sent\" only on success."
+    },
+    {
+      "prompt": "deliverAll is called with 3 notifications and the default concurrency. How many workers run?",
+      "choices": [
+        "8",
+        "1",
+        "3",
+        "Unbounded; one per notification plus spares"
+      ],
+      "answer": 2,
+      "explanation": "The worker count is Math.min(concurrency, batch.length) = min(8, 3) = 3."
+    },
+    {
+      "prompt": "Is next++ inside the workers safe from two workers taking the same index?",
+      "choices": [
+        "No, two workers can read the same value of next concurrently",
+        "Yes, but only because concurrency is capped at 8",
+        "No, Promise.all runs workers in parallel threads",
+        "Yes: JavaScript runs each synchronous segment to completion, so the read-and-increment cannot interleave"
+      ],
+      "answer": 3,
+      "explanation": "The check and next++ run synchronously between awaits on a single thread, so no other worker can observe the same index. Promise.all does not create threads, and the cap does not matter to safety."
+    }
+  ],
+  "concepts": [
+    "backend.observability.metrics",
+    "backend.errors.cleanup_on_error_paths",
+    "backend.concurrency.thread_and_worker_pools"
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "title": "Per-merchant token bucket for charge creation",
+  "name": "Merchant charge limiter",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/merchantRateLimiter.ts",
+      "content": "export interface BucketConfig {\n  capacity: number;\n  refillPerSecond: number;\n}\n\ninterface Bucket {\n  tokens: number;\n  lastRefillMs: number;\n}\n\nexport type Decision =\n  | { allowed: true; remaining: number }\n  | { allowed: false; retryAfterSeconds: number };\n\nexport class MerchantRateLimiter {\n  private readonly buckets = new Map<string, Bucket>();\n\n  constructor(\n    private readonly config: BucketConfig,\n    private readonly now: () => number = Date.now,\n  ) {}\n\n  tryConsume(merchantId: string, cost = 1): Decision {\n    const nowMs = this.now();\n    let bucket = this.buckets.get(merchantId);\n    if (!bucket) {\n      bucket = { tokens: this.config.capacity, lastRefillMs: nowMs };\n      this.buckets.set(merchantId, bucket);\n    }\n\n    const elapsedSec = (nowMs - bucket.lastRefillMs) / 1000;\n    bucket.tokens = bucket.tokens + elapsedSec * this.config.refillPerSecond;\n    bucket.lastRefillMs = nowMs;\n\n    if (bucket.tokens >= cost) {\n      bucket.tokens -= cost;\n      return { allowed: true, remaining: Math.floor(bucket.tokens) };\n    }\n\n    const deficit = cost - bucket.tokens;\n    return {\n      allowed: false,\n      retryAfterSeconds: Math.ceil(deficit / this.config.refillPerSecond),\n    };\n  }\n\n  evictIdle(maxIdleMs: number): number {\n    const cutoff = this.now() - maxIdleMs;\n    let removed = 0;\n    for (const [id, b] of this.buckets) {\n      if (b.lastRefillMs < cutoff) {\n        this.buckets.delete(id);\n        removed++;\n      }\n    }\n    return removed;\n  }\n}\n"
+    },
+    {
+      "path": "src/chargeRoute.ts",
+      "content": "import { MerchantRateLimiter } from \"./merchantRateLimiter\";\n\nexport interface ChargeRequest {\n  merchantId: string;\n  idempotencyKey: string;\n  amountMinor: number;\n  currency: string;\n  lineItems: number;\n}\n\nexport interface Processor {\n  charge(req: ChargeRequest): Promise<{ chargeId: string }>;\n}\n\ntype HttpResult = { status: number; headers?: Record<string, string>; body: unknown };\n\nconst limiter = new MerchantRateLimiter({ capacity: 50, refillPerSecond: 10 });\n\nsetInterval(() => limiter.evictIdle(10 * 60_000), 60_000).unref();\n\nexport async function createCharge(\n  req: ChargeRequest,\n  processor: Processor,\n): Promise<HttpResult> {\n  if (!req.idempotencyKey) {\n    return { status: 400, body: { error: \"idempotency_key_required\" } };\n  }\n\n  const cost = req.lineItems > 20 ? 2 : 1;\n  const decision = limiter.tryConsume(req.merchantId, cost);\n\n  if (!decision.allowed) {\n    return {\n      status: 429,\n      headers: { \"Retry-After\": String(decision.retryAfterSeconds) },\n      body: { error: \"rate_limited\" },\n    };\n  }\n\n  try {\n    const { chargeId } = await processor.charge(req);\n    return {\n      status: 201,\n      headers: { \"X-RateLimit-Remaining\": String(decision.remaining) },\n      body: { chargeId },\n    };\n  } catch {\n    return { status: 502, body: { error: \"processor_error\" } };\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/merchantRateLimiter.ts",
+    "snippet": "bucket.tokens = bucket.tokens + elapsedSec * this.config.refillPerSecond;"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code limits charge requests per merchant? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The refill adds elapsedSec * refillPerSecond to tokens without capping at config.capacity. A merchant that is quiet for a while (but not long enough to be evicted, under 10 minutes) accumulates tokens without bound: after 5 idle minutes it has 50 + 3000 tokens and can fire ~3000 charges in a burst, defeating the 50-request burst limit. The refill should be Math.min(capacity, tokens + elapsed * rate)."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A merchant sends a charge with 30 line items when its bucket holds 1.5 tokens and refillPerSecond is 10. What does the route return?",
+      "choices": [
+        "429 with Retry-After: 1",
+        "201, since 1.5 rounds up to 2 tokens",
+        "429 with Retry-After: 0",
+        "201 with X-RateLimit-Remaining: 0 and the bucket going negative"
+      ],
+      "answer": 0,
+      "explanation": "30 line items cost 2. With 1.5 tokens (assuming no further refill), tokens >= cost is false, deficit is 0.5 and Math.ceil(0.5 / 10) = Math.ceil(0.05) = 1, so 429 with Retry-After: 1. Tokens are not rounded before the comparison, Math.ceil never yields 0 for a positive deficit, and a denied request does not subtract tokens."
+    },
+    {
+      "prompt": "The service runs as 4 Node.js instances behind a round-robin load balancer. What is the effective sustained charge rate allowed per merchant?",
+      "choices": [
+        "10 per second, because buckets are keyed by merchantId",
+        "2.5 per second, since traffic is split across instances",
+        "About 40 per second, because each instance keeps its own in-memory bucket",
+        "Unlimited, since the Map is recreated on every request"
+      ],
+      "answer": 2,
+      "explanation": "The limiter is a module-level object holding an in-process Map, so each instance has independent buckets for the same merchant. With requests spread across 4 instances, each allows 10/s, about 40/s overall. The key alone does not share state across processes, nothing divides the rate, and the Map is created once per process, not per request."
+    },
+    {
+      "prompt": "A charge passes the limiter but the processor call throws. What happens to the merchant's tokens?",
+      "choices": [
+        "They are refunded in the catch block",
+        "They remain spent; the failed attempt still counts against the limit",
+        "They are doubled to compensate on the next request",
+        "The bucket is evicted so the merchant starts fresh"
+      ],
+      "answer": 1,
+      "explanation": "tryConsume subtracts cost before processor.charge is called, and the catch block only returns 502; it never touches the limiter. So the tokens stay spent. There is no refund or compensation logic, and eviction only happens in the periodic evictIdle sweep for buckets idle over 10 minutes."
+    }
+  ],
+  "concepts": [
+    "backend.resilience.rate_limiting",
+    "backend.api.status_codes_and_error_responses"
+  ]
+}

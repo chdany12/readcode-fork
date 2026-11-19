@@ -9,7 +9,7 @@ export default async function ExamplePage({ params }: PageProps<"/examples/[name
     if (!example) notFound();
 
     return (
-        <div className="flex h-screen flex-col font-mono text-sm">
+        <div className="flex min-h-0 flex-1 flex-col font-mono text-sm">
             <header className="flex items-baseline gap-3 border-b border-neutral-400 px-3 py-2">
                 <Link href="/" className="underline">← examples</Link>
                 <span className="font-bold">{example.public.title}</span>

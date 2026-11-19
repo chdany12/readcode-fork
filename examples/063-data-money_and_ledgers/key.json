@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/wireTransferService.ts",
+        "startLine": 34,
+        "endLine": 34
+      }
+    },
+    1,
+    1,
+    2
+  ],
+  "explanations": [
+    "splitFee floors each partner's share independently and never assigns the leftover minor units. Whenever the fee does not divide evenly by the weights (e.g. a 101-cent fee split 1:1:1 gives 33+33+33=99), the fee postings sum to less than the fee debited from the sender. assertBalanced then throws UnbalancedEntryError, so those wires fail outright. The remainder must be allocated (e.g. to the largest share or the last partner) so the shares sum exactly to the fee.",
+    "30,001 * 25 / 10,000 = 75.0025, and Math.ceil rounds it up to 76, which exceeds the 50 minimum. 75 would require floor/round; 50 applies only when the percentage is lower; 75.0025 is impossible because the result is ceiled to an integer.",
+    "A +100 USD and a -100 EUR posting would sum to zero numerically but are not balanced; checking each currency separately enforces double-entry per unit. It is not about performance, the store interface places no per-currency restriction, and no tolerance is allowed (sum must be exactly 0).",
+    "The balance is read, then the entry appended later, with no lock, hold, or conditional write between them; both calls can read the same pre-transfer balance. assertBalanced only checks that postings sum to zero, not account balances, and nothing in LedgerStore implies serialization."
+  ]
+}

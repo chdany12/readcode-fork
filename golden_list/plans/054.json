@@ -1,0 +1,25 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.api.rest_design",
+      "count": 7
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "count": 7
+    },
+    {
+      "label": "backend.observability.metrics",
+      "count": 2
+    },
+    {
+      "label": "backend.design.interface_design",
+      "count": 2
+    },
+    {
+      "label": "backend.integrations.third_party_adapters",
+      "count": 2
+    }
+  ]
+}

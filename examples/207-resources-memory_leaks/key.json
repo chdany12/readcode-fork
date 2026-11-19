@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/outcomeWaiter.ts",
+        "startLine": 24,
+        "endLine": 26
+      }
+    },
+    1,
+    3,
+    0
+  ],
+  "explanations": [
+    "When a wait times out, the timer rejects the promise but never removes the waiter from `this.waiters`. If the processor never emits an outcome for that payment (lost webhook, submit failure, abandoned checkout), the entry and its resolve/reject closures stay in the map forever. Over time `waiters` grows without bound (visible via `pendingCount`). The timeout callback should remove its waiter from the list and delete the key when the list is empty.",
+    "`deliver` calls `remember` before looking for waiters, and `wait` checks `this.recent` first, returning `Promise.resolve(known)`. Entries are evicted once more than `recentLimit` outcomes arrive, hence the qualifier. Nothing throws or resolves with undefined.",
+    "Map preserves insertion order; deleting then setting moves the id to the end, and `keys().next()` returns the oldest, which is deleted when size exceeds `recentLimit`. There is no time-based eviction or full clear, and waiters are unrelated.",
+    "If the outcome event fired during `submit`, a later `wait` could still find it in `recent`, but registering first avoids depending on that cache. When submit throws, nobody awaits `outcomeP`, so its eventual timeout rejection would be unhandled; attaching a no-op catch prevents that. It does not cancel timers, retry, lock, or log."
+  ]
+}

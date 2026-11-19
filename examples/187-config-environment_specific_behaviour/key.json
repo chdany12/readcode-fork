@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/envProfile.ts",
+        "startLine": 34,
+        "endLine": 34
+      }
+    },
+    3,
+    0,
+    1
+  ],
+  "explanations": [
+    "Staging reads patient data from a production snapshot (prod-snapshot) and sends through the real Twilio provider, but the redirect condition leaves staging out, so redirectSmsTo stays null there. ReminderService then texts appt.patientPhone, which means staging sends reminders, with a 1-hour lead time and for appointments that may not exist anymore, to real patients' phones. Staging should be redirected too; only production should set redirectSmsTo to null.",
+    "resolveEnv maps undefined and \"\" to \"development\". buildProfile then picks synthetic data and the console provider. Only unrecognized non-empty values throw, and nothing defaults to staging or production.",
+    "reminderLeadHours is 24 in production, and due() keeps appointments where now < startsAt <= now + 24h. Past ones are left out by the > now check. The 1-hour window applies to other environments, and the range is a window, not a single moment.",
+    "The default branch of resolveEnv throws for any value it does not recognize, so a typo stops startup instead of quietly picking an environment. Only undefined and \"\" fall back to development."
+  ]
+}

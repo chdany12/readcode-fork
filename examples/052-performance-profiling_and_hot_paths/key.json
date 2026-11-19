@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/rankOffers.ts",
+        "startLine": 22,
+        "endLine": 22
+      }
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "`cheapest` is recomputed inside `offers.map`, building a new array of all prices and scanning it for every offer, so ranking is O(n^2) in allocations and work. With a few thousand offers from aggregated suppliers this dominates `fares.rank_ms` and blocks the event loop; spreading a very large array into Math.min can also throw a RangeError. It should be computed once before the map, like `fastest`.",
+    "The AbortController is aborted after 2500ms and its signal is passed to every `client.search`. A client that honours it rejects, `allSettled` records the rejection, and `partial` becomes true. allSettled never throws on rejection, and it waits for all promises to settle, not just the first.",
+    "`fares.rank_ms` wraps exactly the `rankOffers` call, so comparing it with total_ms isolates ranking cost. `fares.offers` is a count, not a timing; supplier timings are flat by assumption; total_ms is a single aggregate.",
+    "`score *= 0.95` lowers the score, and results sort ascending by score, so preferred offers win close calls but not large gaps. There is no forced-first logic, no \"preferred\" badge, and the price itself is not changed."
+  ]
+}

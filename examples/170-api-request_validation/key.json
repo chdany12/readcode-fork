@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/searchParams.ts",
+        "startLine": 23,
+        "endLine": 23
+      }
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "The limit check `if (limit < 1 || limit > MAX_PAGE_SIZE)` does not reject NaN. parseInt('abc', 10) or parseInt('', 10) returns NaN, and every comparison with NaN is false, so the value passes validation and NaN is sent to the engine as `size` (serialized as null in JSON), producing a 500 or an engine default instead of a 400. The offset check avoids this with Number.isInteger; limit needs the same guard.",
+    "The loop strips the 'filter.' prefix and checks FILTERABLE_FIELDS; 'tenant_id' is not in it, so a ValidationError with field 'filter.tenant_id' is thrown, which the route maps to 400. Unknown filters are not ignored or forwarded, and ValidationError is handled before next().",
+    "offset uses Number(), which yields 2.5, and Number.isInteger(2.5) is false, so a ValidationError is thrown and the route returns 400. No truncation or rounding happens because parseInt is not used for offset.",
+    "The first catch converts only ValidationError into a 400 with the field and message, and forwards anything else to next(). Engine failures in the second block go to next(err), not 400. There is no retry, and parseSearchParams is synchronous."
+  ]
+}

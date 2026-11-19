@@ -1,0 +1,25 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.messaging.deduplication",
+      "count": 5
+    },
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "count": 5
+    },
+    {
+      "label": "backend.resources.streaming_large_payloads",
+      "count": 4
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "count": 3
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "count": 3
+    }
+  ]
+}

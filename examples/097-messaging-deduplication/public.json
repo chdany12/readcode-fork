@@ -1,0 +1,51 @@
+{
+  "id": "6c53afed-d072-4e73-b360-3bbcba3ce2d4",
+  "title": "Deduplicating file sync change events",
+  "name": "Sync change processor",
+  "createdAt": "2026-11-15T09:41:31.634Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this service deduplicates file change events? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The broker redelivers an event that SyncIndex already applied, after the dedup entry for it has been evicted. What is the outcome?",
+      "choices": [
+        "The file is rolled back to that version",
+        "applyIfNewer updates nothing because version is not greater, so the event is logged as stale and no fan-out happens",
+        "The event is fanned out to devices a second time",
+        "An exception is thrown on the primary key conflict"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does `remember` delete the key before setting it again?",
+      "choices": [
+        "To reset the TTL without changing the Map's insertion order",
+        "To release memory held by the old Entry immediately",
+        "To move the key to the end of the Map's insertion order, so the oldest-first eviction loops stay accurate",
+        "Because Map.set throws on an existing key"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The service runs as three replicas behind a partitioned queue where each workspace always goes to the same replica. What happens to deduplication when a replica restarts?",
+      "choices": [
+        "Dedup state is lost because it lives in process memory, so redeliveries right after the restart fall through to applyIfNewer, which keeps the index correct",
+        "Dedup state is restored from Postgres on startup",
+        "Duplicates are fanned out repeatedly, because nothing else guards against them",
+        "The other replicas take over its dedup entries"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.messaging.deduplication",
+    "backend.messaging.at_least_once_delivery",
+    "backend.data.optimistic_vs_pessimistic_locking",
+    "backend.resources.unbounded_buffers"
+  ]
+}

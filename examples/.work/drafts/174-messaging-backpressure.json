@@ -1,0 +1,65 @@
+{
+  "title": "Driver location ingestion through a bounded queue",
+  "name": "Driver location ingestor",
+  "language": "TypeScript",
+  "durationMinutes": 15,
+  "files": [
+    {
+      "path": "src/boundedQueue.ts",
+      "content": "export class BoundedQueue<T> {\n  private readonly items: T[] = [];\n  private readonly waitingPutters: (() => void)[] = [];\n  private readonly waitingTakers: ((item: T) => void)[] = [];\n\n  constructor(private readonly capacity: number) {}\n\n  get size(): number {\n    return this.items.length;\n  }\n\n  async put(item: T): Promise<void> {\n    while (this.items.length >= this.capacity) {\n      await new Promise<void>((resolve) => this.waitingPutters.push(resolve));\n    }\n    const taker = this.waitingTakers.shift();\n    if (taker) {\n      taker(item);\n      return;\n    }\n    this.items.push(item);\n  }\n\n  async take(): Promise<T> {\n    const item = this.items.shift();\n    if (item !== undefined) {\n      this.waitingPutters.shift()?.();\n      return item;\n    }\n    return new Promise<T>((resolve) => this.waitingTakers.push(resolve));\n  }\n}\n"
+    },
+    {
+      "path": "src/driverLocationIngestor.ts",
+      "content": "import { BoundedQueue } from \"./boundedQueue\";\n\nexport interface DriverPing {\n  driverId: string;\n  lat: number;\n  lng: number;\n  recordedAt: number;\n}\n\nexport interface PingStream {\n  [Symbol.asyncIterator](): AsyncIterator<DriverPing>;\n}\n\nexport interface GeoIndex {\n  upsertMany(pings: DriverPing[]): Promise<void>;\n}\n\nexport interface Logger {\n  warn(msg: string, fields: Record<string, unknown>): void;\n}\n\nexport class DriverLocationIngestor {\n  private readonly queue: BoundedQueue<DriverPing>;\n  private stopped = false;\n\n  constructor(\n    private readonly geo: GeoIndex,\n    private readonly log: Logger,\n    private readonly batchSize = 200,\n    capacity = 5000,\n  ) {\n    this.queue = new BoundedQueue<DriverPing>(capacity);\n  }\n\n  async readFrom(stream: PingStream): Promise<void> {\n    for await (const ping of stream) {\n      if (this.stopped) break;\n      if (Date.now() - ping.recordedAt > 30_000) continue;\n      this.queue.put(ping).catch((err) =>\n        this.log.warn(\"enqueue failed\", { driverId: ping.driverId, err: String(err) }),\n      );\n    }\n  }\n\n  async runWriter(): Promise<void> {\n    while (!this.stopped) {\n      const batch: DriverPing[] = [await this.queue.take()];\n      while (batch.length < this.batchSize && this.queue.size > 0) {\n        batch.push(await this.queue.take());\n      }\n      try {\n        await this.geo.upsertMany(dedupeLatest(batch));\n      } catch (err) {\n        this.log.warn(\"geo upsert failed\", { count: batch.length, err: String(err) });\n      }\n    }\n  }\n\n  stop(): void {\n    this.stopped = true;\n  }\n}\n\nfunction dedupeLatest(pings: DriverPing[]): DriverPing[] {\n  const latest = new Map<string, DriverPing>();\n  for (const p of pings) {\n    const prev = latest.get(p.driverId);\n    if (!prev || prev.recordedAt < p.recordedAt) latest.set(p.driverId, p);\n  }\n  return [...latest.values()];\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/driverLocationIngestor.ts",
+    "snippet": "      this.queue.put(ping).catch((err) =>"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code keeps a slow geo index from being overwhelmed by incoming driver pings? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The defect is in readFrom: this.queue.put(ping) is not awaited. put() correctly waits while the queue is full, but because the reader never waits on it, the for-await loop keeps pulling pings from the stream at full speed. Each blocked put() leaves a pending promise and a closure holding the ping in waitingPutters, so when the geo index slows down, memory grows without bound and the stream is never slowed. The fix is to await this.queue.put(ping) (inside a try/catch) so the reader stops pulling when the queue is full."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "In BoundedQueue, a put() arrives while a take() is already waiting on an empty queue. What happens?",
+      "choices": [
+        "The item is pushed to items and the taker is woken on the next put",
+        "The item goes straight to the waiting taker without touching items",
+        "The put waits until capacity is available",
+        "The taker resolves with undefined"
+      ],
+      "answer": 1,
+      "explanation": "put() checks waitingTakers.shift() after the capacity loop; if a taker exists it is called with the item and put returns, so items is never touched. Nothing is pushed to items, the queue is not full so put does not wait, and the taker receives the actual item, not undefined."
+    },
+    {
+      "prompt": "Within a single batch, driver D1 has three pings with recordedAt 100, 300 and 200. What is sent to upsertMany for D1?",
+      "choices": [
+        "All three pings, in arrival order",
+        "Only the ping with recordedAt 200, since it arrived last",
+        "Only the ping with recordedAt 300",
+        "Only the ping with recordedAt 100"
+      ],
+      "answer": 2,
+      "explanation": "dedupeLatest keeps one ping per driverId and replaces it only when prev.recordedAt < p.recordedAt, so the newest timestamp (300) wins regardless of arrival order. It never sends duplicates, and it does not prefer the last-arrived or the first ping."
+    },
+    {
+      "prompt": "upsertMany throws for a batch. What happens to those pings and to the writer loop?",
+      "choices": [
+        "The pings are dropped after a warning and the loop continues with the next batch",
+        "The batch is put back on the queue and retried",
+        "The writer loop exits and ingestion stops",
+        "The error propagates and rejects runWriter's promise"
+      ],
+      "answer": 0,
+      "explanation": "The try/catch around upsertMany only logs a warning; the batch is not re-queued, and the while loop moves on to the next take(). For location pings this is a deliberate tradeoff since a newer ping will soon replace them. Nothing re-enqueues, and the catch prevents the error from ending the loop or rejecting runWriter."
+    }
+  ],
+  "concepts": [
+    "backend.messaging.backpressure",
+    "backend.resources.unbounded_buffers",
+    "backend.concurrency.async_await_pitfalls",
+    "backend.messaging.queues_and_consumers"
+  ]
+}

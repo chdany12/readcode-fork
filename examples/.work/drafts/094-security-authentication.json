@@ -1,0 +1,68 @@
+{
+  "title": "Storefront customer login with lockout",
+  "name": "Storefront customer login",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/auth/loginService.ts",
+      "content": "import bcrypt from \"bcrypt\";\nimport { CustomerRepository, Customer } from \"./customerRepository\";\nimport { TokenIssuer } from \"./tokens\";\n\nconst MAX_FAILED_ATTEMPTS = 5;\nconst LOCKOUT_MS = 15 * 60 * 1000;\nconst DUMMY_HASH = \"$2b$12$C6UzMDM.H6dfI/f/IKcEeO5V1rM3a7xJ0wQyO7dJ8b2y6n0aHhW1e\";\n\nexport type LoginResult =\n  | { ok: true; accessToken: string; refreshToken: string }\n  | { ok: false; reason: \"invalid_credentials\" | \"locked\" };\n\nexport class StorefrontLoginService {\n  constructor(\n    private readonly customers: CustomerRepository,\n    private readonly tokens: TokenIssuer,\n    private readonly now: () => number = Date.now\n  ) {}\n\n  async login(email: string, password: string): Promise<LoginResult> {\n    const normalized = email.trim().toLowerCase();\n    const customer = await this.customers.findByEmail(normalized);\n\n    if (!customer) {\n      await bcrypt.compare(password, DUMMY_HASH);\n      return { ok: false, reason: \"invalid_credentials\" };\n    }\n\n    const matches = await bcrypt.compare(password, customer.passwordHash);\n\n    if (matches) {\n      await this.customers.resetFailedAttempts(customer.id);\n      return this.issue(customer);\n    }\n\n    if (this.isLocked(customer)) {\n      return { ok: false, reason: \"locked\" };\n    }\n\n    const attempts = await this.customers.incrementFailedAttempts(customer.id);\n    if (attempts >= MAX_FAILED_ATTEMPTS) {\n      await this.customers.lockUntil(customer.id, new Date(this.now() + LOCKOUT_MS));\n      return { ok: false, reason: \"locked\" };\n    }\n    return { ok: false, reason: \"invalid_credentials\" };\n  }\n\n  private isLocked(customer: Customer): boolean {\n    return customer.lockedUntil !== null && customer.lockedUntil.getTime() > this.now();\n  }\n\n  private async issue(customer: Customer): Promise<LoginResult> {\n    const accessToken = await this.tokens.signAccess({ sub: customer.id, scope: \"orders\" });\n    const refreshToken = await this.tokens.createRefresh(customer.id);\n    return { ok: true, accessToken, refreshToken };\n  }\n}\n"
+    },
+    {
+      "path": "src/auth/customerRepository.ts",
+      "content": "import type { Pool } from \"pg\";\n\nexport interface Customer {\n  id: string;\n  email: string;\n  passwordHash: string;\n  lockedUntil: Date | null;\n}\n\nexport class CustomerRepository {\n  constructor(private readonly pool: Pool) {}\n\n  async findByEmail(email: string): Promise<Customer | null> {\n    const { rows } = await this.pool.query(\n      \"SELECT id, email, password_hash, locked_until FROM customers WHERE email = $1\",\n      [email]\n    );\n    if (rows.length === 0) return null;\n    return {\n      id: rows[0].id,\n      email: rows[0].email,\n      passwordHash: rows[0].password_hash,\n      lockedUntil: rows[0].locked_until,\n    };\n  }\n\n  async incrementFailedAttempts(id: string): Promise<number> {\n    const { rows } = await this.pool.query(\n      \"UPDATE customers SET failed_attempts = failed_attempts + 1 WHERE id = $1 RETURNING failed_attempts\",\n      [id]\n    );\n    return rows[0].failed_attempts;\n  }\n\n  async resetFailedAttempts(id: string): Promise<void> {\n    await this.pool.query(\n      \"UPDATE customers SET failed_attempts = 0, locked_until = NULL WHERE id = $1\",\n      [id]\n    );\n  }\n\n  async lockUntil(id: string, until: Date): Promise<void> {\n    await this.pool.query(\n      \"UPDATE customers SET locked_until = $2, failed_attempts = 0 WHERE id = $1\",\n      [id, until]\n    );\n  }\n}\n"
+    },
+    {
+      "path": "src/auth/routes.ts",
+      "content": "import { Router } from \"express\";\nimport { StorefrontLoginService } from \"./loginService\";\n\nexport function authRoutes(login: StorefrontLoginService): Router {\n  const router = Router();\n\n  router.post(\"/auth/login\", async (req, res, next) => {\n    const { email, password } = req.body ?? {};\n    if (typeof email !== \"string\" || typeof password !== \"string\") {\n      return res.status(400).json({ error: \"email_and_password_required\" });\n    }\n    try {\n      const result = await login.login(email, password);\n      if (!result.ok) {\n        const status = result.reason === \"locked\" ? 423 : 401;\n        return res.status(status).json({ error: result.reason });\n      }\n      res.json({ accessToken: result.accessToken, refreshToken: result.refreshToken });\n    } catch (err) {\n      next(err);\n    }\n  });\n\n  return router;\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/auth/loginService.ts",
+    "snippet": "    if (matches) {\n      await this.customers.resetFailedAttempts(customer.id);\n      return this.issue(customer);\n    }"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this login flow authenticates customers? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The password match is handled before the lockout check. While an account is locked, a wrong guess returns \"locked\", but a correct guess still issues tokens and clears the lock. So the lockout never stops a brute-force attack: the attacker keeps guessing during the lock, and the response for the right password is different (200 with tokens instead of 423). The isLocked check must run before the password comparison, or at least before tokens are issued."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Why does the service run bcrypt.compare against DUMMY_HASH when no customer matches the email?",
+      "choices": [
+        "To make the unknown-email response take about as long as a wrong-password response, so timing does not reveal which emails are registered",
+        "To warm up the bcrypt worker pool for the next request",
+        "To increment a global failed-attempt counter",
+        "To verify that the bcrypt library is configured with cost 12"
+      ],
+      "answer": 0,
+      "explanation": "bcrypt is deliberately slow. Without the dummy compare, unknown emails would return almost instantly while known emails pay the bcrypt cost, so an attacker could list registered accounts by timing responses. The dummy hash evens this out. It has nothing to do with warming a pool, no counter is touched, and nothing about the cost factor is checked."
+    },
+    {
+      "prompt": "Two wrong-password requests for the same customer arrive at the same moment, when failed_attempts is 3. What does incrementFailedAttempts return to each?",
+      "choices": [
+        "Both get 4, because each read the old value before writing",
+        "One gets 4 and the other 5, because the increment is a single atomic UPDATE ... RETURNING",
+        "Both get 5, because Postgres merges the two updates",
+        "One fails with a serialization error"
+      ],
+      "answer": 1,
+      "explanation": "`SET failed_attempts = failed_attempts + 1 ... RETURNING` runs as one statement. Postgres takes a row lock, so the second update waits and then sees the first one's result. They return 4 and 5, so the threshold is enforced correctly. There is no separate read-then-write that could lose an update, nothing merges updates, and under the default READ COMMITTED isolation this does not raise a serialization error."
+    },
+    {
+      "prompt": "A customer types 'Alice@Shop.com ' when the stored email is 'alice@shop.com'. What happens?",
+      "choices": [
+        "400 because the email has trailing whitespace",
+        "401 because the lookup is case-sensitive",
+        "Login proceeds normally because the email is trimmed and lowercased before lookup",
+        "423 because of the mismatch counts as a failed attempt"
+      ],
+      "answer": 2,
+      "explanation": "login() normalizes with `email.trim().toLowerCase()` before calling findByEmail, so it finds the stored lowercase address. The route only checks that both fields are strings, so there is no 400. Since the lookup succeeds, it is not a 401 caused by case. Nothing records a failed attempt for an email mismatch."
+    }
+  ],
+  "concepts": [
+    "backend.security.authentication",
+    "backend.concurrency.atomic_operations",
+    "backend.api.status_codes_and_error_responses"
+  ]
+}

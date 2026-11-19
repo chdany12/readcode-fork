@@ -1,0 +1,69 @@
+{
+  "title": "Payroll provider payslip import",
+  "name": "Payslip import mapper",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/providerClient.ts",
+      "content": "export interface ProviderPayslip {\n  employee_ref: string;\n  period_start: number;\n  period_end: number;\n  pay_date: number;\n  gross_cents: string;\n  net_cents: string;\n  currency: string;\n  deductions: { code: string; amount_cents: string }[];\n}\n\nexport interface ProviderPage {\n  payslips: ProviderPayslip[];\n  next_cursor: string | null;\n}\n\nexport class PayrollProviderClient {\n  constructor(private readonly baseUrl: string, private readonly apiKey: string) {}\n\n  async fetchPayslips(runId: string, cursor: string | null): Promise<ProviderPage> {\n    const url = new URL(`/v2/runs/${encodeURIComponent(runId)}/payslips`, this.baseUrl);\n    if (cursor) url.searchParams.set(\"cursor\", cursor);\n    const res = await fetch(url, {\n      headers: { authorization: `Bearer ${this.apiKey}`, accept: \"application/json\" },\n      signal: AbortSignal.timeout(10_000),\n    });\n    if (!res.ok) throw new Error(`provider responded ${res.status} for run ${runId}`);\n    return (await res.json()) as ProviderPage;\n  }\n}\n"
+    },
+    {
+      "path": "src/payslipMapper.ts",
+      "content": "import { ProviderPayslip } from \"./providerClient\";\n\nexport interface Payslip {\n  employeeId: string;\n  periodStart: Date;\n  periodEnd: Date;\n  payDate: Date;\n  grossCents: bigint;\n  netCents: bigint;\n  currency: string;\n  deductions: Map<string, bigint>;\n}\n\nfunction toCents(field: string, value: string): bigint {\n  if (!/^-?\\d+$/.test(value)) throw new Error(`${field} is not an integer string: ${value}`);\n  return BigInt(value);\n}\n\nfunction fromEpochSeconds(field: string, value: number): Date {\n  if (!Number.isInteger(value) || value <= 0) throw new Error(`${field} is not a valid epoch`);\n  return new Date(value * 1000);\n}\n\nexport function mapPayslip(p: ProviderPayslip): Payslip {\n  const deductions = new Map<string, bigint>();\n  for (const d of p.deductions ?? []) {\n    const prev = deductions.get(d.code) ?? 0n;\n    deductions.set(d.code, prev + toCents(`deduction ${d.code}`, d.amount_cents));\n  }\n  const gross = toCents(\"gross_cents\", p.gross_cents);\n  const net = toCents(\"net_cents\", p.net_cents);\n  const totalDeductions = [...deductions.values()].reduce((a, b) => a + b, 0n);\n  if (gross - totalDeductions !== net) {\n    throw new Error(`payslip for ${p.employee_ref} does not balance`);\n  }\n  return {\n    employeeId: p.employee_ref,\n    periodStart: fromEpochSeconds(\"period_start\", p.period_start),\n    periodEnd: fromEpochSeconds(\"period_end\", p.period_end),\n    payDate: new Date(p.pay_date),\n    grossCents: gross,\n    netCents: net,\n    currency: p.currency.toUpperCase(),\n    deductions,\n  };\n}\n"
+    },
+    {
+      "path": "src/importRun.ts",
+      "content": "import { PayrollProviderClient } from \"./providerClient\";\nimport { mapPayslip, Payslip } from \"./payslipMapper\";\n\nexport interface PayslipRepo {\n  upsert(runId: string, slip: Payslip): Promise<void>;\n}\n\nexport interface ImportSummary {\n  imported: number;\n  rejected: { employeeRef: string; reason: string }[];\n}\n\nexport async function importRun(\n  client: PayrollProviderClient,\n  repo: PayslipRepo,\n  runId: string,\n): Promise<ImportSummary> {\n  const summary: ImportSummary = { imported: 0, rejected: [] };\n  let cursor: string | null = null;\n  do {\n    const page = await client.fetchPayslips(runId, cursor);\n    for (const raw of page.payslips) {\n      let slip: Payslip;\n      try {\n        slip = mapPayslip(raw);\n      } catch (err) {\n        summary.rejected.push({ employeeRef: raw.employee_ref, reason: (err as Error).message });\n        continue;\n      }\n      await repo.upsert(runId, slip);\n      summary.imported++;\n    }\n    cursor = page.next_cursor;\n  } while (cursor);\n  return summary;\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/payslipMapper.ts",
+    "snippet": "    payDate: new Date(p.pay_date),"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how provider payslip fields are deserialized into the internal model? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "pay_date is an epoch value in seconds like period_start and period_end, but it is passed straight to new Date, which expects milliseconds. A pay date like 1767225600 becomes a Date in January 1970, and nothing rejects it, so every imported payslip carries a wrong pay date. It should go through fromEpochSeconds like the other two timestamps."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Why are gross_cents, net_cents and deduction amounts parsed into bigint from strings rather than read as JSON numbers?",
+      "choices": [
+        "bigint arithmetic is faster than number arithmetic",
+        "Strings avoid binary floating-point rounding and precision loss, so the balance check gross - deductions === net is exact",
+        "JSON cannot represent negative numbers",
+        "The provider sends strings only to save bytes"
+      ],
+      "answer": 1,
+      "explanation": "Money as integer strings converted with BigInt keeps exact values regardless of size, and the strict equality balance check depends on exact arithmetic. bigint is not faster, JSON supports negative numbers, and strings are not smaller."
+    },
+    {
+      "prompt": "A payslip lists two deductions with code \"PENSION\" of 5000 and 2500 cents. How does mapPayslip treat them?",
+      "choices": [
+        "The second overwrites the first, leaving 2500",
+        "It throws because codes must be unique",
+        "They are summed into a single PENSION entry of 7500",
+        "Both are kept as separate entries"
+      ],
+      "answer": 2,
+      "explanation": "The loop reads the existing value with deductions.get(d.code) ?? 0n and adds the new amount, so duplicates accumulate into 7500. Nothing overwrites, checks uniqueness, or keeps duplicate Map keys."
+    },
+    {
+      "prompt": "One payslip on page 2 of a 3-page run fails the balance check. What does importRun do?",
+      "choices": [
+        "Records it in rejected and continues importing the remaining payslips and pages",
+        "Aborts the whole run and rethrows",
+        "Skips the rest of page 2 but continues with page 3",
+        "Retries the page fetch"
+      ],
+      "answer": 0,
+      "explanation": "mapPayslip errors are caught per payslip, pushed onto summary.rejected, and the loop continues; pagination follows next_cursor regardless. Only client errors (not caught here) would abort, and there is no retry logic."
+    }
+  ],
+  "concepts": [
+    "backend.api.serialization_and_deserialization",
+    "backend.integrations.third_party_adapters",
+    "backend.data.money_and_ledgers",
+    "backend.data.pagination"
+  ]
+}

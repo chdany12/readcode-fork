@@ -1,0 +1,65 @@
+{
+  "title": "Caching open appointment slots per clinic day",
+  "name": "Clinic availability cache",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/time.ts",
+      "content": "export function clinicLocalDate(instant: Date, timeZone: string): string {\n  const parts = new Intl.DateTimeFormat(\"en-CA\", {\n    timeZone,\n    year: \"numeric\",\n    month: \"2-digit\",\n    day: \"2-digit\",\n  }).formatToParts(instant);\n  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? \"\";\n  return `${get(\"year\")}-${get(\"month\")}-${get(\"day\")}`;\n}\n"
+    },
+    {
+      "path": "src/availability.ts",
+      "content": "import { clinicLocalDate } from \"./time\";\n\nexport interface Slot {\n  slotId: string;\n  providerId: string;\n  startsAt: Date;\n  durationMin: number;\n  booked: boolean;\n}\n\nexport interface Clinic {\n  clinicId: string;\n  timeZone: string;\n}\n\nexport interface SlotRepo {\n  listForDay(clinicId: string, localDate: string): Promise<Slot[]>;\n  markBooked(slotId: string, patientId: string): Promise<Slot | null>;\n}\n\nexport interface KV {\n  get(key: string): Promise<string | null>;\n  setEx(key: string, ttlSeconds: number, value: string): Promise<void>;\n  del(key: string): Promise<void>;\n}\n\nexport class SlotTakenError extends Error {\n  constructor(slotId: string) {\n    super(`slot ${slotId} is no longer available`);\n    this.name = \"SlotTakenError\";\n  }\n}\n\nconst AVAILABILITY_TTL_SECONDS = 15 * 60;\n\nexport class AvailabilityService {\n  constructor(private readonly repo: SlotRepo, private readonly kv: KV) {}\n\n  private key(clinicId: string, localDate: string): string {\n    return `avail:${clinicId}:${localDate}`;\n  }\n\n  async openSlots(clinic: Clinic, localDate: string): Promise<Slot[]> {\n    const k = this.key(clinic.clinicId, localDate);\n    const cached = await this.kv.get(k);\n    if (cached) {\n      return (JSON.parse(cached) as Slot[]).map((s) => ({ ...s, startsAt: new Date(s.startsAt) }));\n    }\n    const slots = (await this.repo.listForDay(clinic.clinicId, localDate)).filter((s) => !s.booked);\n    await this.kv.setEx(k, AVAILABILITY_TTL_SECONDS, JSON.stringify(slots));\n    return slots;\n  }\n\n  async book(clinic: Clinic, slotId: string, patientId: string): Promise<Slot> {\n    const slot = await this.repo.markBooked(slotId, patientId);\n    if (!slot) {\n      throw new SlotTakenError(slotId);\n    }\n    const day = slot.startsAt.toISOString().slice(0, 10);\n    await this.kv.del(this.key(clinic.clinicId, day));\n    return slot;\n  }\n\n  async dayFor(clinic: Clinic, instant: Date): Promise<Slot[]> {\n    return this.openSlots(clinic, clinicLocalDate(instant, clinic.timeZone));\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/availability.ts",
+    "snippet": "    const day = slot.startsAt.toISOString().slice(0, 10);"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code keeps cached availability in sync with bookings? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "Cache keys are built from the clinic-local date (openSlots/dayFor use clinicLocalDate), but book derives the date to invalidate from the UTC ISO string. For a clinic in America/Los_Angeles, a 5:00 pm appointment is the next day in UTC, so book deletes the wrong key and the real day's entry keeps showing the booked slot as open for up to 15 minutes. Patients then try to book it and get SlotTakenError. book should use clinicLocalDate(slot.startsAt, clinic.timeZone)."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Two patients call book for the same slot at nearly the same time. Assuming markBooked is atomic in the database, what happens?",
+      "choices": [
+        "Both bookings succeed and the slot is double-booked",
+        "Both receive SlotTakenError",
+        "The second call reads the cached availability and fails silently",
+        "One succeeds; the other gets SlotTakenError because markBooked returns null"
+      ],
+      "answer": 3,
+      "explanation": "book relies on repo.markBooked, which returns null when the slot is already taken, and then throws SlotTakenError. The cache is not consulted in book at all, so it cannot cause silent failure or double booking."
+    },
+    {
+      "prompt": "What do callers of openSlots receive on a cache hit, compared to a miss?",
+      "choices": [
+        "Slots with startsAt as ISO strings on a hit and Date on a miss",
+        "Slots with startsAt as Date objects in both cases",
+        "Booked and unbooked slots on a hit, only unbooked on a miss",
+        "An empty array on a hit if the TTL has passed"
+      ],
+      "answer": 1,
+      "explanation": "On a hit, the JSON is parsed and startsAt is converted back with new Date(...). The cached array was already filtered to unbooked slots before being stored. Expired keys simply miss and fall through to the repo."
+    },
+    {
+      "prompt": "A slot's status is changed directly in the database by an admin tool that does not go through this service. How long can openSlots keep showing the old state?",
+      "choices": [
+        "Up to 15 minutes, until the key expires",
+        "Until the next book call for any clinic",
+        "Indefinitely, since keys have no expiry",
+        "Not at all; openSlots always reads from the repo"
+      ],
+      "answer": 0,
+      "explanation": "Keys are written with setEx and AVAILABILITY_TTL_SECONDS = 900, so out-of-band changes are visible after at most 15 minutes. book only deletes one specific key, keys do expire, and openSlots serves the cache when present."
+    }
+  ],
+  "concepts": [
+    "backend.caching.stale_reads",
+    "backend.caching.cache_invalidation",
+    "backend.caching.ttls_and_expiry",
+    "backend.concurrency.atomic_operations"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/roleAssignment.ts",
+        "startLine": 31,
+        "endLine": 33
+      }
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "The hierarchy check only compares the actor's rank with the target's current role, never with newRole. An admin can therefore promote any member or billing user (or themselves, since actor and target may be the same user) to owner, which is a privilege escalation. The check should also require ROLE_RANK[newRole] <= ROLE_RANK[actor.role] (or strictly less for non-owners).",
+    "changeRole first loads the actor and throws ForbiddenError(\"role_management_requires_admin\") when the actor's rank is below admin; billing is rank 2, admin is 3. The route maps ForbiddenError to 403 with the code. 404 is only for a missing actor or target, and last_owner only applies when demoting an owner.",
+    "When the target is an owner and newRole is not owner, countOwners is checked; with one owner the service throws ConflictError(\"last_owner\"), mapped to 409, before updateRole runs. The owner's own rank equals the target's, so the hierarchy check passes and does not produce 403.",
+    "The very first step is members.get(orgId, actorId); a non-member gets null and the service throws NotFoundError(\"organization not found\"), which the route maps to 404. The target lookup happens later, the route performs no separate existence check, and ROLE_RANK is never consulted for the missing actor."
+  ]
+}

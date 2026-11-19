@@ -1,0 +1,66 @@
+{
+  "title": "Shipment dispatcher and its test fakes",
+  "name": "Shipment label dispatcher",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/types.ts",
+      "content": "export interface Clock { now(): Date }\n\nexport interface LabelRequest {\n  reference: string;\n  weightGrams: number;\n  destinationPostcode: string;\n  pickupDate: string;\n}\n\nexport interface CarrierClient {\n  createLabel(req: LabelRequest): Promise<{ trackingNumber: string }>;\n}\n\nexport interface Shipment {\n  id: string;\n  weightGrams: number;\n  destinationPostcode: string;\n  trackingNumber?: string;\n  pickupDate?: string;\n  dispatchedAt?: string;\n}\n\nexport interface ShipmentRepo {\n  get(id: string): Promise<Shipment | undefined>;\n  save(s: Shipment): Promise<void>;\n}\n\nexport type DispatchResult =\n  | { status: \"not_found\" }\n  | { status: \"already_dispatched\"; trackingNumber: string }\n  | { status: \"dispatched\"; trackingNumber: string };\n"
+    },
+    {
+      "path": "src/dispatcher.ts",
+      "content": "import { Clock, CarrierClient, ShipmentRepo, Shipment, DispatchResult } from \"./types\";\n\nexport class ShipmentDispatcher {\n  constructor(\n    private readonly carrier: CarrierClient,\n    private readonly repo: ShipmentRepo,\n    private readonly clock: Clock,\n    private readonly cutoffHourUtc = 17,\n  ) {}\n\n  async dispatch(shipmentId: string): Promise<DispatchResult> {\n    const shipment = await this.repo.get(shipmentId);\n    if (!shipment) return { status: \"not_found\" };\n    if (shipment.trackingNumber) {\n      return { status: \"already_dispatched\", trackingNumber: shipment.trackingNumber };\n    }\n\n    const now = this.clock.now();\n    const pickupDate = this.pickupDateFor(now);\n\n    const label = await this.carrier.createLabel({\n      reference: shipment.id,\n      weightGrams: shipment.weightGrams,\n      destinationPostcode: shipment.destinationPostcode,\n      pickupDate,\n    });\n\n    const updated: Shipment = {\n      ...shipment,\n      trackingNumber: label.trackingNumber,\n      pickupDate,\n      dispatchedAt: now.toISOString(),\n    };\n    await this.repo.save(updated);\n    return { status: \"dispatched\", trackingNumber: label.trackingNumber };\n  }\n\n  private pickupDateFor(now: Date): string {\n    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));\n    if (now.getUTCHours() >= this.cutoffHourUtc) d.setUTCDate(d.getUTCDate() + 1);\n    return d.toISOString().slice(0, 10);\n  }\n}\n"
+    },
+    {
+      "path": "src/dispatcher.test.ts",
+      "content": "import { ShipmentDispatcher } from \"./dispatcher\";\nimport { CarrierClient, Clock, LabelRequest, Shipment, ShipmentRepo } from \"./types\";\n\nclass FixedClock implements Clock {\n  constructor(private iso: string) {}\n  now() { return new Date(this.iso); }\n}\n\nclass InMemoryShipmentRepo implements ShipmentRepo {\n  private rows = new Map<string, Shipment>();\n  seed(s: Shipment) { this.rows.set(s.id, { ...s }); }\n  async get(id: string) { const r = this.rows.get(id); return r ? { ...r } : undefined; }\n  async save(s: Shipment) { this.rows.set(s.id, { ...s }); }\n}\n\nclass RecordingCarrier implements CarrierClient {\n  readonly requests: LabelRequest[] = [];\n  private seq = 0;\n  async createLabel(req: LabelRequest) {\n    this.requests.push(req);\n    this.seq += 1;\n    return { trackingNumber: `TRK-${this.seq}` };\n  }\n}\n\nfunction setup(clockIso: string) {\n  const carrier = new RecordingCarrier();\n  const repo = new InMemoryShipmentRepo();\n  repo.seed({ id: \"sh_1\", weightGrams: 1200, destinationPostcode: \"94107\" });\n  const dispatcher = new ShipmentDispatcher(carrier, repo, new FixedClock(clockIso));\n  return { carrier, repo, dispatcher };\n}\n\ndescribe(\"ShipmentDispatcher\", () => {\n  it(\"books same-day pickup before the cutoff\", async () => {\n    const { carrier, repo, dispatcher } = setup(\"2024-03-04T16:59:00Z\");\n    const result = await dispatcher.dispatch(\"sh_1\");\n    expect(result).toEqual({ status: \"dispatched\", trackingNumber: \"TRK-1\" });\n    expect(carrier.requests).toHaveLength(1);\n    expect(carrier.requests[0].pickupDate).toBe(\"2024-03-04\");\n    expect((await repo.get(\"sh_1\"))?.trackingNumber).toBe(\"TRK-1\");\n  });\n\n  it(\"rolls pickup to the next day at the cutoff\", async () => {\n    const { carrier, dispatcher } = setup(\"2024-03-31T17:00:00Z\");\n    await dispatcher.dispatch(\"sh_1\");\n    expect(carrier.requests[0].pickupDate).toBe(\"2024-04-01\");\n  });\n\n  it(\"does not buy a second label for a dispatched shipment\", async () => {\n    const { carrier, dispatcher } = setup(\"2024-03-04T09:00:00Z\");\n    await dispatcher.dispatch(\"sh_1\");\n    const second = await dispatcher.dispatch(\"sh_1\");\n    expect(second).toEqual({ status: \"already_dispatched\", trackingNumber: \"TRK-1\" });\n    expect(carrier.requests).toHaveLength(1);\n  });\n\n  it(\"returns not_found without calling the carrier\", async () => {\n    const { carrier, dispatcher } = setup(\"2024-03-04T09:00:00Z\");\n    expect(await dispatcher.dispatch(\"missing\")).toEqual({ status: \"not_found\" });\n    expect(carrier.requests).toHaveLength(0);\n  });\n});\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how these tests use fakes to isolate the dispatcher (clock, repository, carrier)? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is none. The clock is injected and fixed per test, so the cutoff tests are deterministic. The in-memory repo copies on seed, get and save, so the test cannot pass by mutating a shared object the dispatcher also holds; the 'already dispatched' test genuinely reads back what was saved. Each test builds fresh fakes via setup(), so no state leaks between tests, and the RecordingCarrier asserts on real call counts and arguments rather than on a stubbed return alone."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Why does InMemoryShipmentRepo return copies ({ ...r }) from get and store copies in save?",
+      "choices": [
+        "To make the fake faster than a Map lookup",
+        "So the test only passes if the dispatcher actually calls save, mirroring a real database that does not share object references",
+        "Because TypeScript requires spread to satisfy the Shipment interface",
+        "To prevent the carrier fake from seeing the tracking number"
+      ],
+      "answer": 1,
+      "explanation": "A real repository returns fresh objects. If the fake returned the stored reference, mutating the object would look 'persisted' even without save. Copying keeps the fake faithful. It is not about speed, typing, or the carrier, which never sees the repo."
+    },
+    {
+      "prompt": "The second test uses 2024-03-31T17:00:00Z. What does it verify about pickupDateFor?",
+      "choices": [
+        "That 17:00 exactly is before the cutoff, so pickup stays on 03-31",
+        "That local server time zone is used",
+        "That reaching the cutoff hour rolls to the next day, including across a month boundary",
+        "That the carrier rejects past dates"
+      ],
+      "answer": 2,
+      "explanation": "The check is getUTCHours() >= cutoffHourUtc, so 17:00 counts as past cutoff; setUTCDate(+1) on March 31 yields April 1. UTC getters are used, not local time, and the carrier fake does no validation."
+    },
+    {
+      "prompt": "What would most likely happen to the cutoff tests if ShipmentDispatcher called new Date() directly instead of this.clock.now()?",
+      "choices": [
+        "They would pass or fail depending on when the suite runs",
+        "They would still be deterministic because FixedClock is passed in",
+        "They would fail to compile",
+        "They would always pass because the pickup date is computed from the shipment"
+      ],
+      "answer": 0,
+      "explanation": "The FixedClock only helps if the code under test reads time through it. Bypassing it ties the result to wall-clock time, making the tests time-dependent. It would still compile, and pickup date is derived from the current time, not from shipment data."
+    }
+  ],
+  "concepts": [
+    "backend.testing.mocking_and_fakes",
+    "backend.testing.unit_test_design",
+    "backend.design.dependency_injection",
+    "backend.testing.flaky_tests"
+  ]
+}

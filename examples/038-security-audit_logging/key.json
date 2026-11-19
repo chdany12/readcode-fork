@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/ticketService.ts",
+        "startLine": 59,
+        "endLine": 60
+      }
+    },
+    1,
+    2,
+    1
+  ],
+  "explanations": [
+    "In TicketService.apply, `const before = ticket` copies only the reference, and `Object.assign(ticket, ...)` then mutates that same object. By the time `{ ...before }` is spread for the audit call, it already holds the new values, so before and after are identical. pickChanged then finds no differing keys and every audit entry is written with empty `before` and `after` objects: the log says a status change happened but not from what to what. The fix is to snapshot first, e.g. `const before = { ...ticket }`, or build a new object instead of mutating.",
+    "apply() awaits repo.save() and then awaits audit.record(), which awaits sink.append(). A rejection propagates out of apply, so the caller sees an error, but nothing undoes the save that already happened. There is no try/catch to log-and-continue, no transaction to roll back, and no retry mechanism.",
+    "requestId is copied from the caller-supplied AuditContext and is the only field that correlates with the request. The entry id is generated fresh inside the logger, ticketId identifies the ticket (many requests touch one ticket), and timestamps are not unique per request.",
+    "escalate() checks `ticket.priority === \"urgent\"` and returns the ticket immediately, before apply() is called, so neither repo.save nor audit.record runs. No entry is produced and no error is thrown."
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/settlementService.ts",
+        "startLine": 57,
+        "endLine": 58
+      }
+    },
+    1,
+    3,
+    0
+  ],
+  "explanations": [
+    "recordRefund re-implements the percentage part of processingFee inline instead of reusing the shared rule, and the copy ignores capMinor. For an enterprise merchant whose charge fee was capped at 2_500, a large partial refund returns the uncapped percentage (for example 220 bps of 500_000 = 11_000), giving back far more fee than was ever collected and making the ledger's fee total go negative. The proportional refund fee should be derived from the charge's actual feeMinor (or from processingFee with the cap applied), not a duplicated formula.",
+    "processingFee computes round(10_000 * 290 / 10_000) = 290, then adds fixedMinor 30 for 320. The standard plan has no cap. 290 omits the fixed part, 300 is not derived from the schedule, and 2_500 is the enterprise cap.",
+    "When refundMinor equals charge.grossMinor, feeReturned is charge.feeMinor, the value actually recorded at charge time. This also means a plan change between charge and refund does not affect full refunds. The percentage formula is only used for partial refunds.",
+    "recordRefund throws when charge.merchantId !== m.id, before computing any amounts or calling ledger.append. No entry is written for either merchant."
+  ]
+}

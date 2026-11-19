@@ -1,0 +1,68 @@
+{
+  "title": "Health endpoints for an appointment scheduling API",
+  "name": "Appointment API health endpoints",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/dependencies.ts",
+      "content": "import { Pool } from \"pg\";\n\nexport interface Probe {\n  name: string;\n  check(): Promise<void>;\n}\n\nfunction withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {\n  let timer: NodeJS.Timeout;\n  return Promise.race([\n    p,\n    new Promise<T>((_, reject) => {\n      timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);\n    }),\n  ]).finally(() => clearTimeout(timer));\n}\n\nexport function postgresProbe(pool: Pool, timeoutMs: number): Probe {\n  return {\n    name: \"postgres\",\n    check: async () => {\n      await withTimeout(pool.query(\"SELECT 1\"), timeoutMs, \"postgres\");\n    },\n  };\n}\n\nexport function ehrGatewayProbe(baseUrl: string, timeoutMs: number): Probe {\n  return {\n    name: \"ehr_gateway\",\n    check: async () => {\n      const res = await fetch(`${baseUrl}/status`, { signal: AbortSignal.timeout(timeoutMs) });\n      if (!res.ok) {\n        throw new Error(`ehr_gateway returned ${res.status}`);\n      }\n    },\n  };\n}\n"
+    },
+    {
+      "path": "src/healthRoutes.ts",
+      "content": "import { Router, Request, Response } from \"express\";\nimport { Probe } from \"./dependencies\";\n\ninterface ProbeOutcome {\n  name: string;\n  ok: boolean;\n  error?: string;\n}\n\nasync function runAll(probes: Probe[]): Promise<ProbeOutcome[]> {\n  const settled = await Promise.allSettled(probes.map((p) => p.check()));\n  return settled.map((s, i) => ({\n    name: probes[i].name,\n    ok: s.status === \"fulfilled\",\n    error: s.status === \"rejected\" ? String((s.reason as Error)?.message ?? s.reason) : undefined,\n  }));\n}\n\nexport interface HealthState {\n  startedAt: number;\n  migrationsApplied: boolean;\n  draining: boolean;\n}\n\nexport function healthRouter(state: HealthState, probes: Probe[], log: (o: object) => void): Router {\n  const router = Router();\n\n  router.get(\"/health/live\", async (_req: Request, res: Response) => {\n    const outcomes = await runAll(probes.filter((p) => p.name === \"postgres\"));\n    const ok = outcomes.every((o) => o.ok);\n    if (!ok) {\n      log({ msg: \"liveness failing\", outcomes });\n    }\n    res.status(ok ? 200 : 503).json({ status: ok ? \"alive\" : \"dead\", uptimeMs: Date.now() - state.startedAt });\n  });\n\n  router.get(\"/health/ready\", async (_req: Request, res: Response) => {\n    if (state.draining || !state.migrationsApplied) {\n      res.status(503).json({ status: state.draining ? \"draining\" : \"starting\" });\n      return;\n    }\n\n    const outcomes = await runAll(probes);\n    const ok = outcomes.every((o) => o.ok);\n    if (!ok) {\n      log({ msg: \"readiness failing\", outcomes });\n    }\n    res.set(\"Cache-Control\", \"no-store\");\n    res.status(ok ? 200 : 503).json({ status: ok ? \"ready\" : \"not_ready\", checks: outcomes });\n  });\n\n  return router;\n}\n"
+    },
+    {
+      "path": "src/app.ts",
+      "content": "import express from \"express\";\nimport { Pool } from \"pg\";\nimport { ehrGatewayProbe, postgresProbe } from \"./dependencies\";\nimport { healthRouter, HealthState } from \"./healthRoutes\";\n\nexport async function startSchedulingApi(port: number): Promise<void> {\n  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 20 });\n  const state: HealthState = { startedAt: Date.now(), migrationsApplied: false, draining: false };\n  const log = (o: object) => console.log(JSON.stringify({ svc: \"appointments\", ...o }));\n\n  const probes = [\n    postgresProbe(pool, 1_000),\n    ehrGatewayProbe(process.env.EHR_GATEWAY_URL ?? \"http://ehr-gateway:8080\", 1_500),\n  ];\n\n  const app = express();\n  app.use(healthRouter(state, probes, log));\n\n  const server = app.listen(port, () => log({ msg: \"listening\", port }));\n\n  await pool.query(\"SELECT pg_advisory_lock(42)\");\n  try {\n    await pool.query(\"CREATE TABLE IF NOT EXISTS appointments (id uuid PRIMARY KEY, patient_id uuid NOT NULL, slot_start timestamptz NOT NULL)\");\n  } finally {\n    await pool.query(\"SELECT pg_advisory_unlock(42)\");\n  }\n  state.migrationsApplied = true;\n\n  process.once(\"SIGTERM\", () => {\n    state.draining = true;\n    setTimeout(() => {\n      server.close(() => pool.end().finally(() => process.exit(0)));\n    }, 10_000);\n  });\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/healthRoutes.ts",
+    "snippet": "    const outcomes = await runAll(probes.filter((p) => p.name === \"postgres\"));"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this service separates its liveness and readiness signals? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The liveness handler runs the Postgres probe and returns 503 when it fails. Liveness failures make the orchestrator restart the container, so a database blip or failover restarts every replica at once even though the processes are healthy; on restart they all reconnect and rerun the migration step together, which can prolong the outage. Dependency health belongs only in readiness (which already checks Postgres); liveness should only confirm the process itself can respond."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "During startup, before the CREATE TABLE step finishes, what does /health/ready return?",
+      "choices": [
+        "200 'ready' if Postgres and the EHR gateway respond",
+        "503 'starting' without running any probes",
+        "503 'draining'",
+        "404 because the router is not mounted yet"
+      ],
+      "answer": 1,
+      "explanation": "The router is mounted and the server listens before migrations run. readiness checks !state.migrationsApplied first and returns 503 with status 'starting' before calling runAll. 'draining' only applies after SIGTERM."
+    },
+    {
+      "prompt": "The EHR gateway returns HTTP 500 while Postgres is healthy. What does /health/ready report?",
+      "choices": [
+        "200, because only Postgres is considered",
+        "503 'not_ready' with ehr_gateway ok: false and the error message",
+        "500, because the probe threw",
+        "200 with a warning in the checks array"
+      ],
+      "answer": 1,
+      "explanation": "ehrGatewayProbe throws on a non-ok response; runAll uses Promise.allSettled and maps the rejection into ok: false with the message. Since not every outcome is ok, the handler returns 503 'not_ready'. The throw never escapes, so there is no 500."
+    },
+    {
+      "prompt": "After SIGTERM, what is the sequence of events?",
+      "choices": [
+        "The process exits immediately",
+        "Readiness returns 503 'draining' right away; after 10 seconds the HTTP server stops accepting connections, then the pool is closed and the process exits",
+        "The pool closes first, then readiness starts failing",
+        "The server closes immediately, and readiness keeps returning 200 for 10 seconds"
+      ],
+      "answer": 1,
+      "explanation": "The SIGTERM handler sets state.draining, so readiness returns 503 'draining' immediately, giving the load balancer time to stop routing. After 10_000 ms it calls server.close, and in its callback ends the pool and exits."
+    }
+  ],
+  "concepts": [
+    "backend.observability.health_checks",
+    "backend.resilience.graceful_shutdown",
+    "backend.resilience.timeouts"
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "id": "698ad941-d681-4c95-8e03-b07062ecb8e2",
+  "title": "Fare search ranking hot path",
+  "name": "Fare search ranking",
+  "createdAt": "2026-11-15T09:41:31.573Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how the ranking code scales with the number of offers on the request hot path? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "One supplier hangs and never responds. How does `searchFares` behave?",
+      "choices": [
+        "It waits indefinitely because allSettled waits for every promise",
+        "It throws, failing the whole search",
+        "After ~2.5s the abort signal fires; assuming the client honours it, that supplier rejects and the response comes back with `partial: true`",
+        "It returns immediately with only the fastest supplier's offers"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "On a latency dashboard, `fares.total_ms` p99 rises sharply while every `fares.supplier_ms` p99 stays flat. Which metric best tells you whether ranking is the cause?",
+      "choices": [
+        "fares.rank_ms, which times only the rankOffers call",
+        "fares.offers, which times the merge loop",
+        "fares.supplier_ms tagged by supplier",
+        "None; total_ms already includes everything separately"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "How do offers from a preferred carrier get treated?",
+      "choices": [
+        "They are always placed first in the results",
+        "Their score is reduced by 5%, which moves them earlier only when they are close to a better-scoring offer",
+        "They receive a \"preferred\" badge but are ranked normally",
+        "Their price is discounted 5% before computing priceRatio"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.performance.profiling_and_hot_paths",
+    "backend.observability.metrics",
+    "backend.resilience.timeouts",
+    "backend.resilience.graceful_degradation"
+  ]
+}

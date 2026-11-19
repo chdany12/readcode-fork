@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/fileVersionStore.ts",
+        "startLine": 22,
+        "endLine": 22
+      }
+    },
+    1,
+    0,
+    2
+  ],
+  "explanations": [
+    "The version sort key is built as `VER#${n}` with no zero padding. DynamoDB sorts string sort keys lexicographically, so `VER#10` sorts before `VER#9`. Once a file passes version 9, latestVersion (ScanIndexForward: false, Limit: 1) returns VER#9 instead of the real latest, and listVersions returns history out of order. The sync planner then sees remote.version < localBaseVersion and reports conflicts, or tells clients to download a stale version. Padding the number (e.g. VER#0000000010) or using a numeric sort key fixes it.",
+    "Both try to Put sk VER#5 with attribute_not_exists(pk) and HEAD with version = 4. The first commits; the second's conditions fail and the whole TransactWrite is cancelled atomically, so no partial write remains. Overwriting can't happen because of the conditions, same-partition transactions are allowed, and transactions are all-or-nothing.",
+    "Grouping items under one pk is the item-collection pattern: Query with begins_with(sk, 'VER#') reads history, and GetItem reads HEAD. Transactions can span different keys and tables, co-locating concentrates rather than spreads writes, and DynamoDB has no cascading deletes.",
+    "next = 1, and the HEAD condition is 'attribute_not_exists(pk) OR version = :expected'; for a missing item the first clause is true, so both puts succeed. It does not fail, version 0 is never written, and HEAD is always part of the transaction."
+  ]
+}

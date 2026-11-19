@@ -1,0 +1,63 @@
+{
+  "title": "Wire transfer posting with partner fee split",
+  "name": "Wire fee posting",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/ledger.ts",
+      "content": "export type Currency = \"USD\" | \"EUR\" | \"GBP\";\n\nexport interface Posting {\n  accountId: string;\n  amountMinor: number; // positive = credit, negative = debit\n  currency: Currency;\n}\n\nexport interface JournalEntry {\n  id: string;\n  description: string;\n  postings: Posting[];\n  createdAt: Date;\n}\n\nexport class UnbalancedEntryError extends Error {\n  constructor(public readonly entryId: string, public readonly imbalance: number) {\n    super(`journal entry ${entryId} is unbalanced by ${imbalance}`);\n  }\n}\n\nexport interface LedgerStore {\n  append(entry: JournalEntry): Promise<void>;\n  balanceOf(accountId: string, currency: Currency): Promise<number>;\n}\n\nexport function assertBalanced(entry: JournalEntry): void {\n  const byCurrency = new Map<Currency, number>();\n  for (const p of entry.postings) {\n    if (!Number.isSafeInteger(p.amountMinor)) {\n      throw new Error(`posting amount must be integer minor units: ${p.amountMinor}`);\n    }\n    byCurrency.set(p.currency, (byCurrency.get(p.currency) ?? 0) + p.amountMinor);\n  }\n  for (const [, sum] of byCurrency) {\n    if (sum !== 0) throw new UnbalancedEntryError(entry.id, sum);\n  }\n}\n"
+    },
+    {
+      "path": "src/wireTransferService.ts",
+      "content": "import { randomUUID } from \"crypto\";\nimport { Currency, JournalEntry, LedgerStore, Posting, assertBalanced } from \"./ledger\";\n\nexport interface FeeSchedule {\n  basisPoints: number;\n  minimumMinor: number;\n}\n\nexport interface PartnerShare {\n  accountId: string;\n  weight: number;\n}\n\nexport class InsufficientFundsError extends Error {}\n\nexport class WireTransferService {\n  constructor(\n    private readonly store: LedgerStore,\n    private readonly fees: FeeSchedule,\n    private readonly feePartners: PartnerShare[],\n  ) {\n    if (feePartners.length === 0) throw new Error(\"at least one fee partner required\");\n  }\n\n  computeFee(amountMinor: number): number {\n    const pct = Math.ceil((amountMinor * this.fees.basisPoints) / 10_000);\n    return Math.max(pct, this.fees.minimumMinor);\n  }\n\n  splitFee(feeMinor: number): Posting[] {\n    const totalWeight = this.feePartners.reduce((s, p) => s + p.weight, 0);\n    return this.feePartners.map((p) => ({\n      accountId: p.accountId,\n      amountMinor: Math.floor((feeMinor * p.weight) / totalWeight),\n      currency: \"USD\" as Currency,\n    }));\n  }\n\n  async sendWire(params: {\n    fromAccount: string;\n    toAccount: string;\n    amountMinor: number;\n    currency: Currency;\n    reference: string;\n  }): Promise<JournalEntry> {\n    const { fromAccount, toAccount, amountMinor, currency, reference } = params;\n    if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {\n      throw new Error(\"amount must be a positive integer in minor units\");\n    }\n    if (currency !== \"USD\") {\n      throw new Error(`wires in ${currency} are not supported by this rail`);\n    }\n\n    const fee = this.computeFee(amountMinor);\n    const available = await this.store.balanceOf(fromAccount, currency);\n    if (available < amountMinor + fee) {\n      throw new InsufficientFundsError(\n        `account ${fromAccount} has ${available}, needs ${amountMinor + fee}`,\n      );\n    }\n\n    const feePostings = this.splitFee(fee);\n    const entry: JournalEntry = {\n      id: randomUUID(),\n      description: `wire ${reference}`,\n      createdAt: new Date(),\n      postings: [\n        { accountId: fromAccount, amountMinor: -(amountMinor + fee), currency },\n        { accountId: toAccount, amountMinor, currency },\n        ...feePostings,\n      ],\n    };\n\n    assertBalanced(entry);\n    await this.store.append(entry);\n    return entry;\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/wireTransferService.ts",
+    "snippet": "      amountMinor: Math.floor((feeMinor * p.weight) / totalWeight),"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code turns a wire and its fee into ledger postings? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "splitFee floors each partner's share independently and never assigns the leftover minor units. Whenever the fee does not divide evenly by the weights (e.g. a 101-cent fee split 1:1:1 gives 33+33+33=99), the fee postings sum to less than the fee debited from the sender. assertBalanced then throws UnbalancedEntryError, so those wires fail outright. The remainder must be allocated (e.g. to the largest share or the last partner) so the shares sum exactly to the fee."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "With basisPoints = 25 and minimumMinor = 50, what fee does computeFee return for a 30,001-cent wire?",
+      "choices": [
+        "75",
+        "76",
+        "50",
+        "75.0025"
+      ],
+      "answer": 1,
+      "explanation": "30,001 * 25 / 10,000 = 75.0025, and Math.ceil rounds it up to 76, which exceeds the 50 minimum. 75 would require floor/round; 50 applies only when the percentage is lower; 75.0025 is impossible because the result is ceiled to an integer."
+    },
+    {
+      "prompt": "Why does assertBalanced group sums by currency instead of summing all postings together?",
+      "choices": [
+        "To speed up validation of large entries",
+        "Because amounts in different currencies cannot be netted against each other, so each currency must independently sum to zero",
+        "Because the store can only append postings of one currency per entry",
+        "To let multi-currency entries stay unbalanced by small FX differences"
+      ],
+      "answer": 1,
+      "explanation": "A +100 USD and a -100 EUR posting would sum to zero numerically but are not balanced; checking each currency separately enforces double-entry per unit. It is not about performance, the store interface places no per-currency restriction, and no tolerance is allowed (sum must be exactly 0)."
+    },
+    {
+      "prompt": "Two sendWire calls for the same fromAccount run concurrently, each for amounts that individually fit the balance but together exceed it. What does this code do?",
+      "choices": [
+        "The second call throws InsufficientFundsError because balanceOf sees the first entry",
+        "assertBalanced rejects the second entry",
+        "Both may pass the balance check and both entries are appended, overdrawing the account",
+        "The store serializes calls so the second call waits for the first"
+      ],
+      "answer": 2,
+      "explanation": "The balance is read, then the entry appended later, with no lock, hold, or conditional write between them; both calls can read the same pre-transfer balance. assertBalanced only checks that postings sum to zero, not account balances, and nothing in LedgerStore implies serialization."
+    }
+  ],
+  "concepts": [
+    "backend.data.money_and_ledgers",
+    "backend.concurrency.race_conditions"
+  ]
+}

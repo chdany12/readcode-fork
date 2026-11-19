@@ -1,0 +1,49 @@
+{
+  "id": "5d762c4d-5181-49c2-b96c-b3337686bfb7",
+  "title": "Tenant-aware feature flags for login policy",
+  "name": "Login policy flags",
+  "createdAt": "2026-11-15T09:41:31.519Z",
+  "durationMinutes": 11,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code decides whether a flag is on for a given user? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A tenant appears in both `allowTenants` and `denyTenants` for an enabled flag. What does isEnabled return for its users?",
+      "choices": [
+        "true, because allow is checked against the rollout first",
+        "It depends on the user's bucket",
+        "false, because the deny list is checked before the allow list",
+        "It throws during load()"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does bucketFor hash `${flagKey}:${userId}` rather than just the userId?",
+      "choices": [
+        "So that the same users are not always the early cohort for every flag at a given percentage",
+        "So that a user's bucket changes on each login",
+        "To make the hash cheaper to compute",
+        "So that tenants are bucketed instead of users"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A user has a password, no WebAuthn, and TOTP enrolled; `require-mfa-enrollment` is on for them. What is the outcome?",
+      "choices": [
+        "denied with mfa_enrollment_required",
+        "challenge with totp",
+        "challenge with webauthn",
+        "granted"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.feature_flags",
+    "backend.security.authentication"
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "title": "Ride dispatch match metrics",
+  "name": "Dispatch match metrics",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/metrics.ts",
+      "content": "export type Labels = Record<string, string>;\n\nfunction key(name: string, labels: Labels): string {\n  const parts = Object.keys(labels).sort().map((k) => `${k}=\"${labels[k]}\"`);\n  return `${name}{${parts.join(\",\")}}`;\n}\n\nexport class Counter {\n  private values = new Map<string, number>();\n  constructor(readonly name: string) {}\n  inc(labels: Labels, by = 1): void {\n    const k = key(this.name, labels);\n    this.values.set(k, (this.values.get(k) ?? 0) + by);\n  }\n  snapshot(): Map<string, number> {\n    return new Map(this.values);\n  }\n}\n\nexport class Gauge {\n  private values = new Map<string, number>();\n  constructor(readonly name: string) {}\n  inc(labels: Labels): void {\n    const k = key(this.name, labels);\n    this.values.set(k, (this.values.get(k) ?? 0) + 1);\n  }\n  dec(labels: Labels): void {\n    const k = key(this.name, labels);\n    this.values.set(k, (this.values.get(k) ?? 0) - 1);\n  }\n  snapshot(): Map<string, number> {\n    return new Map(this.values);\n  }\n}\n\nexport class Histogram {\n  private series = new Map<string, { buckets: number[]; sum: number; count: number }>();\n  constructor(readonly name: string, readonly bounds: number[]) {}\n  observe(labels: Labels, value: number): void {\n    const k = key(this.name, labels);\n    let s = this.series.get(k);\n    if (!s) {\n      s = { buckets: this.bounds.map(() => 0), sum: 0, count: 0 };\n      this.series.set(k, s);\n    }\n    this.bounds.forEach((b, i) => {\n      if (value <= b) s!.buckets[i] += 1;\n    });\n    s.sum += value;\n    s.count += 1;\n  }\n  seriesCount(): number {\n    return this.series.size;\n  }\n}\n"
+    },
+    {
+      "path": "src/dispatchService.ts",
+      "content": "import { Counter, Histogram } from \"./metrics\";\n\nexport type MatchOutcome = \"matched\" | \"no_drivers\" | \"rider_cancelled\" | \"error\";\n\nconst KNOWN_REGIONS = new Set([\"sfo\", \"nyc\", \"lax\", \"sea\", \"chi\"]);\n\nexport interface DispatchRequest {\n  rideId: string;\n  riderId: string;\n  regionCode: string;\n  pickup: { lat: number; lng: number };\n}\n\nexport interface DriverMatcher {\n  findDriver(req: DispatchRequest, signal: AbortSignal): Promise<string | null>;\n}\n\nexport const matchLatency = new Histogram(\"dispatch_match_seconds\", [0.25, 0.5, 1, 2, 5, 10, 30]);\nexport const matchOutcomes = new Counter(\"dispatch_match_total\");\n\nfunction regionLabel(code: string): string {\n  const normalized = code.trim().toLowerCase();\n  return KNOWN_REGIONS.has(normalized) ? normalized : \"other\";\n}\n\nexport class DispatchService {\n  constructor(private readonly matcher: DriverMatcher, private readonly timeoutMs = 30_000) {}\n\n  async dispatch(req: DispatchRequest, riderSignal: AbortSignal): Promise<string | null> {\n    const region = regionLabel(req.regionCode);\n    const started = process.hrtime.bigint();\n    let outcome: MatchOutcome = \"error\";\n\n    const controller = new AbortController();\n    const onRiderAbort = () => controller.abort();\n    riderSignal.addEventListener(\"abort\", onRiderAbort, { once: true });\n    const timer = setTimeout(() => controller.abort(), this.timeoutMs);\n\n    try {\n      const driverId = await this.matcher.findDriver(req, controller.signal);\n      if (driverId) {\n        outcome = \"matched\";\n      } else if (riderSignal.aborted) {\n        outcome = \"rider_cancelled\";\n      } else {\n        outcome = \"no_drivers\";\n      }\n      return driverId;\n    } catch (err) {\n      outcome = riderSignal.aborted ? \"rider_cancelled\" : \"error\";\n      if (riderSignal.aborted) return null;\n      throw err;\n    } finally {\n      clearTimeout(timer);\n      riderSignal.removeEventListener(\"abort\", onRiderAbort);\n      const seconds = Number(process.hrtime.bigint() - started) / 1e9;\n      matchLatency.observe({ region, outcome }, seconds);\n      matchOutcomes.inc({ region, outcome });\n    }\n  }\n}\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how DispatchService records its match latency and outcome metrics? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is no defect. Both metrics are recorded in the finally block, so every call (match, no drivers, rider cancel, timeout or thrown error) is counted and timed exactly once. Label values are bounded: region is collapsed to five known codes or \"other\", and outcome is a fixed union, so series count cannot grow with riders or rides. Latency uses a monotonic clock (hrtime.bigint), and the timeout and abort listener are cleaned up in the same finally block."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A new market launches with regionCode \" PDX \". What series does a dispatch there contribute to?",
+      "choices": [
+        "A new series labeled region=\"pdx\"",
+        "A new series labeled region=\" PDX \"",
+        "The existing series labeled region=\"other\"",
+        "No series; the observation is dropped"
+      ],
+      "answer": 2,
+      "explanation": "regionLabel trims and lowercases to \"pdx\", but that is not in KNOWN_REGIONS, so it returns \"other\". No new series is created and nothing is dropped. Region is never used raw, so \" PDX \" cannot appear."
+    },
+    {
+      "prompt": "The matcher throws a network error while the rider is still waiting. What is recorded and returned?",
+      "choices": [
+        "Nothing is recorded because the exception skips the metrics code",
+        "outcome=\"error\" is recorded with its latency, and the error is rethrown",
+        "outcome=\"no_drivers\" is recorded and null is returned",
+        "outcome=\"error\" is recorded and null is returned"
+      ],
+      "answer": 1,
+      "explanation": "In the catch block riderSignal is not aborted, so outcome becomes \"error\" and the error is rethrown. The finally block still runs and records latency and the counter. Null is only returned on rider cancellation."
+    },
+    {
+      "prompt": "Why is process.hrtime.bigint() used instead of Date.now() for the latency measurement?",
+      "choices": [
+        "It is monotonic, so wall-clock adjustments (NTP) cannot produce negative or skewed durations",
+        "It is required for Histogram.observe to accept the value",
+        "It makes the measurement exclude time spent awaiting the matcher",
+        "It automatically converts the duration to seconds"
+      ],
+      "answer": 0,
+      "explanation": "hrtime is a monotonic high-resolution clock, so clock steps cannot distort durations. Histogram.observe accepts any number; the code converts nanoseconds to seconds itself by dividing by 1e9; and the measurement deliberately includes the matcher await."
+    }
+  ],
+  "concepts": [
+    "backend.observability.metrics",
+    "backend.resilience.timeouts",
+    "backend.resources.context_cancellation"
+  ]
+}

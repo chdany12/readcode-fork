@@ -1,0 +1,51 @@
+{
+  "id": "c84325d2-cff6-4a66-9240-7ead88c49053",
+  "title": "Support ticket assignment endpoint",
+  "name": "Ticket assignment endpoint",
+  "createdAt": "2026-11-15T09:44:42.007Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how failures propagate from the database layer up to the HTTP response? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Between findById and tickets.assign, another request deletes the ticket. What does the client receive?",
+      "choices": [
+        "404 with 'ticket ... not found'",
+        "200 with the ticket showing the new assignee",
+        "409 because the ticket changed",
+        "500 with the body 'internal error'"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The agent directory call rejects because the directory service is down. What happens to the request?",
+      "choices": [
+        "The ticket is assigned anyway because the check is skipped",
+        "The rejection propagates to next(err) and the client gets 500 'internal error'",
+        "The client gets 409 'agent cannot take tickets'",
+        "The request hangs because the rejection is unhandled"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does the error handler only send err.message to the client when status is below 500?",
+      "choices": [
+        "To avoid leaking internal details such as SQL or hostnames from unexpected errors",
+        "Because Express cannot serialise messages of 5xx errors",
+        "So that clients retry 4xx errors automatically",
+        "Because ConflictError has no message"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.errors.error_propagation",
+    "backend.errors.swallowed_errors",
+    "backend.api.status_codes_and_error_responses",
+    "backend.design.layering"
+  ]
+}

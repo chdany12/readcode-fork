@@ -1,0 +1,65 @@
+{
+  "title": "Per-account locking for ledger journal posting",
+  "name": "Ledger journal posting",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/accountLocks.ts",
+      "content": "export class AccountLock {\n  private locked = false;\n  private readonly queue: Array<() => void> = [];\n\n  acquire(): Promise<void> {\n    if (!this.locked) {\n      this.locked = true;\n      return Promise.resolve();\n    }\n    return new Promise((resolve) => this.queue.push(resolve));\n  }\n\n  release(): void {\n    const next = this.queue.shift();\n    if (next) next();\n    else this.locked = false;\n  }\n}\n\nexport class AccountLockTable {\n  private readonly table = new Map<string, AccountLock>();\n\n  get(accountId: string): AccountLock {\n    let l = this.table.get(accountId);\n    if (!l) {\n      l = new AccountLock();\n      this.table.set(accountId, l);\n    }\n    return l;\n  }\n}\n"
+    },
+    {
+      "path": "src/ledgerService.ts",
+      "content": "import { AccountLockTable } from \"./accountLocks\";\n\nexport interface Posting {\n  accountId: string;\n  amountCents: bigint;\n  memo: string;\n}\n\nexport interface LedgerStore {\n  balance(accountId: string): Promise<bigint>;\n  append(journalId: string, postings: Posting[]): Promise<void>;\n  isOverdraftAllowed(accountId: string): Promise<boolean>;\n}\n\nexport class UnbalancedJournalError extends Error {}\nexport class InsufficientFundsError extends Error {}\n\nexport class LedgerService {\n  private readonly locks = new AccountLockTable();\n\n  constructor(\n    private readonly store: LedgerStore,\n    private readonly feeAccountId: string,\n    private readonly newJournalId: () => string,\n  ) {}\n\n  async post(postings: Posting[]): Promise<string> {\n    const total = postings.reduce((sum, p) => sum + p.amountCents, 0n);\n    if (postings.length < 2 || total !== 0n) {\n      throw new UnbalancedJournalError(`journal does not balance: ${total}`);\n    }\n\n    const accountIds = postings.map((p) => p.accountId).sort();\n    const held: string[] = [];\n    try {\n      for (const id of accountIds) {\n        await this.locks.get(id).acquire();\n        held.push(id);\n      }\n\n      const net = new Map<string, bigint>();\n      for (const p of postings) net.set(p.accountId, (net.get(p.accountId) ?? 0n) + p.amountCents);\n\n      for (const [accountId, delta] of net) {\n        if (delta >= 0n) continue;\n        const bal = await this.store.balance(accountId);\n        if (bal + delta < 0n && !(await this.store.isOverdraftAllowed(accountId))) {\n          throw new InsufficientFundsError(`account ${accountId} would go negative`);\n        }\n      }\n\n      const journalId = this.newJournalId();\n      await this.store.append(journalId, postings);\n      return journalId;\n    } finally {\n      for (const id of held.reverse()) this.locks.get(id).release();\n    }\n  }\n\n  async transfer(fromId: string, toId: string, amountCents: bigint, feeCents = 0n): Promise<string> {\n    if (fromId === toId) throw new RangeError(\"cannot transfer to the same account\");\n    if (amountCents <= 0n || feeCents < 0n) throw new RangeError(\"invalid amount\");\n\n    const postings: Posting[] = [\n      { accountId: fromId, amountCents: -amountCents, memo: \"transfer out\" },\n      { accountId: toId, amountCents, memo: \"transfer in\" },\n    ];\n    if (feeCents > 0n) {\n      postings.push(\n        { accountId: fromId, amountCents: -feeCents, memo: \"transfer fee\" },\n        { accountId: this.feeAccountId, amountCents: feeCents, memo: \"fee income\" },\n      );\n    }\n    return this.post(postings);\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/ledgerService.ts",
+    "snippet": "    const accountIds = postings.map((p) => p.accountId).sort();"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code acquires and releases account locks? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "post sorts the account ids but does not dedupe them. AccountLock is not reentrant, so when a journal has two postings on the same account the loop acquires that account's lock, then awaits it again and waits on itself forever. transfer with a non-zero fee always does this (fromId appears for the principal and the fee), so every fee-bearing transfer hangs, and the stuck lock also blocks every later operation on that account. The fix is `[...new Set(postings.map((p) => p.accountId))].sort()`."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "Why does post() acquire account locks in sorted id order?",
+      "choices": [
+        "So the store's append writes postings in id order",
+        "Because Map iteration requires sorted keys",
+        "To speed up lookups in the lock table",
+        "So two concurrent journals touching overlapping accounts always lock in the same order and cannot wait on each other in a cycle"
+      ],
+      "answer": 3,
+      "explanation": "A global acquisition order prevents the classic A-waits-for-B, B-waits-for-A deadlock between concurrent transfers in opposite directions. append receives the original postings array (unsorted), Map iteration is insertion order and unrelated, and sorting does nothing for Map lookups."
+    },
+    {
+      "prompt": "A journal debits account A by 500 and credits A by 300 and B by 200, and A's balance is 250 with no overdraft. What does the funds check do?",
+      "choices": [
+        "Rejects, because the 500 debit alone exceeds the balance",
+        "Accepts, because A's net change is -200 and 250 - 200 >= 0",
+        "Rejects, because B has a positive delta",
+        "Skips the check entirely because the journal balances"
+      ],
+      "answer": 1,
+      "explanation": "The check aggregates postings per account into `net` first, so A's delta is -500 + 300 = -200, and 250 + (-200) = 50 is not negative. Individual postings are never checked alone, positive deltas are skipped with continue, and balancing only gates the earlier UnbalancedJournalError."
+    },
+    {
+      "prompt": "store.balance throws a network error while post() holds locks on two accounts. What happens to those locks?",
+      "choices": [
+        "They are released in the finally block, in reverse acquisition order",
+        "They remain held until the AccountLockTable is garbage-collected",
+        "Only the most recently acquired lock is released",
+        "They are released only if the error is an InsufficientFundsError"
+      ],
+      "answer": 0,
+      "explanation": "Every lock acquired is pushed to `held`, and the finally block releases all of them in reverse order whatever the error type. The table keeps locks forever but that has no bearing on release, and there is no error-type check."
+    }
+  ],
+  "concepts": [
+    "backend.concurrency.locking_and_lock_ordering",
+    "backend.concurrency.deadlocks",
+    "backend.data.money_and_ledgers",
+    "backend.errors.cleanup_on_error_paths"
+  ]
+}

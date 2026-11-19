@@ -1,0 +1,50 @@
+{
+  "id": "2245ac24-12cd-4bbc-aa42-286dc9f78318",
+  "title": "Push notification batcher and its tests",
+  "name": "Push notification batcher",
+  "createdAt": "2026-11-15T09:41:31.560Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how these tests wait for asynchronous work, one that could make them pass or fail nondeterministically? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "With maxBatchSize 3, a caller enqueues 3 messages and then immediately 1 more. With no further calls, when is the 4th message sent?",
+      "choices": [
+        "Together with the first three, in the same sendBatch call",
+        "Only when drain() is called; the timer was cleared by the full-batch flush",
+        "After flushIntervalMs, in its own batch, because enqueue starts a new timer once the previous one was cleared",
+        "Never, because pending was spliced to an empty array"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What happens to later flushes if gateway.sendBatch rejects for one batch?",
+      "choices": [
+        "The inFlight chain stays usable, because the rejection is handled and turned into a \"flushError\" event",
+        "Every later flush is skipped, because inFlight is now a rejected promise",
+        "drain() rejects with the gateway error",
+        "The batch is put back into pending and retried on the next flush"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does the \"flushes immediately when the batch is full\" test await drain() before asserting, rather than asserting right after the three enqueue calls?",
+      "choices": [
+        "Because enqueue throws if it is called after drain",
+        "Because sendBatch is invoked inside a .then callback, so it has not run yet when enqueue returns",
+        "Because the 10-second timer must be cancelled or the test process hangs",
+        "Because drain is what triggers the full-batch flush"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.testing.flaky_tests",
+    "backend.concurrency.async_await_pitfalls",
+    "backend.testing.unit_test_design"
+  ]
+}

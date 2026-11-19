@@ -1,0 +1,67 @@
+{
+  "title": "Video transcode worker with visibility-timeout heartbeats",
+  "name": "Transcode queue worker",
+  "language": "TypeScript",
+  "durationMinutes": 15,
+  "files": [
+    {
+      "path": "src/queueTypes.ts",
+      "content": "export interface ReceivedMessage {\n  body: string;\n  receiptHandle: string;\n  receiveCount: number;\n}\n\nexport interface ReceiveOptions {\n  maxMessages: number;\n  visibilityTimeoutSeconds: number;\n  waitTimeSeconds: number;\n}\n\nexport interface SqsLikeQueue {\n  receive(opts: ReceiveOptions): Promise<ReceivedMessage[]>;\n  changeVisibility(receiptHandle: string, seconds: number): Promise<void>;\n  delete(receiptHandle: string): Promise<void>;\n  moveToDeadLetter(receiptHandle: string, reason: string): Promise<void>;\n}\n"
+    },
+    {
+      "path": "src/transcoder.ts",
+      "content": "export type Profile = \"1080p\" | \"720p\" | \"480p\";\n\nexport interface RenditionRequest {\n  videoId: string;\n  sourceKey: string;\n  profile: Profile;\n}\n\nexport interface Transcoder {\n  exists(objectKey: string): Promise<boolean>;\n  // Writes to a temp key and renames on completion, so outputKey is never partial.\n  transcode(sourceKey: string, outputKey: string, profile: Profile): Promise<void>;\n}\n"
+    },
+    {
+      "path": "src/transcodeWorker.ts",
+      "content": "import { SqsLikeQueue, ReceivedMessage } from \"./queueTypes\";\nimport { Transcoder, RenditionRequest } from \"./transcoder\";\n\nconst VISIBILITY_SECONDS = 120;\nconst HEARTBEAT_MS = 45_000;\nconst MAX_RECEIVES = 4;\n\nexport class TranscodeWorker {\n  private stopping = false;\n  private inFlight = 0;\n\n  constructor(\n    private readonly queue: SqsLikeQueue,\n    private readonly transcoder: Transcoder,\n    private readonly concurrency: number,\n  ) {}\n\n  async runForever(): Promise<void> {\n    while (!this.stopping) {\n      const free = this.concurrency - this.inFlight;\n      if (free <= 0) {\n        await new Promise((r) => setTimeout(r, 250));\n        continue;\n      }\n      const messages = await this.queue.receive({\n        maxMessages: Math.min(free, 10),\n        visibilityTimeoutSeconds: VISIBILITY_SECONDS,\n        waitTimeSeconds: 10,\n      });\n      for (const m of messages) {\n        this.inFlight++;\n        void this.process(m).finally(() => {\n          this.inFlight--;\n        });\n      }\n    }\n  }\n\n  requestStop(): void {\n    this.stopping = true;\n  }\n\n  private async process(m: ReceivedMessage): Promise<void> {\n    let req: RenditionRequest;\n    try {\n      req = JSON.parse(m.body) as RenditionRequest;\n    } catch {\n      await this.queue.moveToDeadLetter(m.receiptHandle, \"unparseable body\");\n      return;\n    }\n\n    const heartbeat = setInterval(() => {\n      this.queue\n        .changeVisibility(m.receiptHandle, VISIBILITY_SECONDS)\n        .catch((err) => console.warn(\"visibility extension failed\", { videoId: req.videoId, err }));\n    }, HEARTBEAT_MS);\n\n    try {\n      const outputKey = `renditions/${req.videoId}/${req.profile}.mp4`;\n      if (!(await this.transcoder.exists(outputKey))) {\n        await this.transcoder.transcode(req.sourceKey, outputKey, req.profile);\n      }\n      clearInterval(heartbeat);\n      await this.queue.delete(m.receiptHandle);\n    } catch (err) {\n      clearInterval(heartbeat);\n      if (m.receiveCount >= MAX_RECEIVES) {\n        await this.queue.moveToDeadLetter(m.receiptHandle, String(err));\n      } else {\n        await this.queue.changeVisibility(m.receiptHandle, 30 * m.receiveCount);\n      }\n    }\n  }\n}\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this worker leases, extends, deletes, or retries queue messages? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is no defect. Each message is received with a 120 s visibility timeout, and a heartbeat extends it every 45 s while transcoding, so long jobs are not redelivered to another worker mid-flight. The heartbeat is cleared on both success and failure. The message is deleted only after the rendition exists. Failures get a growing visibility delay, and after MAX_RECEIVES the message is dead-lettered. If a duplicate delivery does occur, the exists() check plus the transcoder's atomic rename make reprocessing safe."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A 1080p transcode takes 9 minutes. What keeps another worker from picking up the same message during that time?",
+      "choices": [
+        "The 10-second waitTimeSeconds on receive",
+        "Nothing; the message becomes visible again after 120 seconds",
+        "The inFlight counter, which is shared across all worker processes",
+        "The setInterval heartbeat that resets the visibility timeout to 120 seconds every 45 seconds"
+      ],
+      "answer": 3,
+      "explanation": "The heartbeat calls changeVisibility(receiptHandle, 120) every 45 s, so the message's visibility deadline keeps moving forward while the transcode runs. waitTimeSeconds only controls long-polling. inFlight is a local field and is not shared between processes. Without the heartbeat the message would reappear after 120 s, but the heartbeat prevents that."
+    },
+    {
+      "prompt": "A message arrives whose body is not valid JSON. What happens to it?",
+      "choices": [
+        "It is moved to the dead-letter queue right away, without retries",
+        "It is retried up to MAX_RECEIVES times and then dead-lettered",
+        "The exception escapes process() and stops runForever",
+        "It is deleted silently"
+      ],
+      "answer": 0,
+      "explanation": "The JSON.parse failure is caught and the message goes straight to moveToDeadLetter with reason \"unparseable body\". A malformed body will never parse, so retrying would be pointless. The retry path in the later try/catch is never reached, the error does not escape, and the message is dead-lettered rather than deleted."
+    },
+    {
+      "prompt": "concurrency is 4, and 4 transcodes are running. What does runForever do?",
+      "choices": [
+        "Calls receive with maxMessages = 0 in a tight loop",
+        "Sleeps 250 ms and checks again, without receiving, until a job finishes",
+        "Receives up to 10 more messages and queues them in memory",
+        "Waits for all four jobs to finish before receiving again"
+      ],
+      "answer": 1,
+      "explanation": "free is 0, so the loop sleeps 250 ms and continues without calling receive. As soon as any process() promise settles, its finally decrements inFlight and the next iteration receives min(free, 10) messages. It never calls receive with 0, never buffers extra messages, and does not wait for the whole group to finish."
+    }
+  ],
+  "concepts": [
+    "backend.messaging.queues_and_consumers",
+    "backend.messaging.at_least_once_delivery",
+    "backend.messaging.dead_letter_queues",
+    "backend.messaging.backpressure",
+    "backend.api.idempotency"
+  ]
+}

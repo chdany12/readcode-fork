@@ -1,0 +1,53 @@
+{
+  "id": "d1ffc80d-6947-46a5-921e-5e1f22c1835f",
+  "title": "Account balance cache in a ledger service",
+  "name": "Ledger balance cache",
+  "createdAt": "2026-11-15T09:41:31.667Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code keeps cached balances consistent with the database? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two transfers run concurrently: A->B and B->A. What prevents them from deadlocking on the row locks?",
+      "choices": [
+        "The ROLLBACK in the catch block releases locks when Postgres detects the deadlock",
+        "Both transactions lock the two rows in sorted account_id order via the SELECT ... ORDER BY ... FOR UPDATE",
+        "The conditional UPDATE with available_cents >= $2 never waits on a lock",
+        "Each transfer uses its own pooled client, so the locks are independent"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "If Redis is unreachable while getBalance() runs, what happens?",
+      "choices": [
+        "get() returns null, the balance is read from Postgres, then set() throws and getBalance() rejects",
+        "getBalance() returns null as if the account did not exist",
+        "The balance is read from Postgres and returned normally because both cache calls swallow errors",
+        "getBalance() hangs until the 300 second TTL elapses"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What does the version column contribute in this code as written?",
+      "choices": [
+        "It is used by set() to refuse overwriting a newer cached balance",
+        "It makes the debit UPDATE an optimistic-concurrency check",
+        "It is incremented and stored in the cache but nothing compares it, so it does not affect which value wins in Redis",
+        "It is used by getBalance() to detect and discard expired cache entries"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.caching.stale_reads",
+    "backend.caching.cache_invalidation",
+    "backend.caching.cache_aside_vs_write_through",
+    "backend.concurrency.deadlocks",
+    "backend.data.transactions_and_isolation_levels",
+    "backend.data.money_and_ledgers"
+  ]
+}

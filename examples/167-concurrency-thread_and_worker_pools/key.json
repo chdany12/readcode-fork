@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/invoicePool.ts",
+        "startLine": 60,
+        "endLine": 62
+      }
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "In the worker 'error' handler, the task assigned to the crashed worker is removed from busy but its promise is never rejected. invoiceWorker throws on an invalid quantity, which kills the thread and fires 'error'; the pool replaces the worker, but the caller's compute() promise stays pending forever. finalizeBillingRun awaits Promise.allSettled, so one bad invoice hangs the whole billing run. The handler should fetch the task from busy and call task.reject(err).",
+    "The pool size is max(1, cpus - 1) = 7. drain() only posts to idle workers, so 7 are in flight and the rest stay in the pool's queue until a 'message' returns a worker to idle. No extra workers are spawned, and jobs are not pushed into busy threads.",
+    "compute() checks queue.length >= maxQueue (1000 by default) and returns a rejected promise. There is no waiting, the limit is enforced, and nothing is evicted.",
+    "close() sets closed, splices the whole queue and rejects each task with \"pool closed\" before terminating workers. They are not processed, not left pending, and not reassigned."
+  ]
+}

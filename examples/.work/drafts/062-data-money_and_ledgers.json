@@ -1,0 +1,63 @@
+{
+  "title": "Clinic visit billing ledger",
+  "name": "Visit billing ledger",
+  "language": "TypeScript",
+  "durationMinutes": 11,
+  "files": [
+    {
+      "path": "src/ledger.ts",
+      "content": "export type AccountId = string;\n\nexport interface Posting {\n  account: AccountId;\n  amountCents: number;\n}\n\nexport interface JournalEntry {\n  id: string;\n  memo: string;\n  postings: Posting[];\n  createdAt: Date;\n}\n\nexport interface LedgerStore {\n  appendEntry(entry: JournalEntry, idempotencyKey: string): Promise<boolean>;\n}\n\nexport class Ledger {\n  constructor(private readonly store: LedgerStore) {}\n\n  async post(entry: JournalEntry, idempotencyKey: string): Promise<boolean> {\n    if (entry.postings.length < 2) throw new Error(\"entry needs at least two postings\");\n    for (const p of entry.postings) {\n      if (!Number.isInteger(p.amountCents)) throw new Error(`non-integer amount on ${p.account}`);\n    }\n    const sum = entry.postings.reduce((s, p) => s + p.amountCents, 0);\n    if (sum !== 0) throw new Error(`unbalanced entry ${entry.id}: off by ${sum}`);\n    return this.store.appendEntry(entry, idempotencyKey);\n  }\n}\n"
+    },
+    {
+      "path": "src/visitBilling.ts",
+      "content": "import { randomUUID } from \"crypto\";\nimport { Ledger, Posting } from \"./ledger\";\n\nexport interface CompletedVisit {\n  appointmentId: string;\n  patientId: string;\n  payerId: string | null;\n  allowedAmountCents: number;\n  copayCents: number;\n  coinsuranceRate: number;\n}\n\nexport class VisitBillingService {\n  constructor(private readonly ledger: Ledger) {}\n\n  async billVisit(visit: CompletedVisit): Promise<void> {\n    if (visit.allowedAmountCents <= 0) throw new Error(\"allowed amount must be positive\");\n    if (visit.coinsuranceRate < 0 || visit.coinsuranceRate > 1) {\n      throw new Error(\"coinsurance rate out of range\");\n    }\n\n    const postings: Posting[] = [\n      { account: \"revenue:clinical\", amountCents: -visit.allowedAmountCents },\n    ];\n\n    if (visit.payerId === null) {\n      postings.push({ account: `ar:patient:${visit.patientId}`, amountCents: visit.allowedAmountCents });\n    } else {\n      const copay = Math.min(visit.copayCents, visit.allowedAmountCents);\n      const remainder = visit.allowedAmountCents - copay;\n      const patientCoins = Math.round(remainder * visit.coinsuranceRate);\n      const payerShare = Math.round(remainder * (1 - visit.coinsuranceRate));\n      postings.push(\n        { account: `ar:patient:${visit.patientId}`, amountCents: copay + patientCoins },\n        { account: `ar:payer:${visit.payerId}`, amountCents: payerShare },\n      );\n    }\n\n    const ok = await this.ledger.post(\n      {\n        id: randomUUID(),\n        memo: `visit ${visit.appointmentId}`,\n        postings: postings.filter((p) => p.amountCents !== 0),\n        createdAt: new Date(),\n      },\n      `visit-charge:${visit.appointmentId}`,\n    );\n    if (!ok) return;\n  }\n\n  async recordPatientPayment(patientId: string, amountCents: number, paymentRef: string): Promise<boolean> {\n    if (!Number.isInteger(amountCents) || amountCents <= 0) throw new Error(\"invalid payment amount\");\n    return this.ledger.post(\n      {\n        id: randomUUID(),\n        memo: `patient payment ${paymentRef}`,\n        postings: [\n          { account: \"cash:operating\", amountCents },\n          { account: `ar:patient:${patientId}`, amountCents: -amountCents },\n        ],\n        createdAt: new Date(),\n      },\n      `patient-payment:${paymentRef}`,\n    );\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/visitBilling.ts",
+    "snippet": "      const payerShare = Math.round(remainder * (1 - visit.coinsuranceRate));"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code splits a visit charge between patient and payer? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "patientCoins and payerShare are each rounded independently. When remainder * rate lands exactly on .5 (e.g. remainder 1001 cents, rate 0.5), both round up and the shares total one cent more than remainder, so the entry no longer sums to zero. Ledger.post rejects it as unbalanced and the visit is never billed. The payer share should be computed as remainder - patientCoins."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "billVisit is called twice for the same appointment after a worker retry. What prevents a double charge?",
+      "choices": [
+        "The random UUID entry id",
+        "The idempotency key visit-charge:<appointmentId> passed to the store",
+        "The zero-sum balance check in Ledger.post",
+        "Nothing; the patient is billed twice"
+      ],
+      "answer": 1,
+      "explanation": "The store receives a deterministic key derived from appointmentId, so a repeated call maps to the same key and appendEntry can return false instead of writing again. The UUID is new on every call, and the balance check only validates a single entry's arithmetic."
+    },
+    {
+      "prompt": "Why does Ledger.post reject amounts that are not integers?",
+      "choices": [
+        "Integer cents avoid binary floating-point representation errors that would make balances drift",
+        "Because JavaScript numbers cannot hold negative fractions",
+        "To keep JSON payloads smaller",
+        "Because the store column is a string"
+      ],
+      "answer": 0,
+      "explanation": "Money is held in integer minor units so sums are exact; fractional values in IEEE doubles (0.1 + 0.2) accumulate errors and break zero-sum checks. JS numbers can represent negative fractions, and payload size or column type are not why the check exists."
+    },
+    {
+      "prompt": "For a self-pay visit (payerId null) with allowedAmountCents 15000 and copayCents 2000, what does the patient receivable increase by?",
+      "choices": [
+        "2000",
+        "13000",
+        "15000",
+        "0, since self-pay is collected up front"
+      ],
+      "answer": 2,
+      "explanation": "In the payerId === null branch the full allowed amount is posted to ar:patient, balanced against revenue; copay and coinsurance are only used in the insured branch. So the receivable grows by 15000, not the copay (2000) or the remainder (13000), and nothing in the code handles up-front collection."
+    }
+  ],
+  "concepts": [
+    "backend.data.money_and_ledgers",
+    "backend.api.idempotency"
+  ]
+}

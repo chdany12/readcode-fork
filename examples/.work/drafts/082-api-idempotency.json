@@ -1,0 +1,69 @@
+{
+  "title": "Refund endpoint with idempotency key reservation",
+  "name": "Charge refund service",
+  "language": "TypeScript",
+  "durationMinutes": 15,
+  "files": [
+    {
+      "path": "src/ports.ts",
+      "content": "export type KeyState =\n  | { kind: \"in_progress\"; fingerprint: string; lockedUntil: number }\n  | { kind: \"completed\"; fingerprint: string; status: number; body: unknown };\n\nexport interface IdempotencyRepo {\n  tryReserve(scope: string, fingerprint: string, lockMs: number): Promise<boolean>;\n  get(scope: string): Promise<KeyState | null>;\n  complete(scope: string, status: number, body: unknown): Promise<void>;\n  release(scope: string): Promise<void>;\n}\n\nexport class GatewayUnavailableError extends Error {}\nexport class CardDeclinedError extends Error {\n  constructor(public readonly declineCode: string) {\n    super(`declined: ${declineCode}`);\n  }\n}\n\nexport interface PaymentGateway {\n  refund(chargeId: string, amountCents: number, reference: string): Promise<{ refundId: string }>;\n}\n\nexport interface ChargeRepo {\n  findForMerchant(merchantId: string, chargeId: string): Promise<{ id: string; amountCents: number; refundedCents: number } | null>;\n  addRefund(chargeId: string, refundId: string, amountCents: number): Promise<void>;\n}\n"
+    },
+    {
+      "path": "src/refundService.ts",
+      "content": "import { createHash } from \"crypto\";\nimport {\n  CardDeclinedError,\n  ChargeRepo,\n  GatewayUnavailableError,\n  IdempotencyRepo,\n  PaymentGateway,\n} from \"./ports\";\n\nexport interface RefundResult {\n  status: number;\n  body: unknown;\n}\n\nconst LOCK_MS = 30_000;\n\nexport class RefundService {\n  constructor(\n    private readonly idem: IdempotencyRepo,\n    private readonly charges: ChargeRepo,\n    private readonly gateway: PaymentGateway\n  ) {}\n\n  async refund(merchantId: string, key: string, chargeId: string, amountCents: number): Promise<RefundResult> {\n    const scope = `${merchantId}:${key}`;\n    const fingerprint = createHash(\"sha256\").update(`${chargeId}|${amountCents}`).digest(\"hex\");\n\n    const reserved = await this.idem.tryReserve(scope, fingerprint, LOCK_MS);\n    if (!reserved) {\n      const state = await this.idem.get(scope);\n      if (!state || state.fingerprint !== fingerprint) {\n        return { status: 422, body: { error: \"idempotency_key_mismatch\" } };\n      }\n      if (state.kind === \"in_progress\") {\n        return { status: 409, body: { error: \"request_in_progress\" } };\n      }\n      return { status: state.status, body: state.body };\n    }\n\n    const result = await this.execute(merchantId, scope, chargeId, amountCents);\n    await this.idem.complete(scope, result.status, result.body);\n    return result;\n  }\n\n  private async execute(merchantId: string, scope: string, chargeId: string, amountCents: number): Promise<RefundResult> {\n    const charge = await this.charges.findForMerchant(merchantId, chargeId);\n    if (!charge) {\n      return { status: 404, body: { error: \"charge_not_found\" } };\n    }\n    if (amountCents <= 0 || charge.refundedCents + amountCents > charge.amountCents) {\n      return { status: 422, body: { error: \"invalid_refund_amount\" } };\n    }\n    try {\n      const { refundId } = await this.gateway.refund(chargeId, amountCents, scope);\n      await this.charges.addRefund(chargeId, refundId, amountCents);\n      return { status: 201, body: { refundId, chargeId, amountCents } };\n    } catch (err) {\n      if (err instanceof CardDeclinedError) {\n        return { status: 402, body: { error: \"refund_declined\", code: err.declineCode } };\n      }\n      if (err instanceof GatewayUnavailableError) {\n        return { status: 503, body: { error: \"gateway_unavailable\", retryable: true } };\n      }\n      await this.idem.release(scope);\n      throw err;\n    }\n  }\n}\n"
+    },
+    {
+      "path": "src/refundRoutes.ts",
+      "content": "import { Router, Request, Response, NextFunction } from \"express\";\nimport { RefundService } from \"./refundService\";\n\ninterface MerchantRequest extends Request {\n  merchantId: string;\n}\n\nexport function refundRoutes(service: RefundService): Router {\n  const router = Router();\n\n  router.post(\"/charges/:chargeId/refunds\", async (req: Request, res: Response, next: NextFunction) => {\n    const { merchantId } = req as MerchantRequest;\n    const key = req.header(\"Idempotency-Key\");\n    if (!key) {\n      res.status(400).json({ error: \"idempotency_key_required\" });\n      return;\n    }\n    const amountCents = Number(req.body?.amountCents);\n    if (!Number.isInteger(amountCents)) {\n      res.status(400).json({ error: \"amount_must_be_integer_cents\" });\n      return;\n    }\n    try {\n      const result = await service.refund(merchantId, key, req.params.chargeId, amountCents);\n      res.status(result.status).json(result.body);\n    } catch (err) {\n      next(err);\n    }\n  });\n\n  return router;\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/refundService.ts",
+    "snippet": "      if (err instanceof GatewayUnavailableError) {\n        return { status: 503, body: { error: \"gateway_unavailable\", retryable: true } };\n      }"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this code records outcomes against idempotency keys? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "A GatewayUnavailableError is turned into a normal 503 result, and refund() then calls idem.complete with it. The key is now permanently completed with a 503, so when the client follows the retryable: true hint and retries with the same key, it gets the cached 503 forever and the refund can never succeed under that key. Transient failures must release the reservation (as the generic error path does) instead of being stored as a completed outcome."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A client retries a refund with the same key while the first request is still waiting on the gateway. What does the retry receive?",
+      "choices": [
+        "The 201 from the first request once it completes",
+        "409 request_in_progress",
+        "422 idempotency_key_mismatch",
+        "A second refund is issued"
+      ],
+      "answer": 1,
+      "explanation": "tryReserve fails because the key is reserved, get returns the in_progress state with the same fingerprint, and the service returns 409 request_in_progress immediately; it does not wait for the first request. The fingerprint matches, so no 422, and execute is never reached for the retry."
+    },
+    {
+      "prompt": "A merchant reuses key K, which earlier refunded 500 cents on charge ch_1, to request a 700-cent refund on ch_1. What happens?",
+      "choices": [
+        "The original 201 for 500 cents is replayed",
+        "A 700-cent refund is issued",
+        "422 idempotency_key_mismatch",
+        "409 request_in_progress"
+      ],
+      "answer": 2,
+      "explanation": "The fingerprint hashes chargeId and amountCents, so the new request's fingerprint differs from the stored one and the service returns 422 idempotency_key_mismatch without executing. Replaying the 500-cent result would mislead the client, and no new refund is issued."
+    },
+    {
+      "prompt": "The request asks to refund more than the remaining refundable amount. Which statement about a retry with the same key and body is correct?",
+      "choices": [
+        "The retry re-checks the charge and may succeed if another refund was reversed",
+        "The retry gets 409 because the key stays in_progress",
+        "The first request throws and releases the key, so the retry runs fresh",
+        "The retry replays the stored 422 invalid_refund_amount"
+      ],
+      "answer": 3,
+      "explanation": "execute returns a 422 result rather than throwing, and refund() stores it with idem.complete. A retry with the same fingerprint finds a completed state and replays the 422 without re-checking the charge. Nothing throws, so release is not called, and the key does not stay in_progress."
+    }
+  ],
+  "concepts": [
+    "backend.api.idempotency",
+    "backend.api.status_codes_and_error_responses",
+    "backend.data.money_and_ledgers",
+    "backend.concurrency.race_conditions"
+  ]
+}

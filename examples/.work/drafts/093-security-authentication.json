@@ -1,0 +1,68 @@
+{
+  "title": "Signed merchant requests for a billing API",
+  "name": "Merchant signature authentication",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "src/signatureAuth.ts",
+      "content": "import crypto from \"crypto\";\nimport type { Request, Response, NextFunction } from \"express\";\nimport { MerchantKeyStore, MerchantKey } from \"./merchantKeys\";\n\nconst SIGNATURE_HEADER = \"x-billing-signature\";\nconst TIMESTAMP_HEADER = \"x-billing-timestamp\";\nconst KEY_ID_HEADER = \"x-billing-key-id\";\nconst TOLERANCE_SECONDS = 300;\n\nexport interface AuthenticatedRequest extends Request {\n  merchantId?: string;\n  rawBody?: Buffer;\n}\n\nexport function computeSignature(secret: string, timestamp: string, body: Buffer): string {\n  return crypto\n    .createHmac(\"sha256\", secret)\n    .update(`${timestamp}.`)\n    .update(body)\n    .digest(\"hex\");\n}\n\nfunction safeEqualHex(a: string, b: string): boolean {\n  const left = Buffer.from(a, \"hex\");\n  const right = Buffer.from(b, \"hex\");\n  if (left.length === 0 || left.length !== right.length) {\n    return false;\n  }\n  return crypto.timingSafeEqual(left, right);\n}\n\nexport function merchantSignatureAuth(keys: MerchantKeyStore) {\n  return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {\n    const keyId = req.header(KEY_ID_HEADER);\n    const timestamp = req.header(TIMESTAMP_HEADER);\n    const signature = req.header(SIGNATURE_HEADER);\n\n    if (!keyId || !timestamp || !signature) {\n      return res.status(401).json({ error: \"missing_credentials\" });\n    }\n\n    const ts = Number(timestamp);\n    if (!Number.isInteger(ts)) {\n      return res.status(401).json({ error: \"invalid_timestamp\" });\n    }\n\n    const nowSeconds = Math.floor(Date.now() / 1000);\n    if (nowSeconds - ts > TOLERANCE_SECONDS) {\n      return res.status(401).json({ error: \"stale_request\" });\n    }\n\n    let key: MerchantKey | null;\n    try {\n      key = await keys.findActive(keyId);\n    } catch (err) {\n      req.log?.error({ err, keyId }, \"merchant key lookup failed\");\n      return res.status(503).json({ error: \"auth_unavailable\" });\n    }\n\n    if (!key) {\n      return res.status(401).json({ error: \"invalid_credentials\" });\n    }\n\n    const body = req.rawBody ?? Buffer.alloc(0);\n    const expected = computeSignature(key.secret, timestamp, body);\n    if (!safeEqualHex(signature, expected)) {\n      return res.status(401).json({ error: \"invalid_credentials\" });\n    }\n\n    req.merchantId = key.merchantId;\n    next();\n  };\n}\n"
+    },
+    {
+      "path": "src/merchantKeys.ts",
+      "content": "import type { Pool } from \"pg\";\n\nexport interface MerchantKey {\n  keyId: string;\n  merchantId: string;\n  secret: string;\n  revokedAt: Date | null;\n}\n\nexport interface MerchantKeyStore {\n  findActive(keyId: string): Promise<MerchantKey | null>;\n}\n\nexport class PgMerchantKeyStore implements MerchantKeyStore {\n  constructor(private readonly pool: Pool) {}\n\n  async findActive(keyId: string): Promise<MerchantKey | null> {\n    const { rows } = await this.pool.query(\n      `SELECT key_id, merchant_id, secret, revoked_at\n         FROM merchant_api_keys\n        WHERE key_id = $1 AND revoked_at IS NULL`,\n      [keyId]\n    );\n    if (rows.length === 0) return null;\n    const r = rows[0];\n    return {\n      keyId: r.key_id,\n      merchantId: r.merchant_id,\n      secret: r.secret,\n      revokedAt: r.revoked_at,\n    };\n  }\n}\n"
+    },
+    {
+      "path": "src/app.ts",
+      "content": "import express from \"express\";\nimport { merchantSignatureAuth, AuthenticatedRequest } from \"./signatureAuth\";\nimport { PgMerchantKeyStore } from \"./merchantKeys\";\nimport { pool } from \"./db\";\nimport { createCharge } from \"./charges\";\n\nconst app = express();\n\napp.use(\n  express.json({\n    verify: (req, _res, buf) => {\n      (req as AuthenticatedRequest).rawBody = Buffer.from(buf);\n    },\n  })\n);\n\nconst auth = merchantSignatureAuth(new PgMerchantKeyStore(pool));\n\napp.post(\"/v1/charges\", auth, async (req: AuthenticatedRequest, res) => {\n  const charge = await createCharge(req.merchantId!, req.body);\n  res.status(201).json(charge);\n});\n\nexport default app;\n"
+    }
+  ],
+  "defect": {
+    "path": "src/signatureAuth.ts",
+    "snippet": "    if (nowSeconds - ts > TOLERANCE_SECONDS) {"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this middleware authenticates merchant requests? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The freshness check `nowSeconds - ts > TOLERANCE_SECONDS` only rejects timestamps that are too old. A timestamp far in the future gives a negative difference and always passes. Anyone who captures one signed request with a future timestamp (for example from a client with a skewed clock, or one an insider pre-signs) can replay it, such as POST /v1/charges, for as long as that timestamp stays ahead of the clock. The check should use the absolute difference: `Math.abs(nowSeconds - ts) > TOLERANCE_SECONDS`."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "A merchant's key is revoked (revoked_at set) while a request signed with it is in flight. What happens to requests that arrive after the revocation commits?",
+      "choices": [
+        "They succeed until the 300-second tolerance window expires",
+        "They are rejected with 401 because findActive filters out revoked keys",
+        "They are rejected with 503 because the lookup throws",
+        "They succeed because the signature is still mathematically valid"
+      ],
+      "answer": 1,
+      "explanation": "PgMerchantKeyStore.findActive queries with `revoked_at IS NULL`, so a revoked key returns null and the middleware responds 401 invalid_credentials. The tolerance window only applies to the timestamp, not to key validity. Nothing throws, so it is not a 503. A valid HMAC is irrelevant once the key is no longer found."
+    },
+    {
+      "prompt": "Why does the app capture `rawBody` in the express.json `verify` hook instead of signing `JSON.stringify(req.body)`?",
+      "choices": [
+        "Because JSON.stringify is too slow for payment payloads",
+        "Because express.json discards the body after parsing",
+        "Because re-serialising parsed JSON can change key order, whitespace, or number formatting, so the HMAC would not match the bytes the merchant signed",
+        "Because timingSafeEqual only accepts Buffers"
+      ],
+      "answer": 2,
+      "explanation": "The merchant signs the exact bytes it sent. Parsing and re-serialising can produce different bytes (spacing, escaping, number representation), so the server would compute a different HMAC. The verify hook keeps the original bytes. Speed is not the reason, req.body is still available after parsing, and the Buffer comparison happens on the hex digests anyway."
+    },
+    {
+      "prompt": "If the database is unreachable during key lookup, how does the middleware respond, and why does that matter?",
+      "choices": [
+        "401, so clients treat it as bad credentials and stop retrying",
+        "It calls next() so charges are not blocked by an auth outage",
+        "It throws and Express returns a default 500 with a stack trace",
+        "503 auth_unavailable, so an outage is distinguishable from bad credentials and the request is never let through"
+      ],
+      "answer": 3,
+      "explanation": "The findActive call is wrapped in try/catch and returns 503 with auth_unavailable. This fails closed (no next()) while telling the client the failure is temporary, unlike a 401 which would look like a credential problem. The error is caught, so it does not fall through to Express's default handler."
+    }
+  ],
+  "concepts": [
+    "backend.security.authentication",
+    "backend.api.status_codes_and_error_responses",
+    "backend.api.serialization_and_deserialization"
+  ]
+}

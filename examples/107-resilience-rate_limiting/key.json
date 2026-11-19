@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    0,
+    3
+  ],
+  "explanations": [
+    "There is none. Only one timer is pending at a time (pump returns early while this.timer is set), each start sets nextSlotAt = now + minIntervalMs before running the task, and the next timer waits until that slot, so call starts are spaced at least 200 ms apart (at most 5/s). The queue is capped at 50, so memory and wait time are bounded and overflow fails fast. task() is invoked inside run(), so a synchronous throw from task would escape, but here the task is an async function, which turns throws into rejections forwarded via then(resolve, reject); the finally guarantees pumping continues.",
+    "The first call starts on a 0 ms timer, and each start schedules the next no earlier than 200 ms later, so call n starts about (n-1) x 200 ms: the tenth at about 1.8 s. Pacing is on start times, not completion, so it does not wait for the 2 s timeout; nothing allows simultaneous starts.",
+    "run() fires task() and returns without awaiting it, and pump() is called in finally right away, so the executor limits the start rate, not concurrency. With 1.5 s per call and a start every 200 ms, about 7-8 overlap. It does not serialize or pause, and the abort timeout is 2 s, not 200 ms.",
+    "submit rejects with QueueFullError once 50 are waiting (one may already have been dequeued by the first timer, so the split is approximate). quote() catches QueueFullError and returns FALLBACK_QUOTE with estimated: true, so it is not rethrown. Queued requests are still served by the real API."
+  ]
+}

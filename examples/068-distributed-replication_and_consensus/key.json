@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/ticketStore.ts",
+        "startLine": 17,
+        "endLine": 17
+      }
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "The write quorum is Math.floor(N/2), which for N=3 is 1 and for N=5 is 2. Read quorum is floor(N/2)+1, so W + R = N, not more than N. A save can succeed after reaching only a minority, and a later load can hit a majority that contains no replica holding that write, returning an older ticket version (for example a reassigned ticket appearing unassigned). The write quorum must also be a majority (floor(N/2)+1) so W + R > N and every read set overlaps every write set.",
+    "Rejected or timed-out replicas are dropped by the status === \"fulfilled\" filter; only responses.length < readQuorum (3) throws. With 3 healthy responders the read proceeds and picks the highest version. It does not fail on any single outage, does not treat failures as null records (only fulfilled 404s become null), and withTimeout ensures it never waits indefinitely.",
+    "HttpReplicaClient.put returns res.ok, so a 500 resolves to false. save() counts only results where status is fulfilled and value === true. Fulfillment alone is not enough, nothing throws until the total is compared with the quorum, and there is no retry logic.",
+    "repair runs in the background, so callers do not wait on it; it uses Promise.allSettled so failures do not reject and are simply dropped. putIfNewer sends an if-version-below header so newer data is not overwritten, the returned record is exactly what repair writes, and allSettled prevents unhandled rejections."
+  ]
+}

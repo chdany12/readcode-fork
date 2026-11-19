@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/shardRouter.ts",
+        "startLine": 32,
+        "endLine": 32
+      }
+    },
+    2,
+    3,
+    0
+  ],
+  "explanations": [
+    "hashKey coerces to a signed 32-bit integer with h |= 0, so roughly half of all keys hash to a negative number. In JavaScript, % keeps the sign of the dividend, so shardFor returns a negative index, this.pools[negative] is undefined, and poolFor(...).query throws a TypeError for those restaurants. The result must be normalized, e.g. ((h % n) + n) % n or hashing with >>> 0.",
+    "Orders are routed by restaurant_id, so a customer's orders are spread across shards; the method scatters the query to every pool in parallel via Promise.all and merges. There is no customer-to-shard lookup, and the queries run concurrently, not sequentially.",
+    "Any order in the global top 20 is also in its own shard's top 20, so taking the per-shard top 20, merging, sorting descending, and slicing to 20 is correct. The sort compares b to a, which is descending, and correctness does not depend on single-shard placement.",
+    "Placement is hash mod shard count, so changing the count remaps most keys; no consistent hashing ring or assignment table exists, and reads go to the new shard where the old rows are not. The constructor only checks that the list is non-empty."
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/orderPlacement.ts",
+        "startLine": 39,
+        "endLine": 39
+      }
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "ReserveResult has three variants, but placeOrder only handles \"insufficient\" and then casts everything else to the \"reserved\" variant. When PgInventoryStore returns { status: \"unknown_sku\" }, the cast silences the compiler, reserved.reservationId is undefined, undefined is pushed into reservationIds, and the order is inserted with a line for a SKU that does not exist and no stock reserved. A switch on res.status (or an explicit check for \"reserved\" with an exhaustive never default) would make the compiler force handling of every variant.",
+    "The InsufficientStockError is thrown inside the try, so the catch calls releaseAll(reservationIds), which holds the first line's id, then rethrows. Nothing in the code expires reservations, releases only on insert failure, or creates backorders.",
+    "releaseAll catches and logs each release failure and continues the loop, so the catch in placeOrder then rethrows the original err. The release error is never thrown, no ref is returned on the failure path, and no AggregateError is built.",
+    "The union makes stock shortages and unknown SKUs part of the method's typed contract, separate from database exceptions which still propagate via throw. PgInventoryStore's catch would roll back and release the lock on a throw too; performance is not the reason; and the insufficient path does still ROLLBACK."
+  ]
+}

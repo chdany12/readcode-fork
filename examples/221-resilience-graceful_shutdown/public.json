@@ -1,0 +1,50 @@
+{
+  "id": "e393cd80-f286-4b1f-9e73-65d2264ab2d6",
+  "title": "Ad impression ingest service shutdown",
+  "name": "Impression ingest service",
+  "createdAt": "2026-11-15T09:44:42.046Z",
+  "durationMinutes": 13,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this service drains work when it is asked to shut down? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A warehouse insert fails during a periodic flush. What happens to those rows?",
+      "choices": [
+        "They are dropped and only logged",
+        "They are placed back at the front of the buffer for the next flush",
+        "The flush is retried immediately in a loop",
+        "The process exits so the orchestrator restarts it"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does flush chain onto this.flushing instead of running directly?",
+      "choices": [
+        "To make insert calls run in parallel for throughput",
+        "To retry the previous flush if it failed",
+        "To serialize flushes so a size-triggered and a timer-triggered flush never insert concurrently",
+        "To delay flushing until the server is idle"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The warehouse is hanging and the final flush never resolves after SIGTERM. What does the process do?",
+      "choices": [
+        "Hangs until the orchestrator sends SIGKILL",
+        "Exits 0 after the flush times out internally",
+        "Ignores further SIGTERMs and keeps serving traffic",
+        "Exits with code 1 after about 20 seconds via the deadline timer"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.resilience.graceful_shutdown",
+    "backend.resilience.timeouts",
+    "backend.concurrency.async_await_pitfalls"
+  ]
+}

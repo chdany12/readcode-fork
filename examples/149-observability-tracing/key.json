@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/ledgerClient.ts",
+        "startLine": 32,
+        "endLine": 37
+      }
+    },
+    3,
+    1,
+    0
+  ],
+  "explanations": [
+    "In LedgerClient.post, span.end() is only called on the !res.ok path and the success path. If fetch itself rejects (the AbortSignal timeout fires, DNS fails, connection reset) or res.json() throws, the exception escapes the callback with the ledger.post_journal span never ended and never marked as an error. That span is never exported, so exactly the failures you most want to see (timeouts to the ledger) show up as a parent transfer.execute span with an error and a missing child. The fix is a try/catch/finally around the body that records the exception, sets ERROR status and always calls span.end().",
+    "reserve_funds has already ended and its active context was restored when its callback returned, so when ledger.post is called the active span is transfer.execute. startActiveSpan makes ledger.post_journal active inside its callback, so propagation.inject(context.active(), ...) writes ledger.post_journal's span ID, making the ledger's server span its child. It is not a new root, and the parent's ID is not what gets injected.",
+    "The reserve_funds callback only has a finally that ends the child; it does not set status, so the child ends with UNSET status. The error propagates to execute's outer catch, which calls recordException and setStatus(ERROR) before rethrowing, and finally ends that span. So only transfer.execute is marked as an error.",
+    "JSON.stringify cannot serialise a bigint and throws a TypeError, so the code converts it to a decimal string, which also preserves exact minor-unit precision. The value is still in minor units, it is not recorded as a span attribute, and a bigint carries no currency."
+  ]
+}

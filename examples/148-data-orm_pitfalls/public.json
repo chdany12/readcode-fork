@@ -1,0 +1,51 @@
+{
+  "id": "543487ca-a566-47cd-a855-f4cea04d296d",
+  "title": "Watch progress persistence with Prisma",
+  "name": "Watch progress repository",
+  "createdAt": "2026-11-15T09:41:31.695Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code uses the ORM (query shape, relation loading, conditional writes, or batching)? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two heartbeats for the same profile and asset arrive out of order: the one sent at 12:00:10 is processed before the one sent at 12:00:05, and a row already exists. What happens to the stored position?",
+      "choices": [
+        "The 12:00:05 heartbeat overwrites it because it is processed last",
+        "The 12:00:05 heartbeat matches no row in updateMany, then create fails with P2002, and recordProgress returns false leaving the 12:00:10 position",
+        "Both heartbeats create separate rows because create is called each time",
+        "Prisma throws an optimistic-locking error that propagates to the caller"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "How many SQL queries does continueWatching issue for a profile with 20 in-progress items?",
+      "choices": [
+        "21: one for progress rows and one per row to load the asset",
+        "41: progress rows, then asset and title separately for each row",
+        "A constant small number independent of the row count, because the relations are loaded through a nested select",
+        "It depends on whether the asset relation was already accessed earlier in the request"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Deleting the profile row in removeProfile fails because of a foreign key from another table. What state is the database left in?",
+      "choices": [
+        "Unchanged: the watchProgress deletions are rolled back with the failed profile delete",
+        "Watch progress is deleted but the profile remains",
+        "The profile is deleted and the other table's rows are cascaded",
+        "Partially deleted progress rows, depending on how far deleteMany got"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.orm_pitfalls",
+    "backend.data.n_plus_one_queries",
+    "backend.data.transactions_and_isolation_levels",
+    "backend.concurrency.race_conditions"
+  ]
+}

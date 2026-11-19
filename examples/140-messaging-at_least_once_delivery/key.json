@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "There is no defect. The message is acked only after the SMS call and the reminder_sent_at update both succeed, so a crash at any point leads to redelivery rather than loss. Redelivery is made safe in two layers: the reminder_sent_at check skips already-completed work, and if the crash happened between send and the UPDATE, the provider's idempotency key (stable per appointment) deduplicates the resend, with 409 treated as success. Failures nack with requeue; only unparseable messages are dropped (nack without requeue), which is appropriate for poison payloads.",
+    "Ack happens last, so an unacked message is redelivered when the channel closes. The DB check does not see the reminder as sent, but the idempotency key `reminder:<appointmentId>` lets the provider recognize the repeat (and 409 is treated as success). Nothing was acked yet, and no DLQ is configured in this code.",
+    "Keying on the business entity deduplicates both broker redeliveries and duplicate publishes, which messageId would not catch. Nothing suggests messageId is non-unique or that keys must be numeric, and the key does not affect the SQL.",
+    "Prefetch caps unacknowledged deliveries per channel, which limits concurrency and how many messages return to the queue on a crash. It is not a retry count, does not serialize processing (handlers run concurrently), and acks are still sent individually."
+  ]
+}

@@ -42,7 +42,11 @@ async function plan(jobDescription: string): Promise<Plan> {
 
     // 1. classify
     const classification = await classify(jobDescription, taxonomy);
+    return planFromClassification(classification, taxonomy);
+}
 
+// steps 2-6: turn a classification (weights per label) into example counts
+export function planFromClassification(classification: Classification, taxonomy: Taxonomy): Plan {
     // 2. rank concepts
     const ranked = taxonomy.labels
         .map((label, i) => ({ label, weight: classification.weights[i], i }))
@@ -152,7 +156,10 @@ async function main() {
     await pipeline(result, values.example_out);
 }
 
-main().catch((err) => {
-    console.error(err);
-    process.exit(1);
-});
+// run only when executed directly, not when imported
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+    main().catch((err) => {
+        console.error(err);
+        process.exit(1);
+    });
+}

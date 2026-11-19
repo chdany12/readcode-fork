@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    2,
+    0
+  ],
+  "explanations": [
+    "There is none. withLocks dedupes and sorts keys, so book and reschedule calls touching overlapping providers and rooms always acquire in one global order and cannot deadlock; rescheduling within the same provider or room does not try to lock it twice because of the Set. A key is pushed to `acquired` only after acquireOne resolves, so on a LockTimeoutError the finally releases exactly the locks already held. A timed-out waiter is spliced out of the queue before rejecting, and grant() clears the timer, so a lock is never handed to a waiter that has given up. releaseOne hands ownership directly to the next waiter, so no caller can barge in.",
+    "keysFor(current, next) yields provider:P, room:R, provider:P, room:R. withLocks wraps them in a Set, leaving two distinct keys, each acquired once. Provider and room keys have different prefixes so they are not merged, and nothing skips locking.",
+    "acquireOne for room:3 rejects with LockTimeoutError; the finally in withLocks releases provider:7 (it is in `acquired`), and book catches LockTimeoutError and returns reason \"busy\". \"conflict\" is only for overlapping appointments, and release is immediate in finally, not timer-driven.",
+    "The caller provides `current`, possibly from a stale read. If another reschedule already moved the appointment, the locks held would cover the wrong provider/room, so the code bails with a conflict rather than updating unprotected resources. It has nothing to do with query counts or release mechanics, and the lock alone cannot guarantee the caller's input is fresh."
+  ]
+}

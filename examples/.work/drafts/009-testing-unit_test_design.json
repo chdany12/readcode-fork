@@ -1,0 +1,65 @@
+{
+  "title": "Unit tests for a quota-checked upload service",
+  "name": "Upload quota tests",
+  "language": "TypeScript",
+  "durationMinutes": 14,
+  "files": [
+    {
+      "path": "uploadService.ts",
+      "content": "export class QuotaExceededError extends Error {\n  constructor(readonly accountId: string, readonly requested: number, readonly remaining: number) {\n    super(`account ${accountId} needs ${requested} bytes, ${remaining} remaining`);\n    this.name = \"QuotaExceededError\";\n  }\n}\n\nexport interface QuotaStore {\n  usedBytes(accountId: string): Promise<number>;\n  limitBytes(accountId: string): Promise<number>;\n  addUsage(accountId: string, delta: number): Promise<void>;\n}\n\nexport interface BlobStore {\n  put(key: string, data: Uint8Array): Promise<{ etag: string }>;\n  delete(key: string): Promise<void>;\n}\n\nexport interface UploadResult {\n  key: string;\n  etag: string;\n  size: number;\n}\n\nexport class UploadService {\n  constructor(private readonly quotas: QuotaStore, private readonly blobs: BlobStore) {}\n\n  async upload(accountId: string, path: string, data: Uint8Array): Promise<UploadResult> {\n    if (data.byteLength === 0) {\n      throw new Error(\"refusing to store empty file\");\n    }\n    const [used, limit] = await Promise.all([\n      this.quotas.usedBytes(accountId),\n      this.quotas.limitBytes(accountId),\n    ]);\n    const remaining = limit - used;\n    if (data.byteLength > remaining) {\n      throw new QuotaExceededError(accountId, data.byteLength, remaining);\n    }\n\n    const key = `${accountId}/${path.replace(/^\\/+/, \"\")}`;\n    const { etag } = await this.blobs.put(key, data);\n    try {\n      await this.quotas.addUsage(accountId, data.byteLength);\n    } catch (err) {\n      await this.blobs.delete(key);\n      throw err;\n    }\n    return { key, etag, size: data.byteLength };\n  }\n}\n"
+    },
+    {
+      "path": "uploadService.test.ts",
+      "content": "import { QuotaExceededError, QuotaStore, BlobStore, UploadService } from \"./uploadService\";\n\nclass InMemoryQuotas implements QuotaStore {\n  usage = new Map<string, number>();\n  constructor(private readonly limit: number, private readonly failAdd = false) {}\n  async usedBytes(id: string) { return this.usage.get(id) ?? 0; }\n  async limitBytes() { return this.limit; }\n  async addUsage(id: string, delta: number) {\n    if (this.failAdd) throw new Error(\"quota db unavailable\");\n    this.usage.set(id, (this.usage.get(id) ?? 0) + delta);\n  }\n}\n\nclass InMemoryBlobs implements BlobStore {\n  objects = new Map<string, Uint8Array>();\n  async put(key: string, data: Uint8Array) {\n    this.objects.set(key, data);\n    return { etag: `etag-${data.byteLength}` };\n  }\n  async delete(key: string) { this.objects.delete(key); }\n}\n\nconst bytes = (n: number) => new Uint8Array(n).fill(7);\n\ndescribe(\"UploadService\", () => {\n  let quotas: InMemoryQuotas;\n  let blobs: InMemoryBlobs;\n  let service: UploadService;\n\n  beforeEach(() => {\n    quotas = new InMemoryQuotas(1000);\n    blobs = new InMemoryBlobs();\n    service = new UploadService(quotas, blobs);\n  });\n\n  it(\"stores the blob under the account prefix and records usage\", async () => {\n    const result = await service.upload(\"acct-1\", \"/docs/a.txt\", bytes(300));\n\n    expect(result).toEqual({ key: \"acct-1/docs/a.txt\", etag: \"etag-300\", size: 300 });\n    expect(blobs.objects.has(\"acct-1/docs/a.txt\")).toBe(true);\n    expect(quotas.usage.get(\"acct-1\")).toBe(300);\n  });\n\n  it(\"accepts an upload that exactly fills the quota\", async () => {\n    quotas.usage.set(\"acct-1\", 600);\n\n    await service.upload(\"acct-1\", \"b.bin\", bytes(400));\n\n    expect(quotas.usage.get(\"acct-1\")).toBe(1000);\n  });\n\n  it(\"rejects an upload larger than the remaining quota without storing it\", () => {\n    quotas.usage.set(\"acct-1\", 900);\n\n    expect(service.upload(\"acct-1\", \"big.bin\", bytes(101))).rejects.toThrow(QuotaExceededError);\n    expect(blobs.objects.size).toBe(0);\n  });\n\n  it(\"removes the stored blob when recording usage fails\", async () => {\n    quotas = new InMemoryQuotas(1000, true);\n    service = new UploadService(quotas, blobs);\n\n    await expect(service.upload(\"acct-1\", \"c.txt\", bytes(10))).rejects.toThrow(\"quota db unavailable\");\n    expect(blobs.objects.size).toBe(0);\n  });\n\n  it(\"rejects empty files\", async () => {\n    await expect(service.upload(\"acct-1\", \"empty\", bytes(0))).rejects.toThrow(\"empty file\");\n    expect(quotas.usage.get(\"acct-1\")).toBeUndefined();\n  });\n});\n"
+    }
+  ],
+  "defect": {
+    "path": "uploadService.test.ts",
+    "snippet": "    expect(service.upload(\"acct-1\", \"big.bin\", bytes(101))).rejects.toThrow(QuotaExceededError);"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how these unit tests verify the UploadService's behavior? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The over-quota test calls `expect(service.upload(...)).rejects.toThrow(QuotaExceededError)` without `await` (and the test function is not async and returns nothing). The `.rejects` assertion produces a promise the test runner never waits for, so the test finishes before the assertion settles. If upload stopped throwing, the test would still pass (at most an unhandled rejection is logged later). The following `blobs.objects.size` check also runs synchronously before upload has done anything, so it would pass even if the blob were stored. The test must be async and `await` (or return) the expectation."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "In the test \"removes the stored blob when recording usage fails\", what does the final assertion that blobs.objects.size is 0 actually show about UploadService?",
+      "choices": [
+        "That the quota check rejected the upload before put was called",
+        "That put was never called because addUsage runs first",
+        "That the blob was written and then deleted in the catch block after addUsage threw",
+        "Nothing, because blobs was recreated for this test"
+      ],
+      "answer": 2,
+      "explanation": "In upload(), blobs.put runs before quotas.addUsage. The failing InMemoryQuotas makes addUsage throw, and the catch calls blobs.delete(key). The same blobs instance from beforeEach is reused (only quotas and service are replaced), so size 0 shows the compensating delete happened. The quota check passes (usage 0, limit 1000), and put does run first."
+    },
+    {
+      "prompt": "Why does the \"accepts an upload that exactly fills the quota\" test matter as a separate case?",
+      "choices": [
+        "It checks that Promise.all reads usage and limit concurrently",
+        "It pins down the boundary of `data.byteLength > remaining`, catching a change to `>=`",
+        "It verifies that etags are derived from the byte length",
+        "It ensures the leading slash is stripped from the path"
+      ],
+      "answer": 1,
+      "explanation": "With usage 600 and limit 1000, remaining is 400 and the upload is 400 bytes. Under `>` this succeeds; an off-by-one change to `>=` would reject it. It asserts nothing about concurrency, etags, or path normalization (\"b.bin\" has no leading slash)."
+    },
+    {
+      "prompt": "Each test gets fresh InMemoryQuotas and InMemoryBlobs from beforeEach. What is the main benefit compared to constructing them once for the whole file?",
+      "choices": [
+        "Tests run faster because fewer objects are allocated",
+        "It allows the tests to run in parallel worker threads sharing the maps",
+        "It is required for async tests to be awaited correctly",
+        "State set by one test, such as usage of 900, cannot leak into another and make results depend on test order"
+      ],
+      "answer": 3,
+      "explanation": "Several tests mutate quotas.usage and blobs.objects. Recreating them in beforeEach isolates tests so outcomes do not depend on order. It does not make tests faster, does not share state across workers, and has nothing to do with awaiting."
+    }
+  ],
+  "concepts": [
+    "backend.testing.unit_test_design",
+    "backend.testing.mocking_and_fakes",
+    "backend.concurrency.async_await_pitfalls",
+    "backend.errors.cleanup_on_error_paths"
+  ]
+}

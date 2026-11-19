@@ -1,0 +1,49 @@
+{
+  "id": "436f789f-7d31-44b5-abf3-d01d7fdfc57a",
+  "title": "Structured logging in a travel booking handler",
+  "name": "Booking request logger",
+  "createdAt": "2026-11-15T09:41:31.643Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code attaches per-request context to log records? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A booking fails with a supplier Error and the call site passes { durationMs }. Which fields does the emitted error record contain besides ts, level and msg?",
+      "choices": [
+        "Only durationMs; error details are dropped because fields replaces errFields",
+        "error.type, error.message, error.stack, durationMs, plus the logger's bindings",
+        "error.message as a stringified object, durationMs, and no bindings",
+        "The raw Error object under an \"err\" key, which JSON.stringify serializes as {}"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A caller passes a field named \"level\" in fields when calling log.info(\"booking.started\", { level: \"vip\" }). What appears in the JSON record?",
+      "choices": [
+        "\"level\": \"info\", because the logger's own fields are written last",
+        "Both values, as level and level_1",
+        "\"level\": \"vip\", because caller fields are spread after the built-in keys",
+        "The record is dropped because \"vip\" is not a valid level"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "LOG_LEVEL is unset in production. Which booking events are written?",
+      "choices": [
+        "None; minLevel is undefined so every comparison is false",
+        "All events including debug, since there is no level configured",
+        "Only booking.failed",
+        "booking.started, booking.confirmed and booking.failed"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.observability.structured_logging",
+    "backend.concurrency.shared_state_in_request_handlers"
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "title": "Polling a third-party video transcoder",
+  "name": "Transcode job poller",
+  "language": "TypeScript",
+  "durationMinutes": 13,
+  "files": [
+    {
+      "path": "src/video/encodaTranscoderClient.ts",
+      "content": "export type TranscodeState = \"pending\" | \"processing\" | \"complete\" | \"errored\";\n\nexport interface TranscodeJob {\n  jobId: string;\n  state: TranscodeState;\n  renditions: Array<{ height: number; bitrateKbps: number; playlistUrl: string }>;\n  errorMessage?: string;\n}\n\ninterface EncodaJobPayload {\n  id: string;\n  status: \"QUEUED\" | \"IN_PROGRESS\" | \"FINISHED\" | \"FAILED\";\n  outputs?: Array<{ height: number; video_bitrate: number; hls_url: string }>;\n  failure_reason?: string;\n}\n\nexport class TranscoderError extends Error {\n  constructor(message: string, readonly retryable: boolean) {\n    super(message);\n    this.name = \"TranscoderError\";\n  }\n}\n\nexport class EncodaTranscoderClient {\n  constructor(\n    private readonly baseUrl: string,\n    private readonly apiKey: string,\n    private readonly timeoutMs = 10_000,\n  ) {}\n\n  async submit(assetId: string, sourceUrl: string, ladder: number[]): Promise<string> {\n    const res = await this.request(\"/v1/jobs\", {\n      method: \"POST\",\n      headers: { \"Content-Type\": \"application/json\", \"Idempotency-Key\": `asset-${assetId}` },\n      body: JSON.stringify({\n        input: sourceUrl,\n        outputs: ladder.map((height) => ({ format: \"hls\", height })),\n        metadata: { asset_id: assetId },\n      }),\n    });\n    const body = (await res.json()) as EncodaJobPayload;\n    return body.id;\n  }\n\n  async getJob(jobId: string): Promise<TranscodeJob> {\n    const res = await fetch(`${this.baseUrl}/v1/jobs/${encodeURIComponent(jobId)}`, {\n      headers: { Authorization: `Bearer ${this.apiKey}` },\n    });\n    await this.assertOk(res);\n    return toJob((await res.json()) as EncodaJobPayload);\n  }\n\n  private async request(path: string, init: RequestInit): Promise<Response> {\n    let res: Response;\n    try {\n      res = await fetch(`${this.baseUrl}${path}`, {\n        ...init,\n        headers: { ...(init.headers as Record<string, string>), Authorization: `Bearer ${this.apiKey}` },\n        signal: AbortSignal.timeout(this.timeoutMs),\n      });\n    } catch (err) {\n      throw new TranscoderError(`encoda request failed: ${(err as Error).message}`, true);\n    }\n    await this.assertOk(res);\n    return res;\n  }\n\n  private async assertOk(res: Response): Promise<void> {\n    if (res.ok) return;\n    const text = await res.text().catch(() => \"\");\n    const retryable = res.status === 429 || res.status >= 500;\n    throw new TranscoderError(`encoda http ${res.status}: ${text.slice(0, 200)}`, retryable);\n  }\n}\n\nfunction toJob(p: EncodaJobPayload): TranscodeJob {\n  const stateMap: Record<EncodaJobPayload[\"status\"], TranscodeState> = {\n    QUEUED: \"pending\",\n    IN_PROGRESS: \"processing\",\n    FINISHED: \"complete\",\n    FAILED: \"errored\",\n  };\n  return {\n    jobId: p.id,\n    state: stateMap[p.status] ?? \"processing\",\n    renditions: (p.outputs ?? []).map((o) => ({\n      height: o.height,\n      bitrateKbps: Math.round(o.video_bitrate / 1000),\n      playlistUrl: o.hls_url,\n    })),\n    errorMessage: p.failure_reason,\n  };\n}\n"
+    },
+    {
+      "path": "src/video/transcodePoller.ts",
+      "content": "import { EncodaTranscoderClient, TranscodeJob, TranscoderError } from \"./encodaTranscoderClient\";\n\nexport interface AssetRepo {\n  pendingTranscodes(limit: number): Promise<Array<{ assetId: string; jobId: string }>>;\n  markReady(assetId: string, renditions: TranscodeJob[\"renditions\"]): Promise<void>;\n  markFailed(assetId: string, reason: string): Promise<void>;\n}\n\nexport class TranscodePoller {\n  private running = false;\n\n  constructor(private readonly transcoder: EncodaTranscoderClient, private readonly assets: AssetRepo) {}\n\n  async tick(): Promise<void> {\n    if (this.running) return;\n    this.running = true;\n    try {\n      const pending = await this.assets.pendingTranscodes(50);\n      for (const { assetId, jobId } of pending) {\n        await this.checkOne(assetId, jobId);\n      }\n    } finally {\n      this.running = false;\n    }\n  }\n\n  private async checkOne(assetId: string, jobId: string): Promise<void> {\n    let job: TranscodeJob;\n    try {\n      job = await this.transcoder.getJob(jobId);\n    } catch (err) {\n      if (err instanceof TranscoderError && !err.retryable) {\n        await this.assets.markFailed(assetId, err.message);\n      }\n      return;\n    }\n    if (job.state === \"complete\") {\n      await this.assets.markReady(assetId, job.renditions);\n    } else if (job.state === \"errored\") {\n      await this.assets.markFailed(assetId, job.errorMessage ?? \"transcode failed\");\n    }\n  }\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/video/encodaTranscoderClient.ts",
+    "snippet": "    const res = await fetch(`${this.baseUrl}/v1/jobs/${encodeURIComponent(jobId)}`, {\n      headers: { Authorization: `Bearer ${this.apiKey}` },\n    });"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how the transcoder client bounds and handles its calls to the provider? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "getJob calls fetch directly instead of going through request(), so it has no AbortSignal timeout (and network errors escape as raw errors rather than retryable TranscoderErrors). If Encoda accepts the connection but stalls, the await never settles; because tick() processes jobs sequentially and guards with the running flag, every later tick returns immediately and no asset is ever marked ready or failed again until the process restarts."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "The submit POST times out after Encoda actually created the job, and the caller retries submit for the same asset. What happens?",
+      "choices": [
+        "A second transcode job is created and billed",
+        "The retry is rejected with a non-retryable TranscoderError",
+        "The provider can recognize the retry via the Idempotency-Key derived from assetId instead of creating a duplicate",
+        "submit returns undefined because the first response was lost"
+      ],
+      "answer": 2,
+      "explanation": "submit sends Idempotency-Key: asset-<assetId>, which is the same on every retry for that asset, so a provider honoring the header returns the original job. A fresh key per call would cause duplicates; nothing here throws non-retryable on a retry."
+    },
+    {
+      "prompt": "Encoda returns HTTP 404 for a job id during polling. What does the poller do with that asset?",
+      "choices": [
+        "Marks it failed with the 'encoda http 404' message",
+        "Leaves it pending and checks again next tick",
+        "Marks it ready with no renditions",
+        "Stops processing the rest of the batch"
+      ],
+      "answer": 0,
+      "explanation": "assertOk throws TranscoderError with retryable = false for 404 (not 429 or 5xx). checkOne catches it and, since it is non-retryable, calls markFailed, then continues with the next job. Retryable errors are the ones left pending."
+    },
+    {
+      "prompt": "Encoda reports a FINISHED job whose output has video_bitrate 4500000. How is the rendition stored?",
+      "choices": [
+        "bitrateKbps 4500000",
+        "bitrateKbps 4500",
+        "bitrateKbps 4.5",
+        "The rendition is dropped because the unit is unknown"
+      ],
+      "answer": 1,
+      "explanation": "toJob converts the provider's bits-per-second value with Math.round(o.video_bitrate / 1000), giving 4500 kbps. The raw value is not stored as-is and no rendition is filtered out."
+    }
+  ],
+  "concepts": [
+    "backend.integrations.third_party_adapters",
+    "backend.resilience.timeouts",
+    "backend.api.idempotency",
+    "backend.errors.error_wrapping_and_context"
+  ]
+}

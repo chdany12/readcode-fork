@@ -1,0 +1,48 @@
+{
+  "id": "9d93fec3-1f3a-41d9-bd3b-5511da08a73e",
+  "title": "Food delivery leg metrics",
+  "name": "Delivery leg tracker",
+  "createdAt": "2026-11-15T09:41:31.672Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how DeliveryTracker labels and records its delivery metrics? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "repo.save throws while marking an order delivered. What happens to the metrics?",
+      "choices": [
+        "The duration is observed but the result counter is not incremented",
+        "Both metrics are recorded because they are computed before the save",
+        "Neither metric is recorded and the error propagates",
+        "The result is recorded as \"courier_cancelled\""
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "markDelivered is called twice for the same order, sequentially. What does the second call do?",
+      "choices": [
+        "Records a second duration observation with a later deliveredAt",
+        "Throws because the loaded leg already has deliveredAt set",
+        "Silently returns without recording anything",
+        "Overwrites deliveredAt and increments the counter only"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "How many series does deliveryResults have at most for a single zone?",
+      "choices": [
+        "One",
+        "Two: delivered and failed",
+        "Four: delivered plus the three failure reasons",
+        "One per order"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.observability.metrics"
+  ]
+}

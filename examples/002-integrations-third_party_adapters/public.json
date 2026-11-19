@@ -1,0 +1,53 @@
+{
+  "id": "91656831-6319-42f3-a025-0c43286043c5",
+  "title": "ParcelHub shipping label adapter",
+  "name": "Parcel label client",
+  "createdAt": "2026-11-15T06:19:26.723Z",
+  "durationMinutes": 14,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this adapter calls the ParcelHub API (timeouts, retries, error mapping)? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The first createLabel attempt for order A-17 reaches ParcelHub, which creates the label, but the response is lost when the client's timeout fires. The second attempt gets a 200. What is the most likely outcome?",
+      "choices": [
+        "Two labels are created and the customer is charged twice, because the second POST is a new request",
+        "One label exists; the retry carries the same Idempotency-Key (label-A-17), so ParcelHub returns the original label",
+        "The call fails with CarrierError because aborted requests are not retryable",
+        "The call fails with InvalidAddressError because ParcelHub rejects the duplicate reference"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "With maxAttempts=4, baseBackoffMs=200, maxRetryWaitMs=5000, ParcelHub answers the first attempt with 429 and Retry-After: 30. What does createLabel do?",
+      "choices": [
+        "Sleeps 5000 ms (the cap) and retries",
+        "Sleeps 200 ms and retries, ignoring Retry-After",
+        "Sleeps 30 seconds and retries",
+        "Throws CarrierRateLimitedError immediately without retrying"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "ParcelHub returns HTTP 400 with body {\"error\":{\"code\":\"parcel_too_heavy\"}}. How many HTTP requests are made and what does the caller see?",
+      "choices": [
+        "One request; a non-retryable CarrierError mentioning 400 parcel_too_heavy",
+        "Four requests; a CarrierUnavailableError after retries are exhausted",
+        "One request; an InvalidAddressError with field \"unknown\"",
+        "One request; the label is returned with an empty tracking number"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.integrations.third_party_adapters",
+    "backend.resilience.retries_and_backoff",
+    "backend.resilience.timeouts",
+    "backend.api.idempotency",
+    "backend.resilience.rate_limiting",
+    "backend.errors.error_wrapping_and_context"
+  ]
+}

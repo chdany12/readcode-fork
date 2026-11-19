@@ -1,0 +1,62 @@
+{
+  "title": "Order reservation consumer with pause/resume flow control",
+  "name": "Inventory reservation consumer",
+  "language": "TypeScript",
+  "durationMinutes": 15,
+  "files": [
+    {
+      "path": "src/reservationConsumer.ts",
+      "content": "import { EventEmitter } from \"events\";\n\nexport interface OrderPlacedEvent {\n  orderId: string;\n  lines: { sku: string; quantity: number }[];\n  offset: number;\n}\n\nexport interface PartitionSource extends EventEmitter {\n  pause(): void;\n  resume(): void;\n  commit(offset: number): Promise<void>;\n}\n\nexport interface InventoryClient {\n  reserve(orderId: string, sku: string, quantity: number): Promise<void>;\n}\n\nexport interface ConsumerOptions {\n  maxInFlight: number;\n  resumeBelow: number;\n}\n\nexport class ReservationConsumer {\n  private inFlight = 0;\n  private paused = false;\n  private readonly pendingOffsets = new Set<number>();\n  private committedThrough = -1;\n\n  constructor(\n    private readonly source: PartitionSource,\n    private readonly inventory: InventoryClient,\n    private readonly opts: ConsumerOptions,\n    private readonly onFailure: (evt: OrderPlacedEvent, err: unknown) => Promise<void>,\n  ) {\n    if (opts.resumeBelow >= opts.maxInFlight) {\n      throw new Error(\"resumeBelow must be lower than maxInFlight\");\n    }\n  }\n\n  start(): void {\n    this.source.on(\"message\", (evt: OrderPlacedEvent) => this.accept(evt));\n  }\n\n  private accept(evt: OrderPlacedEvent): void {\n    this.inFlight++;\n    this.pendingOffsets.add(evt.offset);\n    if (!this.paused && this.inFlight >= this.opts.maxInFlight) {\n      this.paused = true;\n      this.source.pause();\n    }\n    this.process(evt).finally(() => this.release(evt.offset));\n  }\n\n  private async process(evt: OrderPlacedEvent): Promise<void> {\n    try {\n      for (const line of evt.lines) {\n        await this.inventory.reserve(evt.orderId, line.sku, line.quantity);\n      }\n    } catch (err) {\n      await this.onFailure(evt, err).catch(() => undefined);\n    }\n  }\n\n  private release(offset: number): void {\n    this.inFlight--;\n    this.pendingOffsets.delete(offset);\n    void this.advanceCommit(offset);\n    if (this.paused && this.inFlight <= this.opts.resumeBelow) {\n      this.paused = false;\n      this.source.resume();\n    }\n  }\n\n  private async advanceCommit(offset: number): Promise<void> {\n    let lowestPending = Infinity;\n    for (const o of this.pendingOffsets) {\n      if (o < lowestPending) lowestPending = o;\n    }\n    const safe = lowestPending === Infinity ? offset : lowestPending - 1;\n    if (safe > this.committedThrough) {\n      this.committedThrough = safe;\n      await this.source.commit(safe).catch(() => undefined);\n    }\n  }\n\n  get stats(): { inFlight: number; paused: boolean } {\n    return { inFlight: this.inFlight, paused: this.paused };\n  }\n}\n"
+    },
+    {
+      "path": "src/worker.ts",
+      "content": "import { ReservationConsumer, PartitionSource, InventoryClient, OrderPlacedEvent } from \"./reservationConsumer\";\n\nexport function startReservationWorker(\n  source: PartitionSource,\n  inventory: InventoryClient,\n  deadLetter: (evt: OrderPlacedEvent, reason: string) => Promise<void>,\n): ReservationConsumer {\n  const consumer = new ReservationConsumer(\n    source,\n    inventory,\n    { maxInFlight: 64, resumeBelow: 16 },\n    async (evt, err) => {\n      const reason = err instanceof Error ? err.message : String(err);\n      await deadLetter(evt, reason);\n    },\n  );\n  consumer.start();\n  return consumer;\n}\n"
+    }
+  ],
+  "defect": null,
+  "locateQuestion": {
+    "prompt": "Is there a defect in how this consumer limits the amount of work it takes on from the partition source? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "There is no defect. Every accepted message increments inFlight, and accept() pauses the source as soon as inFlight reaches maxInFlight. Each message's process() promise always settles (errors are caught and routed to onFailure, whose own rejection is swallowed), so the .finally() release always runs, decrements inFlight and resumes once it drops to resumeBelow. Messages already delivered after pause() are still counted, so in-flight work cannot grow unchecked, and the constructor rejects a resumeBelow that would make the thresholds overlap."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "With the worker's settings, the source is paused at 64 in-flight orders. Reservations then complete one at a time. When is the source resumed?",
+      "choices": [
+        "As soon as in-flight drops to 63",
+        "When in-flight drops to 16 or below",
+        "Only after every in-flight order has finished",
+        "After the next successful commit"
+      ],
+      "answer": 1,
+      "explanation": "release() resumes only when paused is true and inFlight <= opts.resumeBelow, which is 16 in worker.ts. Resuming at 63 would toggle pause/resume on every completion; that is exactly what the separate low watermark avoids. It does not wait for zero, and commits play no part in the resume check."
+    },
+    {
+      "prompt": "Offsets 10, 11 and 12 are in flight. Offset 12 finishes first, then 10. What has been committed after both complete (assuming 11 is still running)?",
+      "choices": [
+        "12",
+        "11",
+        "Nothing new beyond what was committed before 10 finished, then 10",
+        "10"
+      ],
+      "answer": 3,
+      "explanation": "advanceCommit computes the lowest pending offset and commits one below it. When 12 finishes, 10 is still pending, so safe is 9. When 10 finishes, the lowest pending is 11, so safe is 10 and 10 is committed. Committing 12 or 11 would skip over work still in progress, which could lose it on a restart."
+    },
+    {
+      "prompt": "An inventory reserve call throws for one order, and the dead-letter call for that order also rejects. What happens to the consumer?",
+      "choices": [
+        "The order stays counted as in flight forever and the consumer slowly stalls",
+        "An unhandled rejection crashes the process",
+        "The order is released normally; its offset can be committed and capacity is freed",
+        "The source is paused permanently"
+      ],
+      "answer": 2,
+      "explanation": "process() catches the reserve error and calls onFailure(...).catch(() => undefined), so process() resolves. The .finally() in accept() then calls release(), which decrements inFlight, removes the offset from pendingOffsets and may resume the source. No rejection escapes, so nothing leaks and nothing crashes."
+    }
+  ],
+  "concepts": [
+    "backend.messaging.backpressure",
+    "backend.messaging.queues_and_consumers",
+    "backend.messaging.at_least_once_delivery",
+    "backend.messaging.dead_letter_queues"
+  ]
+}

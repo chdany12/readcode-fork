@@ -1,0 +1,65 @@
+{
+  "title": "Batched ad impression writer",
+  "name": "Impression batch buffer",
+  "language": "TypeScript",
+  "durationMinutes": 12,
+  "files": [
+    {
+      "path": "src/types.ts",
+      "content": "export interface ImpressionEvent {\n  campaignId: string;\n  creativeId: string;\n  ts: number;\n  costMicros: number;\n}\n\nexport interface WarehouseSink {\n  insertRows(table: string, rows: Record<string, unknown>[]): Promise<void>;\n}\n\nexport interface Metrics {\n  increment(name: string, value?: number): void;\n}\n"
+    },
+    {
+      "path": "src/impressionBuffer.ts",
+      "content": "import { ImpressionEvent, Metrics, WarehouseSink } from \"./types\";\n\nexport class ImpressionBuffer {\n  private pending: ImpressionEvent[] = [];\n  private flushing = false;\n  private timer: NodeJS.Timeout | null = null;\n\n  constructor(\n    private readonly sink: WarehouseSink,\n    private readonly metrics: Metrics,\n    private readonly maxBatch = 1000,\n    private readonly flushIntervalMs = 2000,\n  ) {}\n\n  start(): void {\n    this.timer = setInterval(() => {\n      void this.flush();\n    }, this.flushIntervalMs);\n  }\n\n  record(evt: ImpressionEvent): void {\n    this.pending.push(evt);\n    if (this.pending.length >= this.maxBatch) {\n      void this.flush();\n    }\n  }\n\n  async flush(): Promise<void> {\n    if (this.flushing || this.pending.length === 0) return;\n    this.flushing = true;\n    const batch = this.pending.splice(0, this.maxBatch);\n    try {\n      return this.sink.insertRows(\"impressions\", batch.map(toRow));\n    } catch (err) {\n      this.pending.unshift(...batch);\n      this.metrics.increment(\"impressions.flush_failed\");\n    } finally {\n      this.flushing = false;\n      this.metrics.increment(\"impressions.flushed\", batch.length);\n    }\n  }\n\n  async stop(): Promise<void> {\n    if (this.timer) clearInterval(this.timer);\n    this.timer = null;\n    while (this.pending.length > 0 && !this.flushing) {\n      await this.flush();\n    }\n  }\n}\n\nfunction toRow(evt: ImpressionEvent): Record<string, unknown> {\n  return {\n    campaign_id: evt.campaignId,\n    creative_id: evt.creativeId,\n    event_time: new Date(evt.ts).toISOString(),\n    cost_micros: evt.costMicros,\n  };\n}\n"
+    }
+  ],
+  "defect": {
+    "path": "src/impressionBuffer.ts",
+    "snippet": "      return this.sink.insertRows(\"impressions\", batch.map(toRow));"
+  },
+  "locateQuestion": {
+    "prompt": "Is there a defect in how flush() handles the outcome of writing a batch to the warehouse? If so, mark the line(s) where it is; otherwise answer that there is none.",
+    "explanation": "The defect is `return this.sink.insertRows(...)` without await inside the try. Returning a promise from an async function does not wait for it inside the try, so the catch never sees a rejected insert: the batch is never put back and impressions (and their cost) are lost, while the rejection escapes to the void-ed caller as an unhandled rejection. The finally also runs immediately, clearing `flushing` and counting the batch as flushed while the insert is still running, so a second flush can start concurrently. Writing `await this.sink.insertRows(...)` fixes both."
+  },
+  "choiceQuestions": [
+    {
+      "prompt": "3,500 events are pending and a single flush() call runs. How many events does it send?",
+      "choices": [
+        "3,500",
+        "1,000",
+        "2,500",
+        "2,000"
+      ],
+      "answer": 1,
+      "explanation": "flush takes `this.pending.splice(0, this.maxBatch)`, and maxBatch defaults to 1000, so one call sends 1,000 and leaves 2,500 pending. It never sends all pending events at once; the remainder waits for the next timer tick or record() trigger."
+    },
+    {
+      "prompt": "record() is called while flushing is true and pending reaches maxBatch. What happens?",
+      "choices": [
+        "The event is dropped",
+        "record() waits for the current flush to finish",
+        "A second insert starts immediately in parallel",
+        "The event stays in pending; the extra flush() call returns early without sending"
+      ],
+      "answer": 3,
+      "explanation": "record() always pushes to pending, then calls flush(), whose first line returns if `this.flushing` is true. Nothing is dropped, record() is synchronous so it cannot wait, and the guard prevents that call from starting a parallel insert."
+    },
+    {
+      "prompt": "How are impression timestamps written to the warehouse row?",
+      "choices": [
+        "As an ISO-8601 string in UTC built from the millisecond ts",
+        "As the raw epoch milliseconds number",
+        "As a string in the server's local time zone",
+        "As epoch seconds"
+      ],
+      "answer": 0,
+      "explanation": "toRow uses `new Date(evt.ts).toISOString()`, which always produces a UTC ISO-8601 string from epoch milliseconds. It is not the raw number, not local time (toISOString is always UTC), and not converted to seconds."
+    }
+  ],
+  "concepts": [
+    "backend.concurrency.async_await_pitfalls",
+    "backend.errors.swallowed_errors",
+    "backend.errors.error_propagation",
+    "backend.resilience.graceful_shutdown"
+  ]
+}

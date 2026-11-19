@@ -1,0 +1,49 @@
+{
+  "id": "7c17694d-cb51-40f9-a51f-477d59b01300",
+  "title": "Sharded file metadata service",
+  "name": "File metadata service",
+  "createdAt": "2026-11-15T09:41:31.585Z",
+  "durationMinutes": 12,
+  "language": "TypeScript",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code chooses the shard for file metadata? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "What is the main benefit of routing listFolder and syncSince by ownerId rather than by full path?",
+      "choices": [
+        "It makes each shard hold an equal number of files",
+        "A user's whole namespace lives on one shard, so listing and sync are single-shard prefix scans",
+        "It allows two users to share a folder without copying",
+        "It makes renames of a folder free"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A single customer stores 40 million files. With owner-based partitioning, what is the likely consequence?",
+      "choices": [
+        "Their files are automatically split across all shards",
+        "Requests for that customer are rejected by ShardMap",
+        "One shard carries a disproportionate share of storage and traffic (a hot partition)",
+        "Nothing, because sha256 distributes keys uniformly"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "listFolder('/photos') scans the prefix 'owner:/photos/'. Why is the extra parentOf filter applied to the results?",
+      "choices": [
+        "To remove files from other owners that share the prefix",
+        "To exclude entries in nested subfolders like /photos/2024/a.jpg so only direct children are returned",
+        "To undo normalize() on the stored paths",
+        "To drop deleted files"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.distributed.sharding_and_partitioning",
+    "backend.data.nosql_modeling"
+  ]
+}

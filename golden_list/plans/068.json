@@ -1,0 +1,25 @@
+{
+  "taxonomyVersion": "0.1.0",
+  "targets": [
+    {
+      "label": "backend.testing.unit_test_design",
+      "count": 8
+    },
+    {
+      "label": "backend.data.n_plus_one_queries",
+      "count": 3
+    },
+    {
+      "label": "backend.api.rest_design",
+      "count": 3
+    },
+    {
+      "label": "backend.errors.error_propagation",
+      "count": 3
+    },
+    {
+      "label": "backend.testing.mocking_and_fakes",
+      "count": 3
+    }
+  ]
+}

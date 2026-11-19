@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    3,
+    0
+  ],
+  "explanations": [
+    "There is no defect. The idempotency key is derived from orderId once, outside the retry loop, so a retried POST cannot create a second label. Each attempt gets its own AbortController and timer, and the timer is cleared in finally, including while the body is read. Only CarrierErrors marked retryable (network failures, 429, 5xx) are retried; 4xx such as invalid addresses fail fast. A Retry-After longer than maxRetryWaitMs is surfaced immediately instead of blocking the caller, and money is parsed from the decimal string into integer cents without floating-point math.",
+    "idempotencyKey is computed from req.orderId before withRetries and the same value is passed to every send call, so the provider can deduplicate the retried POST. An abort makes fetch throw, which send wraps in CarrierUnavailableError (retryable), so the retry does happen. Nothing maps a duplicate to InvalidAddressError; that only comes from a 422 with code address_invalid.",
+    "Retry-After of 30 seconds becomes retryAfterMs=30000. In withRetries, a CarrierRateLimitedError whose retryAfterMs exceeds maxRetryWaitMs is rethrown right away, letting the caller decide (for example re-queue the job). The cap with Math.min is only reached for smaller Retry-After values, the 200 ms backoff is replaced by Math.max with retryAfterMs, and the code never sleeps past maxRetryWaitMs.",
+    "A 400 is not ok, not 429, not a 422 address_invalid, and not >= 500, so send throws the generic CarrierError with retryable=false, and withRetries rethrows it on the first attempt. CarrierUnavailableError is only for network failures and 5xx; InvalidAddressError requires status 422 with that specific code; and a non-ok response never reaches the label mapping."
+  ]
+}

@@ -24,3 +24,7 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Monaco line highlights for the locate-the-defect question */
+.rc-marked { background: rgba(250, 204, 21, 0.25); }
+.rc-defect { background: rgba(239, 68, 68, 0.3); }
