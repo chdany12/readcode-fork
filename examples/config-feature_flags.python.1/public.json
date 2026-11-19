@@ -1,0 +1,50 @@
+{
+  "id": "de40a53d-1861-456a-80e4-e32b57c48ea1",
+  "title": "Flag cache for payment routing",
+  "name": "Charge routing flags",
+  "createdAt": "2026-11-19T23:09:24.536Z",
+  "durationMinutes": 13,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code caches and evaluates feature flags when the flag service is slow or unavailable? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The flag service starts failing 2 minutes after a successful load. A request arrives at that moment, finding the cache expired. Which description of what happens is correct?",
+      "choices": [
+        "The request raises FlagsUnavailable because the TTL has passed",
+        "Every concurrent request makes its own fetch call and each waits for its own timeout",
+        "The request returns each flag's DEFAULTS value immediately",
+        "The request waits up to the fetch timeout, then uses the flags from 2 minutes ago, and calls in the next 5 seconds skip the fetch"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The flag service stays down for 10 minutes. What does is_enabled(\"block-new-card-bins\", ...) return?",
+      "choices": [
+        "False, because failures fail closed to disabled",
+        "True, from the hardcoded default, once the snapshot is more than 300s old",
+        "An exception propagates to ChargeRouter.submit",
+        "The last known value forever, because the snapshot is never discarded"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Compared with refreshing the cache outside the lock, what is the main tradeoff of this design when the cache expires under heavy traffic?",
+      "choices": [
+        "Many threads can refresh at once, multiplying load on the flag service",
+        "Stale values can be served indefinitely",
+        "Callers can be delayed for up to the fetch timeout, but only one fetch call is in flight",
+        "Flag values can differ between threads in the same instant"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.feature_flags",
+    "backend.resilience.graceful_degradation",
+    "backend.resilience.timeouts"
+  ]
+}

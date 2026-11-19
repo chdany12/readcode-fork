@@ -1,0 +1,49 @@
+{
+  "id": "feb96cc2-c1ab-4f8e-a4a0-aeee02b4d48e",
+  "title": "Idempotent order creation endpoint",
+  "name": "Order creation handler",
+  "createdAt": "2026-11-19T23:02:14.214Z",
+  "durationMinutes": 12,
+  "language": "Go",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code makes order creation idempotent? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends the same valid request twice, one second apart, and the first request succeeded. What does the second caller receive?",
+      "choices": [
+        "A 409 Conflict because the key was already used",
+        "The stored 201 response body with an Idempotent-Replay header, and no new order or stock reservation",
+        "A new order with a new order ID, since the inventory is checked again",
+        "A 400 because the request body is read twice"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two different customers happen to send the same Idempotency-Key value. What happens?",
+      "choices": [
+        "The second customer receives the first customer's order response",
+        "The second request is rejected with 400",
+        "The store overwrites the first record and both customers are charged twice",
+        "Both are processed independently because the store key includes the customer ID"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A request fails because Reserve returns an error (out of stock). The client retries with the same key a minute later after stock was replenished. What happens?",
+      "choices": [
+        "The retry is processed normally and can succeed",
+        "The retry replays the 409 response from the store",
+        "The retry gets 500 because the key is locked",
+        "The retry is rejected because the key is tied to a failed attempt"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.idempotency",
+    "backend.concurrency.race_conditions"
+  ]
+}

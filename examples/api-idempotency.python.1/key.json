@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    0,
+    2,
+    3
+  ],
+  "explanations": [
+    "There is no defect. The key is claimed atomically with INSERT OR IGNORE on a (account, key) primary key, so only one concurrent caller proceeds. The payload fingerprint rejects key reuse with different content, an in-progress row yields 409, and a failure before completion calls abandon (which only deletes rows still without a status), so retries are not blocked. Results are scoped per account and expire by TTL. The deletion of expired rows and the claim happen in one transaction.",
+    "INSERT OR IGNORE affects zero rows for the second caller, which reads the row: status is NULL while in progress (KeyInProgress, 409) and set after finish (replay of 202). There is no waiting. The fingerprints match, so 422 for a conflict does not occur.",
+    "The except block calls abandon, deleting the row since status IS NULL, then re-raises. No 500 response is stored, and the fingerprint is unchanged.",
+    "Dictionary key order varies between clients and serializers; sorting yields a canonical string so a legitimate retry is not mistaken for a conflict. It does not strengthen SHA-256 or reduce stored size, and SQL injection is prevented by parameter binding."
+  ]
+}

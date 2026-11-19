@@ -1,0 +1,50 @@
+{
+  "id": "5155a274-3f5c-4228-90ff-c5e22b19ff44",
+  "title": "Food order payload validation",
+  "name": "Food order placement",
+  "createdAt": "2026-11-19T23:02:14.241Z",
+  "durationMinutes": 13,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code validates the order request? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends delivery_type \"asap\" together with a scheduled_for timestamp. What happens?",
+      "choices": [
+        "The timestamp is silently ignored and the order is placed",
+        "The request is rejected with 422 by the model validator before place_order runs",
+        "place_order rejects it with a 409 after looking up the restaurant",
+        "The order is converted to a scheduled delivery"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A request contains the same menu_item_id twice, each with quantity 15. What is the outcome?",
+      "choices": [
+        "Accepted: each line is within the per-line limit of 20",
+        "Rejected with 422 by the PlaceOrder model before the route body runs",
+        "Rejected with 422 by the route after the restaurant is found open",
+        "Accepted with the quantities merged into 30"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A request with \"quantity\": \"2\" (a JSON string) for one item is submitted. What does the client see?",
+      "choices": [
+        "The order is placed with quantity 2 because pydantic coerces numeric strings",
+        "A 422, because the field is declared strict and a string is not accepted as an int",
+        "A 400 from the HTTP server because the body is malformed",
+        "A 404 because the menu item cannot be matched"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.request_validation",
+    "backend.api.status_codes_and_error_responses",
+    "backend.security.input_sanitization"
+  ]
+}

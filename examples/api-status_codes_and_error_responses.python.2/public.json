@@ -1,0 +1,50 @@
+{
+  "id": "52205c90-6fe9-4f32-9bfe-5690eadbb9d5",
+  "title": "Video segment and manifest API",
+  "name": "Video segment server",
+  "createdAt": "2026-11-19T23:02:14.266Z",
+  "durationMinutes": 12,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code chooses HTTP status codes and error responses? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A viewer with a valid token but no subscription requests the manifest of a premium video that exists, is not removed and is not blocked in their country. What is returned?",
+      "choices": [
+        "401 with a WWW-Authenticate header",
+        "403 subscription required",
+        "404 video not found",
+        "451 not available in your region"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A viewer without a subscription, located in a country listed in the premium video's blocked_countries, requests its manifest. What status do they get?",
+      "choices": [
+        "403 subscription required",
+        "401 invalid token",
+        "404 video not found",
+        "451 not available in your region"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A segment is 5000 bytes long. A client sends Range: bytes=9000-. What is the response?",
+      "choices": [
+        "200 with the full segment",
+        "400 invalid_range",
+        "206 with Content-Range: bytes 0-4999/5000",
+        "416 with Content-Range: bytes */5000"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.status_codes_and_error_responses",
+    "backend.api.rest_design",
+    "backend.security.authorization_checks"
+  ]
+}

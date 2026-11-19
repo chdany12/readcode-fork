@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    2,
+    2
+  ],
+  "explanations": [
+    "There is no defect. The pool is bounded, so concurrency against the directory is capped at max_workers. Connections are thread-local, so no connection is shared between threads, and a broken one is dropped so the next call on that thread reconnects. Results are collected with a deadline, unfinished lookups are reported as failures rather than hanging the caller, and `close` shuts the pool down and cancels queued work. Cancelling a future that is already running does nothing, but the code only uses `cancel` as a best effort and reports the failure either way.",
+    "`dict.fromkeys` removes duplicates while keeping order, so 40 tasks are submitted. ThreadPoolExecutor uses an unbounded internal queue and at most 8 worker threads, so extra tasks wait rather than run concurrently or get rejected.",
+    "`threading.local` gives every pool thread its own `conn` attribute, created lazily on first use. With 8 workers that is at most 8 connections, reused across calls. It is not a single shared connection, which the client's design avoids, and it is not created per call or per id.",
+    "`as_completed` raises its timeout in the caller, and the code reports every not-done future as failed. `Future.cancel()` returns False for a running future, and Python threads cannot be interrupted, so the lookups keep running and hold their workers (and later results are discarded). This means a later `resolve_many` can queue behind them. Nothing retries or blocks past the deadline."
+  ]
+}

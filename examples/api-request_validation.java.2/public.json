@@ -1,0 +1,51 @@
+{
+  "id": "7ab3751e-4be0-4415-a5e9-db60163b44a0",
+  "title": "Booking request validation",
+  "name": "Booking request rules",
+  "createdAt": "2026-11-19T23:02:14.236Z",
+  "durationMinutes": 12,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code validates booking requests? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A request has checkIn in the past and an empty travelers list. What does the client receive?",
+      "choices": [
+        "A 422 whose problems list contains the past-date message",
+        "A 400, because the annotation constraints fail first and BookingRules is never called",
+        "A 201, because the service decides whether to reject past dates",
+        "A 422 listing both the past-date problem and the missing travelers"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A request has checkIn 2030-05-10 and checkOut 2030-05-01 (all annotation constraints satisfied). Which describes what BookingRules does?",
+      "choices": [
+        "It reports that checkOut must be after checkIn and does not compute a night count for that stay",
+        "It reports both the ordering problem and that the stay exceeds the night limit, because the negative count is compared as an absolute value",
+        "It throws an exception from ChronoUnit.DAYS.between",
+        "It reports only the night limit problem"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does BookingRules take a Clock instead of calling LocalDate.now() directly?",
+      "choices": [
+        "LocalDate.now() is not thread-safe",
+        "So the current date used by the checks can be fixed in tests and is consistent with the application time zone configuration",
+        "Because bean validation requires a Clock bean",
+        "To avoid the cost of reading the system time on every request"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.request_validation",
+    "backend.api.status_codes_and_error_responses",
+    "backend.testing.unit_test_design",
+    "backend.design.dependency_injection"
+  ]
+}

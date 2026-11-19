@@ -1,0 +1,50 @@
+{
+  "id": "dbbfc3a5-1713-43bb-bbd3-efecfbf8547d",
+  "title": "Fare search with gradual flag rollout",
+  "name": "Fare ranker rollout",
+  "createdAt": "2026-11-19T23:09:24.532Z",
+  "durationMinutes": 12,
+  "language": "Go",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code assigns users to a percentage rollout? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "After startup, the flag source becomes unreachable and every poll fails. What does IsEnabled return for a flag that existed in the last successful load?",
+      "choices": [
+        "The defaultValue passed by the caller, because the store is considered invalid",
+        "The result computed from the last successfully loaded snapshot",
+        "False, because refresh failures reset the snapshot to empty",
+        "It blocks until the next successful refresh"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Many request goroutines call IsEnabled while the poll goroutine refreshes. Why is no mutex needed?",
+      "choices": [
+        "Go maps are safe for concurrent reads and writes",
+        "The poll goroutine only runs when no requests are in flight",
+        "Each snapshot is built completely and never modified, and readers see it through an atomic pointer swap",
+        "IsEnabled copies the whole map before reading it"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A flag has Enabled=false, RolloutPct=100, and the caller's user ID is in AllowList. What does IsEnabled return?",
+      "choices": [
+        "True, because the allow list is checked first",
+        "True, because the rollout is 100%",
+        "The caller's defaultValue, because the flag is contradictory",
+        "False, because the Enabled check comes before the allow list and rollout"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.feature_flags",
+    "backend.concurrency.atomic_operations",
+    "backend.resilience.graceful_degradation"
+  ]
+}

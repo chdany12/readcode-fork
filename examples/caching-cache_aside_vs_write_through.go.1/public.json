@@ -1,0 +1,49 @@
+{
+  "id": "58beafe2-e447-469c-8dfa-b1e3f56d151e",
+  "title": "Notification preference store",
+  "name": "Notification preference store",
+  "createdAt": "2026-11-19T23:02:14.270Z",
+  "durationMinutes": 12,
+  "language": "Go",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how Update keeps the cache and the repository consistent? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "After SetChannel succeeds for a user, what happens on the next Get for that user?",
+      "choices": [
+        "It returns the entry cached before SetChannel, until the TTL expires",
+        "It fails with ErrNotFound because the key was removed",
+        "It misses the cache, loads from the repository, and repopulates the cache",
+        "It reads the new value directly from SetChannel's in-memory copy"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does SetChannel call s.repo.Load instead of s.Get before modifying the preferences?",
+      "choices": [
+        "Get is not safe to call concurrently",
+        "A cached copy may be stale or may not have been persisted, so a read-modify-write on it could overwrite newer saved changes",
+        "Get does not return a pointer that can be modified",
+        "Load is faster than Get because it bypasses JSON decoding"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The cache backend is down: Get and Set on it fail (Get reports a miss, Set returns errors). What is the effect on Get for a user whose preferences exist in the repository?",
+      "choices": [
+        "Get returns an error because fill reports the cache failure",
+        "Get returns the preferences from the repository on every call, with each call going to the repository",
+        "Get returns a zero-value Preferences",
+        "Get retries the cache until it recovers"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.caching.cache_aside_vs_write_through",
+    "backend.caching.stale_reads"
+  ]
+}

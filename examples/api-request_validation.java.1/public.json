@@ -1,0 +1,50 @@
+{
+  "id": "2bb40829-9aec-43fe-9b86-897d497793ae",
+  "title": "Telemetry batch ingestion validation",
+  "name": "Telemetry batch ingest",
+  "createdAt": "2026-11-19T23:02:14.234Z",
+  "durationMinutes": 14,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code validates incoming telemetry batches? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A batch contains 501 well-formed readings for a valid deviceId. What is the outcome?",
+      "choices": [
+        "The first 500 are stored and the last is dropped",
+        "The request reaches the loop in ingest() and is rejected with 422",
+        "All 501 are stored because @Size only applies to strings",
+        "The request is rejected with 400 and a fields map before the controller method body runs"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why is the \"recordedAt must not be in the future\" rule implemented in the controller rather than as an annotation on ReadingDto?",
+      "choices": [
+        "The limit depends on the current time from an injected Clock, which a static annotation cannot express, and the controller returns 422 rather than the 400 used for shape errors",
+        "Annotations cannot be applied to Instant fields",
+        "Bean Validation runs after the controller method, so time checks must come first",
+        "Because @Valid skips fields of type Instant"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A request whose deviceId is \"sensor 01\" (containing a space) and whose readings list is empty is submitted. What does the client receive?",
+      "choices": [
+        "A 202 because the service only uses deviceId as a string prefix",
+        "A 422 with the future-timestamp error",
+        "A 400 whose fields map contains entries for both deviceId and readings",
+        "A 400 whose fields map contains only deviceId, because validation stops at the first violation"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.request_validation",
+    "backend.api.status_codes_and_error_responses",
+    "backend.api.serialization_and_deserialization"
+  ]
+}

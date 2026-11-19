@@ -1,0 +1,50 @@
+{
+  "id": "f4bb4762-61c9-4497-9cd9-50fa053b8e40",
+  "title": "Idempotent impression batch ingest",
+  "name": "Impression batch ingest",
+  "createdAt": "2026-11-19T23:02:14.227Z",
+  "durationMinutes": 12,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code makes batch ingestion idempotent? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two simultaneous requests with the same account, key and payload arrive. What happens to the second one?",
+      "choices": [
+        "It receives 409 if the first has not finished, or the replayed 202 if it has",
+        "It writes the events again, and duplicates are removed later",
+        "It waits on a lock until the first finishes",
+        "It receives 422 for a conflicting payload"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The writer raises an exception partway through the first attempt. What is the state for a later retry with the same key?",
+      "choices": [
+        "The key stays claimed and retries get 409 until the TTL expires",
+        "The retry replays a stored 500 response",
+        "The claim row is removed by abandon, so a retry can start fresh",
+        "The retry returns 422 because the fingerprint changed"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does fingerprint serialize the payload with sort_keys=True?",
+      "choices": [
+        "To make the SHA-256 digest cryptographically stronger",
+        "To make the stored body smaller",
+        "To prevent SQL injection",
+        "So semantically identical payloads with different key order hash the same"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.idempotency",
+    "backend.data.transactions_and_isolation_levels",
+    "backend.api.request_validation"
+  ]
+}

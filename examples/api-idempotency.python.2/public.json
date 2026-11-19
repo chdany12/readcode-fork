@@ -1,0 +1,50 @@
+{
+  "id": "76cebf3f-7af2-4426-879f-3f5d22cacfb3",
+  "title": "Idempotent appointment booking",
+  "name": "Appointment booking API",
+  "createdAt": "2026-11-19T23:02:14.228Z",
+  "durationMinutes": 11,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code replays responses for repeated booking requests? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A patient books a slot that another patient already holds, receiving 409, and retries the same request with the same key after the slot has been cancelled. What happens?",
+      "choices": [
+        "A new appointment is created because the slot is now free",
+        "The cache entry is removed after the 409, so the retry runs fresh",
+        "The cached 409 is replayed and no booking is attempted",
+        "422 because the key was used before"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Which statement about concurrent identical requests (same patient, key and body) is correct?",
+      "choices": [
+        "Only one booking can result, because create holds a lock and rejects the duplicate slot, and both callers end up with the same stored response",
+        "Two appointments can be created, one for each request",
+        "The second request blocks until the first finishes",
+        "Both receive 409"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What does the code do if the request body lacks starts_at and the key has not been seen?",
+      "choices": [
+        "Returns 400",
+        "Returns 422 and does not cache the response",
+        "Returns 422 and caches it under the key",
+        "Raises KeyError to the caller"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.idempotency",
+    "backend.api.request_validation",
+    "backend.concurrency.race_conditions"
+  ]
+}

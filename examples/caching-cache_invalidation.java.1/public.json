@@ -1,0 +1,50 @@
+{
+  "id": "19ebb7a1-a6b9-49ee-b91a-6bb6cf204edb",
+  "title": "Surge multiplier cache",
+  "name": "Surge quote service",
+  "createdAt": "2026-11-19T23:02:14.272Z",
+  "durationMinutes": 12,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how updateSurge invalidates the cache? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "What does `quoteFor` return for a zone that has no row in the repository?",
+      "choices": [
+        "It throws because the Optional is empty",
+        "null, which Caffeine does not cache",
+        "A quote with multiplier 1 and an epoch timestamp, which is cached",
+        "A quote with multiplier 0"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Which statement about resetZones is correct?",
+      "choices": [
+        "The cache entries are removed before any row is changed",
+        "If the transaction throws, the cache entries are still invalidated",
+        "Only the first zone's entry is removed",
+        "The entries are removed only after the transaction has finished without throwing"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "How long can a cached quote be served at most if nothing ever invalidates it?",
+      "choices": [
+        "Forever, since the cache has a size limit but no timeout",
+        "Until the 5,000 entry limit is reached, then it is evicted",
+        "Five minutes after it was written",
+        "Five minutes after it was last read"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.caching.cache_invalidation",
+    "backend.caching.ttls_and_expiry",
+    "backend.data.transactions_and_isolation_levels"
+  ]
+}

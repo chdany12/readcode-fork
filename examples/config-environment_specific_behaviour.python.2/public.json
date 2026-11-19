@@ -1,0 +1,50 @@
+{
+  "id": "38be49c4-a771-421b-af3e-fcb414cc90e6",
+  "title": "Telemetry ingest runtime profiles",
+  "name": "Telemetry ingest profiles",
+  "createdAt": "2026-11-19T23:09:24.530Z",
+  "durationMinutes": 13,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code varies sampling, transport and simulator behavior between environments? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Staging samples 10 percent of devices using zlib.crc32 of the device id instead of random.random() per reading. What is the main effect of that choice?",
+      "choices": [
+        "It makes sampling faster, because crc32 is cheaper than a random number generator",
+        "It guarantees exactly 10 percent of devices are selected",
+        "A given device is always in or always out of the sample, so selected devices have complete series and the same set is chosen across restarts and instances",
+        "It makes the sample cryptographically unpredictable to devices"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The process starts with TELEMETRY_ENV=production, a valid mqtts:// BROKER_URL, and ENABLE_SIMULATOR=1. What happens?",
+      "choices": [
+        "load_profile raises ConfigError, and main prints a message and exits with status 78",
+        "The simulator is ignored and ingestion starts normally",
+        "Ingestion starts and simulated readings are dropped by the sampling step",
+        "The profile falls back to staging, which permits the simulator"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "TELEMETRY_ENV=local and BROKER_URL is not set. A normal reading (not an alarm) arrives. What happens?",
+      "choices": [
+        "ConfigError at startup, because every profile requires a broker",
+        "The reading is sampled out because local uses a reduced rate",
+        "The reading is buffered and sent to the broker on the next two-second flush",
+        "The reading is passed to the print-based sink immediately, as a batch of one"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.environment_specific_behaviour",
+    "backend.config.configuration_loading",
+    "backend.resources.unbounded_buffers"
+  ]
+}

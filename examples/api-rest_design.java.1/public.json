@@ -1,0 +1,52 @@
+{
+  "id": "28f65517-05c1-448c-b899-210d4e4e8517",
+  "title": "File upload and download resource",
+  "name": "Folder file resource",
+  "createdAt": "2026-11-19T23:02:14.243Z",
+  "durationMinutes": 15,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code designs the REST resource and its responses? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A file \"report.csv\" already exists. A client sends PUT to it with a new body and no conditional headers. What is returned?",
+      "choices": [
+        "200 OK, the file is overwritten",
+        "201 Created, because PUT always creates a new version",
+        "428 Precondition Required, and the stored file is left unchanged",
+        "412 Precondition Failed because no ETag was supplied"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two clients both read the file with ETag \"v1\" and both send PUT with If-Match \"v1\" at the same moment. What is the result?",
+      "choices": [
+        "Both succeed; the later write wins",
+        "Exactly one succeeds with 200; the other is rejected with 412 because the stored ETag has changed",
+        "Both are rejected with 428",
+        "Exactly one succeeds; the other receives 409"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client calls GET .../files/report.csv with If-None-Match set to the current ETag. What does it receive?",
+      "choices": [
+        "200 with the full body, since If-None-Match only applies to PUT",
+        "404 because the ETag header is treated as a version selector",
+        "304 Not Modified with no body and the ETag header",
+        "200 with an empty body"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.rest_design",
+    "backend.api.idempotency",
+    "backend.api.status_codes_and_error_responses",
+    "backend.data.optimistic_vs_pessimistic_locking",
+    "backend.data.pagination"
+  ]
+}

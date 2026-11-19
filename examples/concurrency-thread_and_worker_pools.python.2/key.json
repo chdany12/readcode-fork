@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "telemetry/ingestor.py",
+        "startLine": 31,
+        "endLine": 31
+      }
+    },
+    2,
+    1,
+    2
+  ],
+  "explanations": [
+    "The batch is acknowledged to the source right after it is handed to the pool, not after the write succeeds. If `insert_many` raises (database down, constraint error), the exception is stored in the discarded future, the done callback only releases the semaphore, and the source has already been told the batch is processed, so those readings are lost without any log or metric. The ack belongs in the worker after a successful write (or the done callback should inspect `future.exception()` and the batch be left un-acked or retried).",
+    "The semaphore starts at workers * 2 = 8 and is released only when a write completes, so the loop blocks on the ninth batch. That limits memory held by the process: the executor's own queue is unbounded, but the semaphore keeps it from growing past a few batches. It neither raises nor drops.",
+    "Up to 4 workers run `_write_batch` concurrently. FIFO only governs the order tasks start, not the order they finish, and the semaphore admits up to 8 outstanding batches, not one. `_write_batch` does not sort. Anything downstream that depends on per-device ordering must use timestamps.",
+    "`shutdown(wait=True)` without `cancel_futures` lets queued tasks run to completion and waits for all workers to finish. It does not interrupt anything and does not return early. Note it does not stop the polling thread; `stop()` sets the flag for that."
+  ]
+}

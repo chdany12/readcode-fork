@@ -1,0 +1,49 @@
+{
+  "id": "47ed72e3-82fc-40a2-a975-fd6e41d77a96",
+  "title": "Mid-cycle plan changes and discount allocation in subscription billing",
+  "name": "Subscription proration billing",
+  "createdAt": "2026-11-19T23:09:24.551Z",
+  "durationMinutes": 10,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code rounds, splits and records monetary amounts? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "What does prorate(999, 15, 30) return?",
+      "choices": [
+        "499",
+        "499.5",
+        "501",
+        "500"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What does allocate(100, [1, 1, 1]) return?",
+      "choices": [
+        "[33, 33, 33]",
+        "[34, 33, 33]",
+        "[34, 34, 32]",
+        "[33, 33, 34]"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A customer downgrades mid-period so that unused_credit is larger than new_charge. What does change_plan do?",
+      "choices": [
+        "It raises ValueError because net is negative.",
+        "It posts a journal with a negative receivable amount (a credit to the customer) and an offsetting positive revenue amount, then returns the negative net.",
+        "It posts nothing and returns 0.",
+        "It posts a zero-amount journal and drops the difference."
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.money_and_ledgers",
+    "backend.api.idempotency"
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "id": "76b974cb-a939-40e2-9dc8-5b4770b2c434",
+  "title": "Two-tier channel settings cache",
+  "name": "Channel settings cache",
+  "createdAt": "2026-11-19T23:02:14.274Z",
+  "durationMinutes": 13,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in the order of operations in invalidate? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A node receives an Invalidation message from another node. What does onInvalidation do?",
+      "choices": [
+        "Deletes the shared entry and the local entry",
+        "Reloads the settings from the repository into the local cache",
+        "Removes only the node's own local entry for that channel",
+        "Publishes the message again so every node receives it"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "How long can a channel's settings remain in the shared cache without any invalidation?",
+      "choices": [
+        "2 minutes, matching the local cache",
+        "30 minutes, per SHARED_TTL",
+        "Until the repository changes, because Caffeine evicts on writes",
+        "Indefinitely"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two threads on the same node call get for the same uncached channel at the same moment. What happens?",
+      "choices": [
+        "Both call loadShared and race to write the local cache",
+        "The local cache runs loadShared once, and the other thread waits for that result",
+        "One thread receives null",
+        "Both receive an exception because the key is being computed"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.caching.cache_invalidation",
+    "backend.caching.stale_reads",
+    "backend.caching.ttls_and_expiry"
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "id": "0fb3a8bd-d49d-40ac-af77-9104287ce1b1",
+  "title": "Layered configuration for a dispatch service",
+  "name": "Dispatch config loader",
+  "createdAt": "2026-11-19T23:09:24.519Z",
+  "durationMinutes": 12,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code layers the base file, the override file and the environment into the final settings? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "DISPATCH_CARRIER__TIMEOUT_S=5 is exported, and the file named by DISPATCH_CONFIG_OVERRIDE sets carrier.timeout_s to 20. What timeout does the CarrierClient use?",
+      "choices": [
+        "20 seconds, because file layers are applied after the environment",
+        "5 seconds, because environment variables are applied last",
+        "10 seconds, because the two conflicting sources cancel out and the default applies",
+        "The process fails to start because the value is set in two places"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "An operator mistypes the variable and exports DISPATCH_CARRIER__TIMEOUT=30 (missing the _S). What happens when the service starts?",
+      "choices": [
+        "_coerce raises ValueError because the key is not in DEFAULTS",
+        "load_config raises KeyError for the unknown key",
+        "The service starts normally; the stray key is stored in the merged tree but never read, so timeout_s is unchanged",
+        "The value is coerced to an int and replaces carrier.timeout_s"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "DISPATCH_CONFIG_OVERRIDE is set to a path that does not exist, and /etc/dispatch/config.json is also absent. What does load_config do?",
+      "choices": [
+        "Ignores the missing override and returns the defaults plus environment values",
+        "Logs a warning and falls back to the base file only",
+        "Raises FileNotFoundError out of load_config",
+        "Returns Settings with the override treated as an empty dict, but only for non-production runs"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.configuration_loading",
+    "backend.config.defaults_and_validation"
+  ]
+}

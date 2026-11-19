@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "io/searchlane/index/IndexCoordinator.java",
+        "startLine": 85,
+        "endLine": 86
+      }
+    },
+    1,
+    3,
+    1
+  ],
+  "explanations": [
+    "refresh() reads the counter with sum() and then clears it with reset(). LongAdder.sum() and reset() are separate operations, so any add() that calls pendingDocs.increment() between them is erased: the document sits in the buffer but is no longer counted. Over time pending() under-reports and the threshold-triggered refresh fires later than configured, leaving documents unsearchable longer. sumThenReset() performs the read and clear as one step per cell and avoids losing those increments (and the flushed value is not otherwise used here).",
+    "current.compareAndSet(prev, next) only succeeds if the reference is still prev. After a concurrent publish it fails, the do/while repeats, current.get() returns the new snapshot, and merge is recomputed over all of its segments. It is not automatic merging, the publish is not an unconditional overwrite, and no exception is thrown.",
+    "maybeRefresh() uses refreshing.compareAndSet(false, true); if it fails it simply returns, so add() never blocks. The document remains in the queue for the next refresh. It does not wait, does not run concurrently because the flag excludes that, and has no back-pressure signal.",
+    "IndexSnapshot is immutable, so holding one reference gives a stable view; reading current twice could mix segments from one snapshot with the generation of another. Nothing is blocked, performance is not the point, and documents still in the buffer are not visible to any snapshot."
+  ]
+}

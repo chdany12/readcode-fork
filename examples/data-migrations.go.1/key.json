@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    2,
+    3
+  ],
+  "explanations": [
+    "There is no defect. The advisory lock is taken on a dedicated *sql.Conn that stays open for the whole Up call, so it is a real session lock rather than one that could land on a different pooled connection. Each migration's SQL and its schema_migrations row are executed in one transaction, so a failure rolls back both and the migration is retried cleanly (PostgreSQL DDL is transactional). The unlock runs with context.Background so it still happens if ctx was cancelled, and even if it were skipped the lock would die with the session. The checksum comparison prevents silent drift of already-applied migrations.",
+    "pg_advisory_lock (not the try_ variant) blocks until the holder releases it, and because the lock is held on the same connection for the whole run, the waiting replica only proceeds after the first has finished. It then loads the applied set, sees versions 1-3 with matching checksums and skips them. The first choice describes a race the lock prevents; IF NOT EXISTS only covers the bookkeeping table, not the migrations themselves; and the blocking lock call does not fail fast.",
+    "apply opens a transaction per migration and executes both ALTER statements, then the bookkeeping insert, before Commit. An error in the second statement triggers the deferred Rollback, undoing the ADD COLUMN as well (PostgreSQL supports transactional DDL). Version 1 was committed in its own earlier transaction. The first two choices assume the statements are not atomic; the last assumes one transaction for the entire run, which is not how the loop is written.",
+    "For an applied version the loop compares the stored checksum with the checksum of the current SQL and returns an error on mismatch, so startup fails until the change is reverted or handled as a new migration. It is not re-run (the version is found in the applied map), not silently ignored (the comparison happens before the continue), and the checksum is never rewritten."
+  ]
+}

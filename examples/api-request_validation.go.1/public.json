@@ -1,0 +1,51 @@
+{
+  "id": "e99d9ee2-4dbf-412d-962b-9b46969a7bdb",
+  "title": "Pipeline trigger request decoding",
+  "name": "Pipeline trigger endpoint",
+  "createdAt": "2026-11-19T23:02:14.232Z",
+  "durationMinutes": 12,
+  "language": "Go",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code validates the incoming trigger request? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends a well-formed JSON object whose \"priority\" is the string \"high\". What does decodeTrigger return?",
+      "choices": [
+        "A 422 response listing the priority field, because validate() finds it is not between 0 and 9",
+        "A 400 response with a field error for \"priority\" saying the type is wrong, produced during decoding before validate() runs",
+        "A request with Priority left nil, because the decoder skips values it cannot convert",
+        "A 400 response with an empty Fields list, because every decoding error is reported as malformed JSON"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A request body is {\"branch\":\"main\"} followed by a second object {\"branch\":\"dev\"} in the same body. What happens?",
+      "choices": [
+        "Both objects are decoded and the last one wins",
+        "The first object is accepted and the rest of the body is ignored",
+        "The request is rejected with 400 because the decoder finds more data after the first value",
+        "The request is rejected with 413 because the body exceeds maxBodyBytes"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Which statement about the variables check is correct?",
+      "choices": [
+        "Per-variable checks run for every request regardless of how many variables are supplied, so a request with thousands of variables produces thousands of field errors",
+        "Names starting with \"CI_\" are accepted as long as they match the name regex",
+        "Value length is counted in bytes, so a 4096-character value of multi-byte characters is rejected",
+        "When more than 50 variables are supplied, only a single \"variables\" error is produced and the per-variable loop is skipped"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.request_validation",
+    "backend.api.status_codes_and_error_responses",
+    "backend.resources.unbounded_buffers",
+    "backend.api.serialization_and_deserialization"
+  ]
+}

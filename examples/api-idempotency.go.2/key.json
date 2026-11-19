@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "dispatch/rides.go",
+        "startLine": 49,
+        "endLine": 49
+      }
+    },
+    1,
+    2,
+    3
+  ],
+  "explanations": [
+    "The cache key is the raw Idempotency-Key header and does not include the authenticated rider. Keys are chosen by clients, so two riders sending the same value (or a guessable one) collide: the second rider gets the first rider's ride, including the driver ID, and no ride is dispatched for them. The key should be namespaced by rider ID (riderID + \":\" + key), ideally with a request fingerprint check.",
+    "Save stores an expiry of now+24h and Lookup treats expired entries as misses, so a later request with the same key runs Assign again. Entries are never removed from the map, but expiry is checked on read; they are also not tied to any request context.",
+    "Save is only reached after a successful Assign and Marshal, so the 503 path stores nothing. The retry misses in Lookup and calls Assign again. No in-use or consumed state exists.",
+    "The lock is held only inside Lookup and Save, not across the handler. Both requests can miss, both call Assign, and the later Save overwrites the earlier one. The map is not raced because each access holds the lock, and no lock is held across calls, so there is no deadlock."
+  ]
+}

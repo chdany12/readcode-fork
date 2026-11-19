@@ -1,0 +1,51 @@
+{
+  "id": "e3a07224-b2ee-4117-8253-86e4efc85cbf",
+  "title": "Shipment tracking REST API (FastAPI)",
+  "name": "Shipment tracking API",
+  "createdAt": "2026-11-19T23:02:14.252Z",
+  "durationMinutes": 10,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how the pickup-window endpoint behaves for a client that retries or repeats its request? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client POSTs a tracking event to /v1/shipments/4/events for a shipment whose status is already \"delivered\". What happens?",
+      "choices": [
+        "201; the event is appended and the status is updated",
+        "409 Conflict; no event is appended and the shipment is unchanged",
+        "404 Not Found, because closed shipments are no longer addressable",
+        "422, because the status in the body is not a valid transition"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client requests GET /v1/shipments?status=returned, a value that is not in ShipmentStatus. What does the API return?",
+      "choices": [
+        "200 with an empty list",
+        "400 Bad Request produced by the handler",
+        "422 from FastAPI request validation; the handler does not run",
+        "200 with all shipments, since the filter is ignored when unknown"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two clients concurrently POST new shipments with the same reference \"ACME-0042\" and different bodies otherwise. What is the outcome?",
+      "choices": [
+        "Both get 201 because the uniqueness check is racy",
+        "One gets 201 and the other gets 409, because the reference check and insert run under the same lock",
+        "Both get 409 because each sees the other",
+        "One gets 201 and the other gets 422 from the model constraints"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.rest_design",
+    "backend.api.idempotency",
+    "backend.concurrency.shared_state_in_request_handlers",
+    "backend.api.status_codes_and_error_responses"
+  ]
+}

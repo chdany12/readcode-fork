@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "eligibility/ttlcache.go",
+        "startLine": 39,
+        "endLine": 39
+      }
+    },
+    1,
+    1,
+    2
+  ],
+  "explanations": [
+    "Get() resets expiresAt to now plus the cache's default TTL on every hit. That makes expiry sliding: a patient whose coverage is checked more often than every 6 hours is never re-verified, so a lapsed policy keeps being reported as active indefinitely. It also overrides the per-entry TTL given to SetWithTTL, so a short-lived 'inactive' entry (15 minutes) is extended to the default TTL on its first hit, and a patient who renewed would stay blocked longer than intended. Expiry should be fixed at write time and a hit should leave expiresAt alone.",
+    "On error, Check returns before any cache write, wrapping ErrPayerUnavailable with %w so errors.Is works. Nothing is cached, so the next call goes to the payer again. Choice 1 and 3 describe writes that do not exist; choice 4 is wrong because a non-nil error is returned.",
+    "A negative result blocks scheduling, and the cost of it being wrong is a patient wrongly turned away, so it is re-checked after 15 minutes. Active results change rarely and are reused for 6 hours. The code has no relation to memory size, rate limits or serialization.",
+    "The goroutine returns on ctx.Done(); nothing else depends on it. Get still deletes an expired entry it happens to find, but entries nobody reads again would stay in the map. There is no clean-up on exit, and no state is invalidated by cancellation."
+  ]
+}

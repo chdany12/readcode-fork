@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "transfers.py",
+        "startLine": 39,
+        "endLine": 41
+      }
+    },
+    2,
+    0,
+    3
+  ],
+  "explanations": [
+    "Yes. The balance read and the insufficient-funds check (available_balance and the comparison) happen before the per-account lock is taken, and the lock only wraps post_entries. Two concurrent transfers from the same account can both read the same available balance across an await, both pass the check, and then post their entries one after the other under the lock, overdrawing the account. The check and the posting need to be inside the same critical section (or the ledger must enforce the invariant atomically).",
+    "asyncio.wait_for cancels the inner awaitable on timeout and raises TimeoutError out of transfer(), before any balance read or post_entries call. It works on any awaitable, not just CPU work (first choice), it raises rather than returning None (second), and posting happens strictly after the score is obtained (fourth).",
+    "The loop holds only weak references to tasks, so fire-and-forget tasks need a strong reference elsewhere; the done callback removes each task once finished and flush_audits can gather the remainder. The set does not serialize anything (second), create_task never runs the coroutine synchronously (third), and the task is scheduled regardless of the set (fourth).",
+    "gather(..., return_exceptions=True) returns results in input order, placing exceptions in the list instead of raising, and does not cancel siblings. The semaphore created in transfer_batch limits in-flight transfers to BATCH_CONCURRENCY. The other choices describe the default gather behavior or a filtering step the code does not perform."
+  ]
+}

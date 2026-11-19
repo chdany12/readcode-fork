@@ -1,0 +1,50 @@
+{
+  "id": "45d3ce9c-aa8c-4b3c-b6e2-cff18ff84053",
+  "title": "Ride request validation",
+  "name": "Ride request intake",
+  "createdAt": "2026-11-19T23:02:14.240Z",
+  "durationMinutes": 13,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code validates the ride request? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A request has an invalid vehicle_class and a seats value of 0. What does the response contain?",
+      "choices": [
+        "A 400 whose fields contain only vehicle_class, since the first failure aborts validation",
+        "A 422 whose fields contain both seats and vehicle_class",
+        "A 202 with a default vehicle class substituted",
+        "A 400 whose fields contain both seats and vehicle_class"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "When \"now\" is 2030-01-03T00:00:00+00:00, which scheduled_at value is rejected by validation?",
+      "choices": [
+        "\"2030-01-04T10:00:00-08:00\"",
+        "\"2030-01-03T10:00:00\" (no UTC offset)",
+        "\"2030-01-05T00:00:00+00:00\"",
+        "Omitting scheduled_at entirely"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What does the view do for a body that is a JSON array, or not JSON at all?",
+      "choices": [
+        "Responds 400 with a \"body\" field error saying it must be a JSON object",
+        "Raises an exception that Flask turns into a 500",
+        "Responds 415 because the content type is wrong",
+        "Treats it as an empty object and applies defaults for seats and vehicle_class"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.request_validation",
+    "backend.security.input_sanitization",
+    "backend.api.status_codes_and_error_responses"
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "id": "487fc985-68ef-4535-aa2f-0714e67e7b5b",
+  "title": "Cached appointment slot lookup",
+  "name": "Appointment slot service",
+  "createdAt": "2026-11-19T23:02:14.277Z",
+  "durationMinutes": 12,
+  "language": "Go",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code prevents patients from seeing outdated slot availability? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Book() is called for a slot that another patient booked a moment earlier. What does the caller get, and what happens to the cached list?",
+      "choices": [
+        "It gets ErrSlotTaken and the cached list is deleted again",
+        "It gets a wrapped error that cannot be matched with errors.Is",
+        "It gets ErrSlotTaken and the cache key is left alone",
+        "It gets nil because the cache is consulted before the primary"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The cache service times out on every call for several minutes. What do patients and bookings experience?",
+      "choices": [
+        "Slot listing fails with an error and bookings still succeed",
+        "Slot listing keeps working from the replica, bookings still succeed, and failures are only logged",
+        "Both listing and booking fail because Delete returns an error that Book propagates",
+        "Booking succeeds but the slot stays bookable by others since the cache could not be updated"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does Book rely on s.primary.BookSlot returning ErrSlotTaken rather than checking the cached slot list first?",
+      "choices": [
+        "The cached list might be undecodable, which would panic",
+        "A cached list can be out of date at any time, so only the conditional write on the primary can decide who gets the slot",
+        "Checking the cache would be slower than the primary call",
+        "json.Unmarshal cannot decode the Duration field"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.caching.stale_reads",
+    "backend.caching.cache_invalidation",
+    "backend.caching.cache_aside_vs_write_through",
+    "backend.distributed.replication_and_consensus",
+    "backend.resilience.graceful_degradation"
+  ]
+}

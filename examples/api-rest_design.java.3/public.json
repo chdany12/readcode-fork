@@ -1,0 +1,51 @@
+{
+  "id": "e3c168a9-b90b-4c4d-9da0-630b7f06b6e3",
+  "title": "Ad campaigns and creatives REST controller",
+  "name": "Campaign management API",
+  "createdAt": "2026-11-19T23:02:14.246Z",
+  "durationMinutes": 10,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how the nested creative routes resolve resources under a campaign? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client POSTs a new creative to /api/v2/campaigns/777/creatives and no campaign 777 exists. What happens?",
+      "choices": [
+        "404 Not Found is returned and no creative row is written",
+        "201 Created is returned, and the creative is saved as an orphan with campaignId 777",
+        "400 Bad Request, because the body is validated against existing campaigns",
+        "404 Not Found is returned, but the creative is saved before the check fails"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client calls DELETE /api/v2/campaigns/5 twice in a row for a campaign that is ACTIVE at first. What do the two calls return, and what is the state of the campaign afterwards?",
+      "choices": [
+        "204 then 404, since the campaign row is physically removed by the first call",
+        "204 both times; the campaign remains with status ARCHIVED and still resolves for lookups by id",
+        "204 then 409, because archiving twice is a conflict",
+        "204 both times, and the campaign is now hidden, so GET /api/v2/campaigns/5/creatives returns 404"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client requests GET /api/v2/campaigns?size=1000&page=2. What does the endpoint do?",
+      "choices": [
+        "Responds 400 because size exceeds 100",
+        "Responds 200 with up to 100 items for page index 2, and the body reports size 100",
+        "Responds 200 with up to 1000 items, since MAX_PAGE_SIZE is only used for the default",
+        "Responds 200 with page 1, because pages are 1-based and are normalized"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.rest_design",
+    "backend.api.status_codes_and_error_responses",
+    "backend.data.pagination",
+    "backend.security.authorization_checks"
+  ]
+}

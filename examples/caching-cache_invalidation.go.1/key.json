@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "There is no defect. Get snapshots the per-key generation and the global epoch before loading outside the lock, and only stores the loaded value if neither changed; Invalidate and InvalidateAll bump them under the same mutex. So a load that started before an invalidation cannot re-insert stale data afterwards. The loader is deliberately called without holding the lock, which looks risky but is safe because of that check, and the TTL bounds staleness if events are lost.",
+    "The load runs without the mutex. If Invalidate or InvalidateAll runs meanwhile, the loaded value might predate the change, so the generation or epoch will differ and the result is not cached. Duplicate loads are not detected (two goroutines can load concurrently), and TTL is computed at store time.",
+    "InvalidateAll increments epoch even when there is no entry, so the epoch check fails and the store is skipped, yet Get still returns the template it loaded. This is why the global epoch exists alongside per-key generations: a per-key counter alone would not protect ids that were never cached. No error is returned and nothing blocks.",
+    "Listen only returns; it does not touch entries. Get checks `c.now().Before(e.expires)`, so each entry stops being served at its TTL and is reloaded on the next call. This makes the TTL the upper bound on staleness when invalidation events stop. Nothing clears entries on closure, and Get does not depend on the listener."
+  ]
+}

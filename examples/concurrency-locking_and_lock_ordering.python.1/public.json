@@ -1,0 +1,50 @@
+{
+  "id": "0da05b6c-098a-457a-9718-71f428ff7467",
+  "title": "Runner pool rebalancer",
+  "name": "Runner pool rebalancer",
+  "createdAt": "2026-11-19T23:09:24.495Z",
+  "durationMinutes": 12,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code handles locking when it moves runner capacity between pools? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A build thread calls RunnerPool.reserve() on a pool while another thread is in the middle of rebalance() involving that pool. What happens to the reserve() call?",
+      "choices": [
+        "It fails immediately with CapacityError because the pool is being modified",
+        "It proceeds using the old capacity value, since capacity is read without the lock",
+        "It blocks until rebalance() has released that pool's lock, then sees the updated capacity",
+        "It acquires the registry guard first and is queued behind the rebalance"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "In PoolRegistry.get(), the guard is released before rebalance() takes the pool locks. What is the practical effect of that choice?",
+      "choices": [
+        "Pool lookups never wait on long-running pool operations, but a pool object may be used after the lookup without the guard held",
+        "A pool can be removed from the registry while rebalance() holds its lock, corrupting the dict",
+        "The registry guard and the pool locks become the same lock",
+        "Lookups for different pools are serialized behind each rebalance"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "rebalance(src, dst, 5) is called when src has only 3 idle runners. What is the state afterwards?",
+      "choices": [
+        "src.capacity is reduced by 3 and dst.capacity increased by 3",
+        "src.capacity is reduced by 5 and in_use is clamped",
+        "Both pools' capacities are unchanged, but the locks stay held until the log line runs",
+        "Both pools' capacities are unchanged and both locks are released"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.locking_and_lock_ordering",
+    "backend.concurrency.deadlocks",
+    "backend.concurrency.shared_state_in_request_handlers"
+  ]
+}

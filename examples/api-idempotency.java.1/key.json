@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "com/acme/sync/upload/UploadService.java",
+        "startLine": 46,
+        "endLine": 47
+      }
+    },
+    1,
+    2,
+    3
+  ],
+  "explanations": [
+    "claim() leaves a PENDING entry, and release() exists but is never called. When the blob write throws IOException, the handler returns 500 without releasing the key. Any retry with the same key then sees a PENDING entry and gets 409 until the retention window passes, so the client cannot complete the upload even though nothing was stored. The catch block should call registry.release(key) before returning (and unchecked exceptions need the same treatment, e.g. in a finally).",
+    "merge runs its remapping function atomically for the key; if no entry existed, the supplied value is stored and returned, so the reference comparison prior == fresh is true for exactly one caller. The method is not synchronized, the BlobStore is not shown to serialize anything, and nothing limits users to one request.",
+    "After commit the entry is COMMITTED, so claim returns it and upload returns 200 with entry.fileId() without calling the blob store. 201 only comes from a fresh execution; 409 is for PENDING; no code path returns 500 for COMMITTED.",
+    "The key is userId + \"/\" + idempotencyKey, so entries differ per user. The blob path is also prefixed with the user ID. No cross-user conflict occurs."
+  ]
+}

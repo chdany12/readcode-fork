@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "events.py",
+        "startLine": 38,
+        "endLine": 38
+      }
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "The defect is `REQUIRED_FIELDS.get(version, ())`. For a schema_version this service does not know (for example 4 from a newer producer), the required set defaults to empty, so validation passes. upgrade() then skips the loop because the version is not below CURRENT_VERSION and returns the event unchanged. The event reaches spend_by_campaign, which indexes `campaign_id`, `currency` and `cost_micros`; if the newer schema renamed or removed them, a KeyError aborts the whole batch, and if it changed units the spend is silently wrong. Unknown versions should be rejected as InvalidEvent.",
+    "A missing schema_version defaults to 1 and v1 requirements are satisfied. The loop applies _v1_to_v2 (rename campaign, convert cost with round(), which gives 290000 rather than a truncated 289999) and then _v2_to_v3 (default currency USD). The first choice ignores the loop, the second assumes int truncation and skips the v3 step, and the fourth contradicts REQUIRED_FIELDS[1] and UPGRADERS[1].",
+    "Each upgrader only knows its own step, and the while loop in upgrade() keeps applying UPGRADERS[version] until CURRENT_VERSION is reached, so a v4 needs CURRENT_VERSION bumped, a _v3_to_v4 and a REQUIRED_FIELDS entry. Batch order is irrelevant because events are processed independently. The upgraders copy with dict(event), so inputs are not mutated. validate() still uses REQUIRED_FIELDS[1] for old events.",
+    "normalize_batch catches InvalidEvent per event, so one failure does not stop the others; the bad event is stored as (raw, reason) in `rejected`. v3 requires `currency` (the USD default is only applied by the v2 to v3 upgrader), so it is not defaulted. spend_by_campaign runs only on accepted events, and sink.record_rejections receives the rejected pair."
+  ]
+}

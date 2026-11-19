@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "config.py",
+        "startLine": 98,
+        "endLine": 98
+      }
+    },
+    1,
+    2,
+    2
+  ],
+  "explanations": [
+    "The override file is merged with merged.update(...) while the base file is merged with _deep_merge. update() replaces whole top-level keys, so an override file containing {\"carrier\": {\"timeout_s\": 20}} discards every other key of the carrier section that came from the defaults or /etc/dispatch/config.json, including a production base_url. _section() then silently refills the missing keys from DEFAULTS, so the service starts without error and talks to the sandbox carrier URL. The fix is to use _deep_merge for the override layer as well.",
+    "load_config applies _apply_env after both file layers, so the environment wins and timeout_s becomes 5 (converted with int() because the default is an int). Files are not applied after the environment, nothing cancels conflicting values, and there is no duplicate-source check.",
+    "_apply_env sets merged['carrier']['timeout'] = '30' (a string, since _lookup finds no default for that path). Nothing validates keys, and CarrierSettings is built only from base_url, timeout_s and max_retries, so the extra key is ignored. _coerce does not raise for unknown paths, and no lookup of 'timeout' ever occurs.",
+    "The base file is optional because of the BASE_PATH.exists() check, but the override path is opened unconditionally through _read_json when the variable is set, so open() raises FileNotFoundError and nothing catches it. There is no warning path, no fallback, and no environment-dependent behavior in the loader."
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "id": "cf7bcb6f-72bd-4a26-a77a-5c9d8ce1440b",
+  "title": "Telemetry minute aggregator",
+  "name": "Telemetry minute aggregator",
+  "createdAt": "2026-11-19T23:09:24.501Z",
+  "durationMinutes": 12,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code computes the per-device average while readings are still arriving? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two MQTT threads receive the first readings for the same device and minute at the same moment. What does record() guarantee?",
+      "choices": [
+        "One thread may get a null Bucket and throw a NullPointerException",
+        "Each thread creates its own Bucket and the last put wins",
+        "Both threads add to the same Bucket instance, because computeIfAbsent creates at most one value per key",
+        "The two threads are serialized for the entire record() call"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A reading stamped three hours and ten minutes ago arrives after the sweeper has already run for that period. What happens?",
+      "choices": [
+        "It creates a new bucket containing only that reading, which the next sweep removes",
+        "It is added to the old bucket that was kept alive by the retention window",
+        "It is rejected by record() because the bucket no longer exists",
+        "It throws because evictOlderThan has frozen the map"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A device publishes the payload \"sensor-7,21500,abc\". What does onMessage() do?",
+      "choices": [
+        "Records the reading with timestamp 0",
+        "Propagates a NumberFormatException to the MQTT client thread",
+        "Records the temperature but skips the timestamp bucket",
+        "Records nothing, increments the dropped counter and returns normally"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.race_conditions",
+    "backend.concurrency.atomic_operations",
+    "backend.realtime.connection_fanout"
+  ]
+}

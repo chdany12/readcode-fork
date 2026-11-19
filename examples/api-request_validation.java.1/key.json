@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/main/java/io/fleetsense/ingest/TelemetryBatchRequest.java",
+        "startLine": 17,
+        "endLine": 17
+      }
+    },
+    3,
+    0,
+    2
+  ],
+  "explanations": [
+    "The readings field is a List<ReadingDto> without @Valid. Bean Validation does not cascade into collection elements unless the field (or the element type, as List<@Valid ReadingDto>) is marked for cascading, so the constraints on ReadingDto (@NotNull on recordedAt and value, the metric whitelist, the -100..1000 range, the unit size) are never evaluated. Only the list-level @NotEmpty and @Size(max = 500) run. A reading with a missing recordedAt or value passes the controller, then triggers a NullPointerException in the future-timestamp loop or in getValue(), producing a 500; out-of-range values and arbitrary metric names are accepted and written as series names to the time-series store.",
+    "@Size(max = 500) on a collection limits its element count, and @Valid on the parameter triggers it before the method runs; a violation throws MethodArgumentNotValidException which onInvalid maps to a 400 with a fields map. Nothing truncates the list (A), the 422 path is only for the future timestamp check (B), and @Size applies to collections too (C).",
+    "The allowed bound is computed from clock.instant() plus a 5-minute skew, and the injected Clock makes it testable; the controller also reports it as 422 with a different body. Annotations like @NotNull are already used on Instant (B). Validation runs before the method body (C), and @Valid does not skip Instant (D).",
+    "Bean Validation collects all violations; onInvalid iterates every FieldError and puts the first message per field. Both deviceId (pattern) and readings (@NotEmpty) fail, so both appear. It does not stop at the first violation (D), and neither the service (A) nor the 422 branch (B) is reached."
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    0,
+    2
+  ],
+  "explanations": [
+    "There is no defect. Cache keys include a per-customer version counter, and invalidation increments it after the commit. A reader that loaded old data before the commit writes it under the old version key, which no later reader looks up, so stale data cannot be revived after invalidation. The invalidation happens after the transaction commits, the row is locked for the read-modify-write, and a failed incr is logged while the TTL bounds staleness.",
+    "get() computes the key before loading, so the write goes to `...:v<old>`. After incr, _current_version returns the new number and later reads use a different key, so the stale value is never served (it just expires after TTL_SECONDS). Nothing compares versions at write time, so it does not raise or get dropped.",
+    "The with block commits on exit. If the version were bumped before the commit, a reader could use the new version, read the still-old row and cache it under the new key. After commit, any load under the new version sees the updated row. The other reasons do not match the code: the lock is released by the commit, and incr has no relation to transactions.",
+    "_invalidate catches the exception, logs it with the TTL, and returns normally; update() then returns the updated settings. The database commit has already happened, so there is no rollback, and no retry loop exists. The cost is up to 600 seconds of stale reads."
+  ]
+}

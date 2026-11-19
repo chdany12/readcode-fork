@@ -1,0 +1,51 @@
+{
+  "id": "55c412db-206c-4a18-b18f-df181a56a836",
+  "title": "Appointment scheduling REST API (FastAPI)",
+  "name": "Appointment booking API",
+  "createdAt": "2026-11-19T23:02:14.249Z",
+  "durationMinutes": 10,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this API handles partial updates and conflicting bookings? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two requests arrive at the same moment, each booking practitioner 3 for 09:00-09:30 on the same day. What is the outcome?",
+      "choices": [
+        "Both succeed with 201 because the check happens before the insert in separate steps",
+        "Exactly one gets 201 and the other gets 409, because the overlap check and insert are inside one lock",
+        "Both get 409, because each sees the other's pending booking",
+        "One gets 201 and the other gets 422 from the model validation"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends PATCH /v1/appointments/8 with body {\"notes\": null}. What happens?",
+      "choices": [
+        "422, because null is not allowed for any field",
+        "200; notes is cleared and the start time and duration are unchanged",
+        "200; all fields not mentioned are reset to None",
+        "200; the request is a no-op because None values are ignored"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends DELETE /v1/appointments/8 twice for a booked appointment, and then books a new appointment for the same practitioner and time. What happens?",
+      "choices": [
+        "204 then 404; the new booking succeeds",
+        "204 then 204; the new booking succeeds because cancelled rows are skipped by the overlap check",
+        "204 then 204; the new booking returns 409 because the cancelled row still occupies the slot",
+        "204 then 409; the new booking succeeds"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.rest_design",
+    "backend.concurrency.race_conditions",
+    "backend.api.status_codes_and_error_responses",
+    "backend.api.idempotency"
+  ]
+}

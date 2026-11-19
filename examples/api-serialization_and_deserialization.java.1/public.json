@@ -1,0 +1,51 @@
+{
+  "id": "ecd786ea-a6c0-46a4-ae28-d9f792016f11",
+  "title": "Webhook event parsing with Jackson",
+  "name": "Payment webhook parser",
+  "createdAt": "2026-11-19T23:02:14.254Z",
+  "durationMinutes": 9,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code serializes or deserializes webhook payloads and money values? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The provider starts sending a new signed event {\"id\":\"evt_9\",\"type\":\"dispute.opened\",\"occurredAt\":\"2025-03-01T10:00:00Z\",\"disputeId\":\"dp_1\"}. What does handle return and what happens to the event?",
+      "choices": [
+        "400, because the type has no registered subtype and deserialization fails",
+        "500, because the unknown type throws an unchecked exception out of handle",
+        "200; it is deserialized as Unknown and is not passed to the sink",
+        "200; it is passed to the sink as a Succeeded event with null fields"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A validly signed refund.created event has amount {\"amount\":\"10.505\",\"currency\":\"USD\"}. What does handle return?",
+      "choices": [
+        "200; the amount is rounded to 10.51 by setScale",
+        "200; the amount is truncated to 10.50",
+        "400; Money.parse throws, which surfaces as a Jackson exception caught as IOException",
+        "401; the amount does not match the signature"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why is the signature computed over rawBody rather than over a re-serialized event?",
+      "choices": [
+        "Because Jackson cannot serialize sealed interfaces back to JSON",
+        "Because re-serializing the parsed object could change bytes (field order, number formatting, dropped unknown fields), so the HMAC would not match what the provider signed",
+        "Because MessageDigest.isEqual only accepts byte arrays that come directly from the network",
+        "Because parsing first would make the Unknown fallback impossible"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.serialization_and_deserialization",
+    "backend.security.authentication",
+    "backend.data.money_and_ledgers",
+    "backend.integrations.third_party_adapters"
+  ]
+}

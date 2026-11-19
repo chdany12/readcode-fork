@@ -1,0 +1,50 @@
+{
+  "id": "ed48bdbf-fc3a-44c1-8a7d-9f6559a054bc",
+  "title": "Notification preference cache",
+  "name": "Notification preference cache",
+  "createdAt": "2026-11-19T23:02:14.281Z",
+  "durationMinutes": 11,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code sets expiry on cached preferences? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A user has never saved preferences. They receive several notifications over a few minutes. How many repository lookups happen, assuming the cache is available and the absent TTL has not elapsed?",
+      "choices": [
+        "One per notification, because absent users are never cached",
+        "One for the first notification only, later ones see the Absent marker and use the defaults",
+        "None, because the cache is pre-filled with defaults",
+        "Two: one to find the user and one to confirm the default"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A user turns off every channel and saves an empty set. How does channelsFor behave for that user afterwards?",
+      "choices": [
+        "It returns the default email channel because an empty set looks absent",
+        "It returns an empty set from the repository or cache, since an empty encoding is distinguished from the absent marker",
+        "It throws IllegalArgumentException when decoding the empty string",
+        "It returns an empty set only on the first call; later calls return defaults"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A user who has no stored preferences saves them right after being cached as absent. When do notifications start honoring the new preferences?",
+      "choices": [
+        "Only after the absent TTL elapses",
+        "Immediately, since update() saves and then evicts the cached marker",
+        "Never, until the service restarts",
+        "Only when channelsFor is called twice"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.caching.ttls_and_expiry",
+    "backend.caching.cache_invalidation",
+    "backend.config.defaults_and_validation"
+  ]
+}

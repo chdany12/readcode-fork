@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "flags/FlagService.java",
+        "startLine": 34,
+        "endLine": 34
+      }
+    },
+    1,
+    2,
+    1
+  ],
+  "explanations": [
+    "refresh() empties the shared map with flags.clear() and then repopulates it entry by entry. ConcurrentHashMap makes each operation thread-safe, but the sequence is not atomic. Any request that calls isEnabled between the clear and the last put sees missing flags and gets the caller's fallback. For a flag like enforce-mfa the fallback is false, so for a few milliseconds every minute MFA silently stops being required. The fix is to build a new map and swap it in through a volatile or atomic reference, or to put the fresh entries and then remove stale keys.",
+    "isEnabled looks up tenantOverrides.get(tenantId) before checking enabled or the rollout, and returns a non-null override immediately. So tenant t-42 gets false regardless of the global settings. The rollout bucket is never evaluated on that path, and overrides are not limited to disabled flags.",
+    "refreshQuietly catches RuntimeException and logs it, so the exception does not escape into the scheduled task. With scheduleWithFixedDelay an uncaught exception would cancel future runs, but here the catch prevents that, and the next run happens one period later. isEnabled never calls the repository. The retry is not immediate: the delay is fixed at the refresh period.",
+    "The bucket is Math.floorMod((key + \":\" + userId).hashCode(), 100). String.hashCode is specified by the language and is identical across JVMs and runs, and refreshes do not change it, so a user keeps the same outcome everywhere until the percentage changes. Including the key also makes buckets differ between flags. Nothing random is involved."
+  ]
+}

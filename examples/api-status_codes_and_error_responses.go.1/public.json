@@ -1,0 +1,50 @@
+{
+  "id": "07f2d16b-0f75-4e9c-aafd-a59d80861369",
+  "title": "Impression ingestion API errors",
+  "name": "Impression ingestion handler",
+  "createdAt": "2026-11-19T23:02:14.260Z",
+  "durationMinutes": 12,
+  "language": "Go",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code maps failures to HTTP status codes and error responses? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The store returns an error created as fmt.Errorf(\"db: %w\", ErrCampaignPaused). What does the caller of POST /v1/campaigns/{id}/impressions receive?",
+      "choices": [
+        "409 with code campaign_paused",
+        "400 with code bad_request, since the error was wrapped twice",
+        "500, because the error is not exactly ErrCampaignPaused",
+        "404, because the campaign cannot be used"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client posts a 3 MiB JSON array of impressions. What status does it get?",
+      "choices": [
+        "400 with code malformed_json",
+        "422 with code validation_failed",
+        "413 with code body_too_large",
+        "202, since only the first 1 MiB is read and processed"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A batch of 100 impressions is valid except that the 60th has an empty ad_id. What happens?",
+      "choices": [
+        "The first 59 are recorded and the response is 202 with accepted 59",
+        "The whole batch is rejected with 422 and nothing is sent to the store",
+        "The batch is sent to the store, which decides how to handle the bad event",
+        "The request fails with 400 malformed_json"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.status_codes_and_error_responses",
+    "backend.errors.error_wrapping_and_context",
+    "backend.api.request_validation"
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "id": "d74b82f3-5ba5-4c14-a4fa-c69acd0aa616",
+  "title": "Idempotent file upload service",
+  "name": "Upload commit service",
+  "createdAt": "2026-11-19T23:02:14.223Z",
+  "durationMinutes": 12,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code handles a failed upload attempt that used an idempotency key? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "What guarantees that exactly one of two simultaneous first-time callers with the same key proceeds to write the blob?",
+      "choices": [
+        "The upload method is synchronized",
+        "ConcurrentHashMap.merge is atomic per key, and only the caller whose fresh Entry instance is returned gets an empty Optional",
+        "The BlobStore serializes writes by path",
+        "Each user can only have one request at a time"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client retries a request whose first attempt fully succeeded. What does it receive?",
+      "choices": [
+        "201 with a newly written file",
+        "409 because the key already exists",
+        "200 with the original fileId and no second blob write",
+        "500 because the entry is COMMITTED"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two different users upload with the identical idempotency key string. What is the effect?",
+      "choices": [
+        "They share one registry entry, so one user's upload is treated as the other's retry",
+        "The second is rejected with 409",
+        "Both writes go to the same blob path",
+        "They are tracked independently, because the registry key is prefixed with the user ID"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.idempotency",
+    "backend.errors.cleanup_on_error_paths",
+    "backend.concurrency.atomic_operations"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    2,
+    0,
+    2
+  ],
+  "explanations": [
+    "There is none. Floats are parsed straight to Decimal (parse_float=Decimal) so amounts never pass through binary floating point; NaN and Infinity constants are rejected; money inputs are range checked and required to have at most two decimals before being quantized; bool is excluded where integers are expected; and output Decimals are written as plain strings via format(value, 'f'), so no exponent notation or float rounding appears. Unknown fields are ignored on purpose for an intake endpoint, which does not harm correctness here.",
+    "json.loads is called with parse_float=Decimal, so 2.50 becomes Decimal('2.50') directly from the text. parse_money accepts Decimal, passes the range and two-decimal checks, and the view emits it via format(value, 'f') as \"2.50\". No float is involved, numbers are accepted alongside strings, and no rounding to integers is done.",
+    "json.loads accepts NaN by default, but parse_constant=_reject_constant makes the parser raise ValueError for it. load_body catches ValueError and raises BadRequest('invalid_json'), so the failure happens at parsing time, before parse_money runs. Even without the hook, parse_money would reject a non-finite Decimal; the hook is what decides the error code, and nothing is left unhandled.",
+    "Because parse_float=Decimal, the token 2.0 arrives as Decimal('2.0'), and isinstance(Decimal, int) is false, so the qty check raises qty_invalid. Numeric equality to an integer is not considered, nothing is rounded, and floats are fine elsewhere (tip and unit_price accept them), so invalid_json is wrong."
+  ]
+}

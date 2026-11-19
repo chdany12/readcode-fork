@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "feed/FeedCache.java",
+        "startLine": 35,
+        "endLine": 38
+      }
+    },
+    1,
+    1,
+    1
+  ],
+  "explanations": [
+    "When get() finds an expired entry it reports a miss but leaves the entry in the map, and nothing else ever removes entries (there is no sweeper and invalidate() only runs for followers of authors who post). A user who stops opening the app is never read again, so their stale feed list stays in memory forever. In a social product with many inactive accounts the map grows toward the whole user base and size() keeps climbing. Expired entries should be removed on read (entries.remove(userId, entry)) and swept periodically.",
+    "Entries created together (for example after a deploy or a peak) would all expire together, sending a wave of builder.build calls. Spreading expiry by up to 10% of the TTL smooths that load. Jitter does not change feed content; the TTL guarantee comes from adding to the base TTL; and the cache uses a local Clock so drift between servers is not addressed.",
+    "onPostPublished returns early when followerCount exceeds 5,000, so no entries are invalidated. Staleness for those followers is bounded only by the TTL plus jitter. This trades freshness for avoiding millions of deletes per post.",
+    "There is no locking or single-flight around the miss path. Both threads see a miss, both call builder.build, and both call put; ConcurrentHashMap.put is atomic per call but does not deduplicate work. The cost is duplicate builds, and neither result is corrupt."
+  ]
+}

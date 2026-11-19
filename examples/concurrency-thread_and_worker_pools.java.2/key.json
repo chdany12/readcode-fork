@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/main/java/com/loopfeed/feed/FeedWorkerPool.java",
+        "startLine": 41,
+        "endLine": 41
+      }
+    },
+    2,
+    3,
+    0
+  ],
+  "explanations": [
+    "`FeedContext.clear()` is only reached when `ranker.rank` and `cache.put` complete normally; it is not in a finally block. If ranking throws, the pool thread keeps the viewer's region in its ThreadLocal because pool threads are reused. A later `trending` task that lands on that thread reads the stale region, builds the trending list for the wrong region and caches it under that region's key, so users in that region see results driven by an unrelated failure, and the outcome depends on which thread ran which task. The fix is to clear the context in a finally block.",
+    "ThreadPoolExecutor prefers queueing over growing once the core size is reached. Threads 5 to 8 are created only when the bounded queue is full. The caller-runs policy only applies when both the queue and the maximum thread count are exhausted, and nothing is rejected before then.",
+    "CallerRunsPolicy runs the rejected task on the submitting thread. That provides natural backpressure because the caller is busy and cannot submit more, but it also means the work executes with the caller thread's own ThreadLocal state rather than a pool thread's. AbortPolicy would throw, DiscardPolicy would drop silently and DiscardOldestPolicy would evict a queued task; none is configured here.",
+    "supplyAsync wraps the supplier; an exception completes the returned CompletableFuture exceptionally (surfacing as CompletionException from join or ExecutionException from get). The worker thread is not terminated, so it is reused for later tasks. The exception is not thrown at submission and is not converted to an empty result."
+  ]
+}

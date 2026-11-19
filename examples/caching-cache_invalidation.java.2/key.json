@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "MenuService.java",
+        "startLine": 58,
+        "endLine": 60
+      }
+    },
+    0,
+    1,
+    2
+  ],
+  "explanations": [
+    "changePrice invalidates only the per-item entry. The menu cache holds a Menu that contains the same items with their prices, keyed by restaurantId, and is not invalidated, so getMenu keeps returning the old price for up to 15 minutes while getItem returns the new one. setAvailability shows the intended pattern of invalidating both caches. changePrice should also call menus.invalidate(restaurantId).",
+    "loaded.ifPresent only puts present values, so absent items are never cached and every lookup repeats the repository call. The method has no null handling that could throw.",
+    "Caffeine's Cache.get(key, mappingFunction) computes atomically per key, so concurrent callers wait for a single load. getItem, in contrast, does a separate getIfPresent and put, so that path can load twice. No errors or empty menus occur.",
+    "The method invalidates the keyed item entry and the menu keyed by restaurantId; invalidate on an absent key is a no-op. Nothing else is cleared, and other restaurants' entries are untouched."
+  ]
+}

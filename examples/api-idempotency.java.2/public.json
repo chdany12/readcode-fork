@@ -1,0 +1,50 @@
+{
+  "id": "3f8c3b3d-483b-41c1-bc27-3d9e578b1f2f",
+  "title": "Idempotent document ingest",
+  "name": "Document ingest service",
+  "createdAt": "2026-11-19T23:02:14.225Z",
+  "durationMinutes": 10,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this service guarantees that a retried indexing request is applied only once? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A retry arrives with a requestId that was fully processed earlier, but with different fields in the body. What is returned?",
+      "choices": [
+        "A new version from a fresh upsert with the new fields",
+        "An IllegalArgumentException",
+        "The originally recorded version, and the new fields are ignored",
+        "The latest version of the document"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two tenants send requests with the same requestId. How does the processed-request lookup treat them?",
+      "choices": [
+        "As the same request, so the second tenant gets the first tenant's version",
+        "As separate requests, since lookups are by tenant and requestId together",
+        "The second request fails validation",
+        "As the same request, but only if docId matches"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A request with an empty tags list is processed. Which calls are made to the index?",
+      "choices": [
+        "Only upsert",
+        "upsert and appendTags with an empty list",
+        "Neither, because empty tags are invalid",
+        "appendTags only"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.idempotency",
+    "backend.messaging.deduplication",
+    "backend.data.transactions_and_isolation_levels"
+  ]
+}

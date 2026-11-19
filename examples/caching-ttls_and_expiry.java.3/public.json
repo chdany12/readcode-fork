@@ -1,0 +1,51 @@
+{
+  "id": "f5ea5c94-259b-4567-9b45-c6949743c22c",
+  "title": "Cached playback manifests with signed URLs",
+  "name": "Playback manifest service",
+  "createdAt": "2026-11-19T23:02:14.284Z",
+  "durationMinutes": 13,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code chooses the lifetime of cached manifests? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A user's subscription is cancelled while a manifest for a video is cached. What happens when that user requests the manifest again?",
+      "choices": [
+        "They receive the cached manifest until it expires",
+        "assertCanWatch runs first and throws, so the cached manifest is not served",
+        "The cache entry is removed and rebuilt for the user",
+        "They receive the manifest but segment requests fail"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Many viewers request a newly released video at the same moment, none of them hitting a cache entry. What does the code do?",
+      "choices": [
+        "Only one request builds the manifest; the others wait",
+        "Each request that misses builds and caches its own manifest; the result is equivalent but the catalog and signer are called redundantly",
+        "The requests fail with IllegalStateException",
+        "The cache refuses puts for a key being built"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What does ManifestCache.get do when it finds an entry whose expiry has passed?",
+      "choices": [
+        "Returns the entry and refreshes its expiry",
+        "Returns an empty Optional and leaves the entry in place",
+        "Removes that specific entry and returns an empty Optional",
+        "Throws an IllegalStateException"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.caching.ttls_and_expiry",
+    "backend.caching.stale_reads",
+    "backend.security.authorization_checks",
+    "backend.config.defaults_and_validation"
+  ]
+}

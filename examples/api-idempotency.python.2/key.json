@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "api.py",
+        "startLine": 21,
+        "endLine": 23
+      }
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "The replay is looked up by (patient, key) only, and the request body is never compared with the one that produced the cached response. A patient who reuses a key for a different clinician or time receives the first booking's response and the new appointment is never created, while the client believes it succeeded or failed on the wrong slot. The store should save a fingerprint of the request and return 422 (or similar) when a key is reused with a different payload. (The lookup also happens before body validation, so malformed bodies can replay too.)",
+    "The 409 response is stored via setdefault like any other response, and later lookups return it before create is called. Entries are never evicted. No 422 is produced for reuse.",
+    "Both may pass the replay lookup, but create takes a lock and the slot check makes only one succeed (201); the other gets SlotUnavailable (409). The final setdefault under the lock means both callers return whichever response was stored first, so both see the same result. Two appointments cannot be created since the slot key is unique, and the lookup does not block.",
+    "The KeyError is caught and a 422 is returned directly, before any code that writes to _replays, so nothing is cached. 400 is reserved for a missing key header and the exception does not escape."
+  ]
+}

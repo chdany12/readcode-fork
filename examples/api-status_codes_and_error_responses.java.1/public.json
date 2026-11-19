@@ -1,0 +1,50 @@
+{
+  "id": "1ce5b736-65d2-47df-bdd4-d2d7a830b473",
+  "title": "File sync API error mapping",
+  "name": "File sync endpoints",
+  "createdAt": "2026-11-19T23:02:14.261Z",
+  "durationMinutes": 13,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code maps failures to HTTP status codes and error responses? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client PUTs a new version of a file without sending an If-Match header. What does it receive?",
+      "choices": [
+        "400 bad_request",
+        "412 stale_version",
+        "409 with the current version",
+        "428 if_match_required"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two devices both hold version 4 and upload edits with If-Match \"4\". The second request is handled after the store has moved to version 5 and throws StaleVersionException. What does the second device see?",
+      "choices": [
+        "409 with an empty body",
+        "412 with currentVersion 5 in the error details so it can re-sync",
+        "200 because the store overwrote the file",
+        "500, since the exception is not mapped"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A file is 1000 bytes long and the client sends Range: bytes=1000-. What happens?",
+      "choices": [
+        "206 with an empty body and Content-Range bytes 1000-999/1000",
+        "200 with the full file",
+        "416 with Content-Range: bytes */1000",
+        "400, because the range is malformed"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.status_codes_and_error_responses",
+    "backend.api.rest_design",
+    "backend.resilience.retries_and_backoff"
+  ]
+}

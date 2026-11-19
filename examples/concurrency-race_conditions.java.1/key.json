@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/dev/ci/coordinator/BuildCoordinator.java",
+        "startLine": 29,
+        "endLine": 30
+      }
+    },
+    3,
+    1,
+    2
+  ],
+  "explanations": [
+    "Yes. trigger() does a get, a null check and then a put on the ConcurrentHashMap. Each call is thread-safe on its own, but the sequence is not atomic: two webhook threads for the same commit can both see null, both create a BuildRun and both put/submit, so the same commit is built twice and the second put overwrites the first run in the map. Use activeBuilds.computeIfAbsent or putIfAbsent and only submit if this thread's run was the one stored.",
+    "ConcurrentHashMap.remove(key, value) removes only when the current mapping equals the value (BuildRun has no equals override, so identity). A single-argument remove could delete a newer run registered after this one. It does not throw on a missing key, has nothing to do with shutdown, and only touches one key.",
+    "The catch block removes the entry (only if it is still this run) and rethrows, so the caller sees the rejection and a later trigger can start fresh. It is not left QUEUED, the state is not set to FAILED, and there is no inline retry.",
+    "Entries are added in trigger() before the task is queued and removed in execute()'s finally block, so the map holds both queued and running builds. Finished ones are removed immediately in the same finally; the cumulative number is tracked separately by executedCount() and only counts completed executions."
+  ]
+}

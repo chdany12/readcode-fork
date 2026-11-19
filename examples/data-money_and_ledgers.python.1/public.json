@@ -1,0 +1,50 @@
+{
+  "id": "12fe2019-0138-49ad-8e07-444e8705b552",
+  "title": "Payroll stub calculation and ledger posting",
+  "name": "Payroll stub calculator",
+  "createdAt": "2026-11-19T23:09:24.550Z",
+  "durationMinutes": 10,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code loads and applies the monetary rates used for pay? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "An employee with an hourly rate of 20.00 works 45 hours and the overtime multiplier is 1.5. What gross pay does compute_stub produce?",
+      "choices": [
+        "900.00",
+        "950.00",
+        "975.00",
+        "1,000.00"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does compute_stub derive net as gross - withholding rather than rounding gross * (1 - withholding_rate) separately?",
+      "choices": [
+        "It is faster than a multiplication.",
+        "Decimal cannot represent (1 - rate) exactly.",
+        "It makes withholding and net always add up to exactly the gross, so the three journal entries cannot be off by a rounding cent.",
+        "to_cents would raise on a product with more than two decimals."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A caller passes hours=37.5 as a Python float to compute_stub. What happens?",
+      "choices": [
+        "The result is computed with float precision and then rounded to cents.",
+        "A ValueError is raised by the negative-hours check.",
+        "The float is silently converted by Decimal and the calculation proceeds exactly.",
+        "A TypeError is raised, because Decimal arithmetic does not accept a float operand."
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.money_and_ledgers",
+    "backend.config.configuration_loading",
+    "backend.api.serialization_and_deserialization"
+  ]
+}

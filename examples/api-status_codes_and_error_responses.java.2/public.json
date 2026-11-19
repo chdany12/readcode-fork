@@ -1,0 +1,50 @@
+{
+  "id": "3380997f-73e9-43d1-8dee-f6658501c27a",
+  "title": "Search service REST responses",
+  "name": "Search service resource",
+  "createdAt": "2026-11-19T23:02:14.263Z",
+  "durationMinutes": 13,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code maps failures to HTTP status codes and error responses? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A bulk request of 50 documents is processed and 7 of them fail (for example mapping errors) while 43 succeed. What does the client receive?",
+      "choices": [
+        "200 with failed set to 7",
+        "207 with the per-item outcomes",
+        "422 with the per-item outcomes",
+        "400 because some items were invalid"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A caller requests from=9990 and size=50 on an existing index. What happens?",
+      "choices": [
+        "The page is served, truncated to the last 10 results of the window",
+        "The service is called and any limit is enforced by the backend",
+        "The request is rejected with 400 window_too_large before the service is called",
+        "A 200 is returned with an empty hits list"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "While a node restarts, search throws IndexRecoveringException. What does the response tell the client?",
+      "choices": [
+        "404 index_not_found, since the index cannot be read",
+        "500 with a generic message",
+        "429, so the client slows down",
+        "503 index_recovering with Retry-After: 5"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.status_codes_and_error_responses",
+    "backend.api.rest_design",
+    "backend.resilience.timeouts"
+  ]
+}

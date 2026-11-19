@@ -1,0 +1,51 @@
+{
+  "id": "8f89fb78-32ff-4c02-951b-57a15619f7cb",
+  "title": "Support ticket JSON encoding and decoding",
+  "name": "Ticket JSON handlers",
+  "createdAt": "2026-11-19T23:02:14.253Z",
+  "durationMinutes": 10,
+  "language": "Go",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how tickets are decoded from requests or encoded into responses? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends PATCH /tickets/7 with the body {\"status\":\"SOLVED\"}. What happens?",
+      "choices": [
+        "400, because status values are case-sensitive",
+        "200, and the stored status becomes solved; the response shows \"status\":\"solved\"",
+        "200, but the status is unchanged because the value does not match exactly",
+        "500, because json.Unmarshal cannot decode into a pointer to an int-based type"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends POST /tickets with {\"subject\":\"Login fails\",\"priority\":3}. What does the handler do?",
+      "choices": [
+        "201; the unknown priority field is silently ignored",
+        "400; decodeStrict fails because DisallowUnknownFields rejects the field",
+        "201; priority is stored in the ticket as an extra attribute",
+        "400; json.Decoder rejects numbers that are not declared as float64"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A ticket is created with {\"subject\":\"Refund\"} (no tags, no due date) and then fetched with GET. What does the JSON response contain for tags, assignee_id and due_at?",
+      "choices": [
+        "\"tags\":null, \"assignee_id\":null, and no due_at key",
+        "\"tags\":[], \"assignee_id\":null, and no due_at key",
+        "\"tags\":[], no assignee_id key, and \"due_at\":null",
+        "The keys tags, assignee_id and due_at are all omitted"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.serialization_and_deserialization",
+    "backend.api.request_validation",
+    "backend.errors.error_propagation",
+    "backend.resources.unbounded_buffers"
+  ]
+}

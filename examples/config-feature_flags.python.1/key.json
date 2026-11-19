@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    3,
+    1,
+    2
+  ],
+  "explanations": [
+    "There is no defect. Holding the lock during the fetch looks risky, but the fetch has a timeout, only one thread refreshes while others wait for its result, and a failure sets retry_after so the waiting threads and later callers get the stale snapshot immediately instead of each paying a timeout. A stale snapshot is served only while younger than max_stale, after which is_enabled falls back to per-flag DEFAULTS rather than raising. The rollout hash uses sha256 over key and merchant, so it is deterministic across processes and independent per flag.",
+    "The TTL has passed, so the thread tries a fetch with a 1.5s timeout. It fails, sets retry_after to now + 5s and returns the old snapshot because its age (120s) is within max_stale (300s). Other threads queue on the lock, then see now < retry_after and return the stale snapshot without fetching. FlagsUnavailable is only raised when there is no snapshot or it is older than max_stale, and DEFAULTS are used only after that.",
+    "After 300s _stale_or_raise raises FlagsUnavailable, and is_enabled catches it and returns DEFAULTS.get(key, False). For block-new-card-bins that default is True, so the safety check stays on, while route-via-processor-b falls back to False. The exception is handled inside is_enabled, so callers never see it, and snapshots do not live forever.",
+    "Because the fetch runs inside `with self._lock`, only one thread fetches while the rest wait for the lock, so the flag service sees one request per refresh. The cost is that those waiters are delayed by up to the timeout (1.5s). The staleness is bounded by max_stale, and every thread gets the same snapshot object."
+  ]
+}

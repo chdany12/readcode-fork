@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    3,
+    1,
+    2
+  ],
+  "explanations": [
+    "There is no defect. Per-customer state lives in its own _Account object created under a registry guard, and every read or write of balance_cents and applied happens under that account's lock. apply_to_invoice checks for a prior application and deducts inside one critical section, so concurrent finalizations of the same invoice cannot double-spend credit. The gateway call happens outside the lock, and a decline restores credit through reverse(), which is also locked.",
+    "The applied dictionary is checked and updated inside the account lock, so the loser of the race finds the recorded amount and returns it unchanged; the balance ends at 200. The deduction is not repeated, no exception exists for this case, and returning 0 would only occur with a zero balance.",
+    "The whole check-create-insert sequence is inside the guard, so the second thread finds the first thread's object. A separate per-account lock would not help because two different objects would have two different locks; there is no per-object call serialization in CPython.",
+    "Holding acct.lock across network I/O would block every other grant, balance read and apply for that customer for the duration of the call. The credit is already deducted and recorded before the charge, so a retry with the same invoice id returns the same amount. The call is not made at-most-once by this structure, and the amount is computed locally, not by the gateway."
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "id": "856e8e02-2bfa-4e95-b2d8-82b49b590954",
+  "title": "Booking service configuration and validation",
+  "name": "Booking service config",
+  "createdAt": "2026-11-19T23:09:24.520Z",
+  "durationMinutes": 12,
+  "language": "Go",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code validates the loaded configuration values? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The environment has BOOKING_MAX_PASSENGERS=abc and BOOKING_HOLD_TTL=30s. What does Load return?",
+      "choices": [
+        "A zero Config and a single error about BOOKING_MAX_PASSENGERS, since parsing stops at the first failure",
+        "A usable Config using the default passenger limit and a nil error, because parse failures fall back to defaults",
+        "A non-nil error that reports both the unparsable passenger count and the out-of-range hold TTL",
+        "Only an error about the hold TTL, because the failed Atoi leaves a valid default in place"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A deployment template renders BOOKING_INVENTORY_URL as an empty string (the variable is set but empty). What happens at startup?",
+      "choices": [
+        "The default inventory URL is used, since an empty value counts as unset",
+        "The service starts and every search fails with a bad gateway",
+        "Load returns an error because the empty URL has no host, and main exits via log.Fatalf",
+        "Load panics when url.Parse is called on an empty string"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A deployment sets BOOKING_CURRENCY=usd. What does the service do with it?",
+      "choices": [
+        "Rejects it because currency codes must be upper case",
+        "Accepts it unchanged and sends currency=usd to the inventory service",
+        "Normalizes it to USD before use",
+        "Falls back to the default USD because the value does not match the default exactly"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.defaults_and_validation",
+    "backend.resilience.timeouts",
+    "backend.config.configuration_loading"
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "id": "5764b187-d8d1-4262-bd12-454376540e2f",
+  "title": "Streaming session configuration loader",
+  "name": "Streaming config loader",
+  "createdAt": "2026-11-19T23:09:24.521Z",
+  "durationMinutes": 13,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code validates the relationship between the configured bitrate settings? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A deployment sets stream.startBitrateKbps to an empty value (the line is present but blank) and stream.maxBitrateKbps=6000. Which start bitrate does the loaded config contain?",
+      "choices": [
+        "It fails with a ConfigException because an empty value is not an integer",
+        "0, since an empty string parses as zero",
+        "The start bitrate is derived as half of the max, 3000",
+        "1500, because a blank value is treated the same as an absent one"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "stream.allowedRegions is set to \" , \" (spaces and a comma only). What happens?",
+      "choices": [
+        "load throws a ConfigException because no region remains after trimming and filtering empties",
+        "The config is created with a list containing two empty strings",
+        "The default regions us,eu are used because the value is effectively blank",
+        "The config is created with an empty region list, so every admit() call returns false"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "With default settings, what initial bitrate does PlaybackPlanner.initialBitrateKbps return for a measured bandwidth of 400 kbps?",
+      "choices": [
+        "320, which is 80 percent of the measurement",
+        "1500, the configured start bitrate",
+        "750, half of the start bitrate",
+        "400, the measured value unchanged"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.defaults_and_validation",
+    "backend.config.configuration_loading"
+  ]
+}

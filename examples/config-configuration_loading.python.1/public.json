@@ -1,0 +1,50 @@
+{
+  "id": "2fd8eda0-1945-46df-a659-2a6432b68eef",
+  "title": "Ledger service settings loader",
+  "name": "Ledger settings loader",
+  "createdAt": "2026-11-19T23:09:24.518Z",
+  "durationMinutes": 11,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code combines the defaults with an operator-supplied file? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "`load_settings(environ={\"LEDGER_PORT\": \"80a\"})` is called with no file. What happens?",
+      "choices": [
+        "The default port 8080 is used because the value is not a valid port",
+        "The port becomes 0 after a failed conversion",
+        "ValueError is raised during loading",
+        "The invalid value is stored and the error surfaces when the server binds"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does `_money` convert with `Decimal(str(value))` rather than `Decimal(value)`?",
+      "choices": [
+        "Decimal cannot be constructed from strings",
+        "To avoid carrying binary floating-point artifacts when the file supplies a JSON number such as 0.1",
+        "To make the value an integer number of cents",
+        "Because json.load returns all numbers as strings"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "`load_settings` is called once with `LEDGER_PER_TRANSFER_LIMIT=100` and later, in the same process, with no environment variables and no file. What are the limits in the second call?",
+      "choices": [
+        "per_transfer is 100, because the first call modified the module-level defaults",
+        "Both calls fail because DEFAULTS is frozen after first use",
+        "The second call returns the previous Settings object from a cache",
+        "The packaged defaults: 5000.00 and 20000.00"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.configuration_loading",
+    "backend.config.defaults_and_validation",
+    "backend.data.money_and_ledgers"
+  ]
+}

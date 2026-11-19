@@ -1,0 +1,51 @@
+{
+  "id": "e995b0f0-6010-4237-acf5-62d6c2781b36",
+  "title": "Order creation payload validation",
+  "name": "Order creation endpoint",
+  "createdAt": "2026-11-19T23:02:14.238Z",
+  "durationMinutes": 12,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code validates the order payload? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client posts {\"customer_ref\": \"c-1\", \"currency\": \"USD\", \"lines\": [{\"sku\": \"AB-1234\", \"quantity\": 2}], \"gift\": true}. What happens?",
+      "choices": [
+        "The order is created and \"gift\" is ignored",
+        "The request fails with 422 because the model forbids extra fields",
+        "The request fails with 400 because \"gift\" is not a known field of the view",
+        "The order is created and \"gift\" is stored on the model as an attribute"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What does the view do if the second of three order lines cannot be reserved because of insufficient stock?",
+      "choices": [
+        "Returns 201 with the reservations that succeeded",
+        "Returns 409 and keeps the first reservation so a retry can reuse it",
+        "Returns 422 because stock problems are validation errors",
+        "Returns 409 after releasing the reservation made for the first line"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A request body is the JSON array [{\"sku\": \"AB-1234\"}]. What is returned?",
+      "choices": [
+        "400 with \"body must be a JSON object\"",
+        "422 with a list of problems from OrderIn",
+        "500 because model_validate raises TypeError",
+        "201 because arrays are coerced into the lines field"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.request_validation",
+    "backend.observability.structured_logging",
+    "backend.security.input_sanitization",
+    "backend.api.status_codes_and_error_responses"
+  ]
+}

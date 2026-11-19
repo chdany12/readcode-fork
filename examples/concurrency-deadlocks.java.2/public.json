@@ -1,0 +1,50 @@
+{
+  "id": "44feb860-cd0a-4515-bc4d-d378c8d77ad5",
+  "title": "Lane quote aggregation across carriers",
+  "name": "Shipment route quoting",
+  "createdAt": "2026-11-19T23:09:24.487Z",
+  "durationMinutes": 12,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code coordinates its locking with the carrier worker threads when producing a quote? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two threads call quote() for two different lanes at the same time, with no cached quotes. How do their carrier lookups proceed?",
+      "choices": [
+        "Both lanes are fetched in parallel, since the cache is keyed by lane.",
+        "The lookups are interleaved on the 4-thread pool, with each future.get() waiting for its own tasks.",
+        "The calls are serialized: the second waits for the first to finish all its carrier calls, whatever the lane.",
+        "The second call fails fast because the monitor is already held."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "One carrier's basePrice() throws a RuntimeException while the other carriers answer normally. What does the caller of quote() observe?",
+      "choices": [
+        "The best price among the carriers that succeeded is returned and cached.",
+        "An ExecutionException wrapping the failure is thrown, and nothing is cached for the lane.",
+        "A null quote is returned and cached for the lane.",
+        "The exception is thrown immediately and the remaining carrier tasks are cancelled."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "fuelIndex and fuelIndexFetchedAt are volatile, and currentFuelIndex() reads fuelIndexFetchedAt without holding any lock. What does volatile give that unsynchronized read?",
+      "choices": [
+        "Mutual exclusion between pool threads and the thread that refreshes the index.",
+        "It guarantees that only one thread ever refreshes the index per hour.",
+        "Atomic updates of the pair so a reader never sees a new index with an old timestamp.",
+        "Pool threads see the values written by the refreshing thread promptly, without being told to wait for a monitor."
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.deadlocks",
+    "backend.concurrency.thread_and_worker_pools",
+    "backend.caching.ttls_and_expiry"
+  ]
+}

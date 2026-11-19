@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "prefs.go",
+        "startLine": 68,
+        "endLine": 69
+      }
+    },
+    2,
+    1,
+    1
+  ],
+  "explanations": [
+    "Update populates the cache before the repository write. If Save fails (timeout, constraint, outage), the function returns an error but the cache already holds the new preferences with the incremented Version, so Get serves values that were never persisted until the TTL expires, and other instances using the shared cache see them too. A write-through update should write the source of truth first and refresh the cache only after Save succeeds (or delete the key on failure).",
+    "SetChannel saves, then deletes the key (cache-aside invalidation). The next Get finds nothing, calls repo.Load and refills via fill. The first choice would only hold if Delete were skipped. ErrNotFound only comes from the repository when the user has no row. SetChannel keeps no in-memory copy.",
+    "Modifying data read from the cache and saving it back could write over changes made elsewhere since the entry was filled; the repository is the source of truth for read-modify-write. Get has no concurrency problem here, it does return a modifiable pointer, and bypassing the cache is not about speed.",
+    "Cache reads are treated as misses and fill discards the error from Set, so Get always falls through to repo.Load and returns its result; the cost is that every read hits the repository. No error is surfaced, no zero value is made up, and there is no retry loop in the code."
+  ]
+}

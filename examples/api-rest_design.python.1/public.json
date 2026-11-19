@@ -1,0 +1,51 @@
+{
+  "id": "7e8f371b-61fa-4075-ba9e-f279ed4aa724",
+  "title": "Campaign management REST API (FastAPI)",
+  "name": "Campaign CRUD service",
+  "createdAt": "2026-11-19T23:02:14.248Z",
+  "durationMinutes": 9,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how PATCH requests are applied to a campaign? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client calls GET /v1/campaigns?limit=500. What happens?",
+      "choices": [
+        "200 with up to 100 campaigns; the limit is silently capped",
+        "200 with up to 500 campaigns",
+        "422 Unprocessable Entity; FastAPI rejects the value before the handler runs",
+        "404 because no page of that size exists"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client POSTs a valid campaign body to /v1/campaigns. What does the response contain?",
+      "choices": [
+        "200 OK and the created campaign without a Location header",
+        "201 Created, a Location header /v1/campaigns/<id>, and the created campaign in the body",
+        "201 Created with an empty body, since the client can fetch it from Location",
+        "302 Found redirecting to the new campaign"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends DELETE /v1/campaigns/12 twice for an existing campaign, then GET /v1/campaigns/12. What are the three results?",
+      "choices": [
+        "204, 404, 404",
+        "204, 204, then 200 with status \"archived\"",
+        "204, 204, then 404",
+        "204, 409, then 200 with status \"archived\""
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.rest_design",
+    "backend.api.request_validation",
+    "backend.api.status_codes_and_error_responses",
+    "backend.data.pagination"
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "id": "8acea01c-0871-4dac-8226-62517670ccfc",
+  "title": "Template cache with invalidation events",
+  "name": "Message template cache",
+  "createdAt": "2026-11-19T23:02:14.271Z",
+  "durationMinutes": 13,
+  "language": "Go",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code keeps cached templates consistent with invalidation events? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does Get compare `c.gen[id]` and `c.epoch` with the values captured earlier before storing the loaded template?",
+      "choices": [
+        "To avoid storing the same template twice",
+        "To make sure the TTL has not expired during the load",
+        "To skip caching a result whose load overlapped an invalidation, which could be an outdated version",
+        "To detect that another goroutine loaded the same template"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A template is not in the cache and a load for it is in flight. InvalidateAll runs, then the load finishes. What does the caller and the cache see?",
+      "choices": [
+        "The caller gets the loaded template, but it is not stored in the cache",
+        "The caller gets an error because the epoch changed",
+        "The caller gets the loaded template and it is stored with a fresh TTL",
+        "The caller blocks until another load completes"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The events channel is closed by the publisher, and Listen returns. What is the effect on the cache?",
+      "choices": [
+        "All entries are cleared immediately",
+        "Existing entries keep being served until their TTL expires, after which they are reloaded",
+        "Get starts returning errors",
+        "Entries are served indefinitely because nothing else expires them"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.caching.cache_invalidation",
+    "backend.caching.ttls_and_expiry",
+    "backend.concurrency.race_conditions"
+  ]
+}

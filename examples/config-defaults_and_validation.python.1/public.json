@@ -1,0 +1,49 @@
+{
+  "id": "6c24f03d-f675-47a3-9c2d-398848efa24f",
+  "title": "Shipment batching settings",
+  "name": "Shipment batch settings",
+  "createdAt": "2026-11-19T23:09:24.523Z",
+  "durationMinutes": 11,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code validates the combined settings once they have been parsed? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "SHIP_BATCH_SIZE is exported as two spaces (\"  \"). What batch size does from_env produce?",
+      "choices": [
+        "A ConfigError, because whitespace is not an integer",
+        "100, because a whitespace-only value is treated as unset",
+        "0, because int() of an empty string is falsy and clamps to the lower bound",
+        "1, the lower bound of the allowed range"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The environment contains only SHIP_LABEL_FORMAT=PDF. What does from_env do?",
+      "choices": [
+        "Raises ConfigError because no warehouse codes were configured",
+        "Returns settings with label_format 'PDF' and an empty warehouse list",
+        "Rejects the value because the label format must be lower case",
+        "Returns settings with default values for everything, including a default warehouse"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Settings allow warehouse AMS with batch_size=200. build_batches receives 450 parcels for 'ams' that all pass accept(). What does it return for them?",
+      "choices": [
+        "One batch of 450, since batches are grouped per warehouse",
+        "Three batches of 150, split evenly",
+        "Three batches of sizes 200, 200 and 50 for warehouse AMS",
+        "Two batches of 200, with the remaining 50 parcels reported as rejected"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.defaults_and_validation",
+    "backend.config.configuration_loading"
+  ]
+}

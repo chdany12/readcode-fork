@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "registry.py",
+        "startLine": 34,
+        "endLine": 35
+      }
+    },
+    2,
+    0,
+    3
+  ],
+  "explanations": [
+    "Yes. rebalance() acquires src.lock and then dst.lock in whatever order the caller named the pools. Two Autoscaler instances running concurrently can request rebalance(A, B) and rebalance(B, A) at the same time: one thread holds A.lock and waits for B.lock while the other holds B.lock and waits for A.lock, so both block forever and every reserve()/release() on those pools hangs behind them. Locks must be taken in a global order (for example by pool name) regardless of argument order.",
+    "reserve() takes the pool's own lock, which rebalance() holds while it changes capacity, so reserve() waits and then sees the new capacity. It does not fail fast (no try-lock), capacity is read inside the lock via available(), and the registry guard is not used by reserve() at all.",
+    "The guard only protects the dict; get() returns the pool and releases it, so lookups are short and independent of pool locks. Pools are never removed in this code, so the dict is not corrupted, the guard and pool locks are separate objects, and lookups are not held up by rebalance() because it does not hold the guard.",
+    "CapacityError is raised inside the nested with blocks before any mutation; the context managers release both locks as the exception propagates. Nothing is partially moved, locks are not held past the exception, and the log line after the blocks is skipped."
+  ]
+}

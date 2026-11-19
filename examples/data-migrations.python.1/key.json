@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "migrations/runner.py",
+        "startLine": 80,
+        "endLine": 83
+      }
+    },
+    2,
+    0,
+    3
+  ],
+  "explanations": [
+    "The schema_migrations insert runs after COMMIT, on a connection in autocommit mode, so the schema change and the record of it are two separate commits. If the process is killed (deploy rollout, OOM, lost connection) between them, the DDL is permanent but the version is not recorded. The next start re-applies the migration, and a statement like ADD COLUMN fails with 'already exists', which blocks every instance from starting until someone repairs the table by hand. The insert needs to be executed inside the same BEGIN ... COMMIT as the migration statements.",
+    "The advisory lock is taken before _load_applied, and the connection that holds it is used for the whole run, so the second instance waits and then sees the first one's work. The primary key is only a backstop and would fire after the DDL already ran; transactions on the same table do not make the whole check-then-apply sequence atomic; and the pool does not limit upgrade() calls across separate processes.",
+    "_apply issues BEGIN, executes the statements, and on any exception executes ROLLBACK, then re-raises. PostgreSQL DDL such as ADD COLUMN is transactional, so the column disappears along with the UPDATE. The other choices assume the statements commit independently or that the runner retries; neither is in the code. (Whether the concurrent insert could produce a NULL at all depends on the application writing orders during the migration, which is a separate operational concern.)",
+    "Session-level advisory locks are released automatically when the database session ends, and an open transaction on a dropped connection is aborted by the server. Autocommit only applies to statements outside an explicit BEGIN; here the explicit BEGIN means nothing in that transaction is committed. The server does not keep sessions open for dead clients to resume."
+  ]
+}

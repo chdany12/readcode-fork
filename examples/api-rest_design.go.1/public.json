@@ -1,0 +1,50 @@
+{
+  "id": "6dd70d5a-286b-49ca-a4e9-cfb8c9144958",
+  "title": "Build resource HTTP API",
+  "name": "Build runs API",
+  "createdAt": "2026-11-19T23:02:14.242Z",
+  "durationMinutes": 12,
+  "language": "Go",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code designs the REST resource and its responses? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends POST .../builds/b7/cancel for a build whose status is already \"cancelling\". What is returned?",
+      "choices": [
+        "409 Conflict, because the build is not in a cancellable state",
+        "202 Accepted with the build, and the status is unchanged",
+        "404 Not Found, because cancel is only valid once",
+        "200 OK with an empty body"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client calls DELETE on a build id that does not exist (or has already been deleted). What happens?",
+      "choices": [
+        "204 No Content, the same as a successful delete",
+        "404 with an error body",
+        "409 Conflict",
+        "500 because the map lookup fails"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What does GET /v1/projects/acme/builds return when the project has no builds?",
+      "choices": [
+        "204 No Content",
+        "404 Not Found",
+        "200 with {\"items\": null}",
+        "200 with {\"items\": []}"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.rest_design",
+    "backend.api.status_codes_and_error_responses",
+    "backend.api.idempotency"
+  ]
+}

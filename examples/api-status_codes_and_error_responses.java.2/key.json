@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/main/java/com/findit/search/api/SearchResource.java",
+        "startLine": 77,
+        "endLine": 77
+      }
+    },
+    1,
+    2,
+    3
+  ],
+  "explanations": [
+    "A search that exceeds the server-side time budget is reported as 408 Request Timeout. 408 means the server gave up waiting for the client to send its request; many HTTP clients, proxies and browsers automatically retry 408 on a fresh connection, so an expensive slow query gets silently re-executed, adding load to an already struggling index. A timeout while the server runs the query is a server-side or upstream condition and belongs under 504 Gateway Timeout (or 503 with Retry-After), which signals the client correctly.",
+    "The status is computed from the counts: 200 only when nothing failed, 422 only when every item failed, and 207 Multi-Status otherwise, with the body listing each item's outcome. So a mixed result is 207. 200 would hide the partial failure in the status line, and 400 is used only for invalid bulk size.",
+    "from + size is 10040, which exceeds MAX_RESULT_WINDOW (10,000), so the resource returns 400 window_too_large itself without calling the SearchService. Values are rejected, not clamped, and the check precedes any backend call. The paging check passes first because size 50 is within 1-100.",
+    "The catch block returns 503 Service Unavailable with a Retry-After of 5 seconds, signaling a temporary condition on the server that clears by itself. It is not 404 (the index exists), not a 500 (the exception is anticipated), and not 429, which this code reserves for RateLimitedException."
+  ]
+}

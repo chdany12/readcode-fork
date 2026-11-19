@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    2,
+    0,
+    3
+  ],
+  "explanations": [
+    "There is no defect. The environment is required and validated, so there is no silent default. TLS and the simulator restriction are enforced at startup, before any data flows, and the production profile cannot enable the simulator. Sampling is deterministic per device and alarm-level readings bypass it, so staging's 10 percent sampling cannot hide overheating devices. The buffer is bounded with drop-oldest accounting, and a batch is removed only after the sink accepts it, so a failing sink does not lose data beyond the cap.",
+    "crc32 of the id is stable, so is_sampled returns the same answer for a device every time and on every process. That keeps per-device time series intact. Speed is not the point, crc32 gives only an approximately uniform split rather than an exact 10 percent, and crc32 is neither cryptographic nor unpredictable.",
+    "The production profile has allow_simulator=False and the check raises ConfigError. main catches it, writes to stderr and raises SystemExit(78). Nothing ignores the flag, sampling is unrelated (the production rate is 1.0), and profiles never fall back to another environment.",
+    "The local profile does not require TLS, so an empty broker is allowed, and build_sink returns the print sink for an empty broker. The local profile has sample_rate 1.0 and batch_size 1, so the reading is flushed immediately. There is no broker flush interval in local, and no startup error is raised."
+  ]
+}

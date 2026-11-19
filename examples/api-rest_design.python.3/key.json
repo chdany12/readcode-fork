@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "app.py",
+        "startLine": 50,
+        "endLine": 50
+      }
+    },
+    2,
+    1,
+    1
+  ],
+  "explanations": [
+    "The Location header is built from transfer[\"source_id\"] (an account id such as acc_100) instead of transfer[\"id\"]. A client following Location gets /v1/transfers/acc_100, which does not match the route (an integer id) and returns 404, and every transfer from the same account would point to the same URL. The header must identify the created transfer: f\"/v1/transfers/{transfer['id']}\".",
+    "post_transfer finds the stored transfer for the key, confirms the request fields match, and returns (existing, True); the handler turns replayed into status 200. No balance change happens on that path. A different body with the same key would produce 409 (choice 1 describes only that case), and a new id (choice 3) is never generated.",
+    "validate_transfer explicitly rejects bool before checking int (bool is a subclass of int in Python), returning the message that amount_cents must be a positive integer, which becomes a 400. The ledger is never reached, so neither 422 nor 404 can occur.",
+    "The balance check happens inside post_transfer before any mutation or any write to the key table, so the exception leaves no trace: no debit, no stored transfer, and the key stays unused. 422 is the mapped response. The request is well formed so it is not a 400 (choice 2), and nothing is stored under the key for a failure (choice 3)."
+  ]
+}

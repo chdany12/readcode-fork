@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "service.py",
+        "startLine": 8,
+        "endLine": 8
+      }
+    },
+    3,
+    1,
+    0
+  ],
+  "explanations": [
+    "The service forgets a key after 5 minutes, but the client keeps retrying on timeouts for up to 6 hours with backoff up to 10 minutes. A transfer that succeeded while the client timed out will, on a later retry after the window, be treated as a new request and executed again, moving the money twice. The dedupe window must be at least as long as the maximum client retry horizon (typically 24 hours or more) and be stored durably.",
+    "The rejection result is stored in _seen like a completed result, so within the window the retry returns it from the cache without calling the ledger. The exception is caught inside submit, and no separate duplicate error exists.",
+    "The check, both balance changes and the append happen inside a single with self._lock block, making the operation atomic. The lock is shared by all transfers and held for the whole body.",
+    "submit runs its lookup, the ledger call and the cache write inside one service-level lock, so the second call sees the stored result and returns it. There is no in-progress or conflict state, and the ledger is not called twice."
+  ]
+}

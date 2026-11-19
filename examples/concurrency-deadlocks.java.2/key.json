@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "com/haulway/routing/ShipmentRouter.java",
+        "startLine": 35,
+        "endLine": 35
+      }
+    },
+    2,
+    1,
+    3
+  ],
+  "explanations": [
+    "quote() is synchronized, so the calling thread holds the router's monitor while it waits in future.get() for the pool tasks. Each task calls currentFuelIndex(), and when the cached fuel index is stale that path calls refreshFuelIndex(), which is also synchronized on the same router. The worker blocks on the monitor the caller holds, and the caller blocks waiting for the worker: a deadlock that only appears when a quote cache miss coincides with a stale fuel index (about once an hour) and that also blocks every other synchronized method. The monitor should not be held while waiting on tasks that may need it.",
+    "synchronized on the method locks the whole router instance, not a lane, so quote() calls run one at a time. A caller that cannot get the monitor blocks rather than failing. The pool could service both, but the second call never reaches submit() until the first returns, so throughput is limited to one quote at a time.",
+    "future.get() rethrows a task failure as ExecutionException, which escapes quote() before quoteCache.put runs, so nothing is stored. There is no per-carrier fallback, the failure is not turned into a null, and nothing cancels the other submitted tasks; they run to completion in the pool.",
+    "volatile provides visibility and ordering for each field individually. It provides no mutual exclusion and says nothing about the pair: a reader can still observe the new index with the old timestamp (here harmless, it only causes a redundant check inside the synchronized method). The one-refresh-per-hour behaviour comes from the re-check inside refreshFuelIndex(), not from volatile."
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "id": "1269c831-4459-408c-b57e-3960276382c2",
+  "title": "Payroll adjustment ledger",
+  "name": "Payroll adjustment ledger",
+  "createdAt": "2026-11-19T23:09:24.503Z",
+  "durationMinutes": 12,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code protects the pending adjustments while they are being read? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "close_period() computes the per-employee totals after leaving the with-block. Why is that safe?",
+      "choices": [
+        "The GIL makes iterating any dict safe in Python",
+        "The dict was swapped out under the lock, so no other thread holds a reference to it and add() now writes to a new dict",
+        "_net() is a pure function, so it never needs synchronization",
+        "The _closed flag prevents any thread from reading the dict"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "add() is called concurrently with close_period(). Which statement is correct about each adjustment?",
+      "choices": [
+        "It may be added to the old dict after the swap and silently lost",
+        "It is always rejected once close_period() has started",
+        "It is always included, because add() waits for the totals to be computed",
+        "It is either included in the closed period's totals or rejected with PeriodClosedError"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two operators click 'Run payroll' at the same instant. What is the outcome?",
+      "choices": [
+        "The first call closes the period and pays; the second logs a warning and returns 0",
+        "Employees are paid twice",
+        "Both calls pay half of each employee's net amount",
+        "The second call blocks until the first finishes, then pays again"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.race_conditions",
+    "backend.concurrency.shared_state_in_request_handlers",
+    "backend.data.money_and_ledgers"
+  ]
+}

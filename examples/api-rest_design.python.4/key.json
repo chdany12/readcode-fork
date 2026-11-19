@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "app/main.py",
+        "startLine": 62,
+        "endLine": 62
+      }
+    },
+    1,
+    2,
+    1
+  ],
+  "explanations": [
+    "The endpoint uses PUT, which must be idempotent: repeating the same request should leave the same state. Here an omitted window_start defaults to the current time, so each repeat of an identical request stores a different pickup_start, and a retried or replayed request after the end passed can even flip into a 422. The default should not depend on the clock at request time (require window_start, or store it as absent), so identical PUTs always produce identical resources.",
+    "add_event looks up the shipment, sees it is DELIVERED and raises 409 before creating the event or touching the status, all under the lock. The shipment still exists (not 404), and the status value in the body is a valid enum member, so request validation passes (not 422).",
+    "The query parameter is typed as ShipmentStatus | None, so FastAPI validates it against the enum and responds 422 before list_shipments executes. The handler has no code to return an empty list, 400, or ignore the filter (choices 0, 1 and 3).",
+    "create_shipment scans for the reference and inserts inside one with _lock block, so the second request sees the first one's row and raises 409. The model has no uniqueness constraint, so 422 is not what duplicates produce (choice 3)."
+  ]
+}

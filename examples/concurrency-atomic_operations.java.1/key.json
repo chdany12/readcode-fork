@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "com/driftbox/sync/quota/QuotaTracker.java",
+        "startLine": 23,
+        "endLine": 26
+      }
+    },
+    1,
+    2,
+    3
+  ],
+  "explanations": [
+    "tryReserve reads the counter with used.get(), compares, and only then calls addAndGet. Each call is atomic on its own, but the check and the update together are not. Two uploads for the same account can both read the same value, both pass the limit check, and both add their bytes, pushing usage past limitBytes. The fix is to make the reservation a single atomic step, for example a compareAndSet retry loop or updateAndGet/accumulateAndGet that only applies the increment when it fits.",
+    "tryReserve is called before the write, and the catch block calls quota.release(accountId, length) before rethrowing. So the bytes are given back and the exception propagates. The first choice is wrong because nothing later 'corrects' the counter; the one returning a failed result is wrong because the exception is rethrown; the last is wrong because reservation precedes the write.",
+    "updateAndGet is a compare-and-set loop: if another thread modifies the AtomicLong between the read and the write, the function is re-applied to the fresh value. A get()/set() pair would let one thread's write erase another's. It does not block (it is lock-free), it says nothing about limitBytes, and the map lookup is a separate concern.",
+    "ConcurrentHashMap.merge applies the remapping function atomically per key, so each caller sees the result of a distinct increment (e.g. 4 and 5). The version is part of blobKey, so the blobs do not collide. merge does not fail on conflict and length plays no role."
+  ]
+}

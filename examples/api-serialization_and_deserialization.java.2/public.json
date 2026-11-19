@@ -1,0 +1,50 @@
+{
+  "id": "4dd6d7b0-8ccd-4c59-89eb-03f145999219",
+  "title": "Order placement JSON endpoint",
+  "name": "Order placement endpoint",
+  "createdAt": "2026-11-19T23:02:14.255Z",
+  "durationMinutes": 12,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code serializes or deserializes order data? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client adds an extra field \"giftNote\": \"Happy birthday\" at the top level of an otherwise valid order JSON body. What does placeOrder return?",
+      "choices": [
+        "201 and the extra field is silently ignored",
+        "400 with error malformed_body",
+        "422 with error invalid_line",
+        "500 with error serialization_failed"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A line in the request body contains \"quantity\": 2.5. What happens?",
+      "choices": [
+        "The quantity is truncated to 2 and the order is placed",
+        "The quantity is rounded to 3 and the order is placed",
+        "The request fails at the 422 invalid_line check",
+        "The request fails parsing and returns 400 malformed_body"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "How does the placedAt value appear in the JSON of a successful 201 response?",
+      "choices": [
+        "A numeric epoch-seconds value with fractional nanoseconds",
+        "A numeric epoch-milliseconds value",
+        "An array of date-time components such as [2024,5,1,12,30,0]",
+        "An ISO-8601 string such as \"2024-05-01T12:30:00Z\""
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.serialization_and_deserialization",
+    "backend.api.request_validation",
+    "backend.data.money_and_ledgers"
+  ]
+}

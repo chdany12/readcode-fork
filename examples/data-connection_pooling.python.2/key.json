@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "accounts.py",
+        "startLine": 48,
+        "endLine": 48
+      }
+    },
+    1,
+    2,
+    1
+  ],
+  "explanations": [
+    "record_failed_login takes a connection straight from the pool and returns it with a plain putconn after the work, with no try/finally and no rollback. If either execute raises (a deadlock, a timeout, a dropped connection, a missing table), the function exits before putconn, and the connection is never returned. Each such failure permanently removes one of the 10 connections, and after 10 of them every caller gets ServiceUnavailable even though the database is healthy. The other methods use Database.connection(), which rolls back on error and always returns the connection in its finally; this method should use it too.",
+    "In Database.connection the yield is inside a try. The except clause rolls back and re-raises, and the finally clause calls putconn, so the connection returns to the pool in a clean state while the caller sees the original exception. commit is skipped because the exception jumps past it, and the connection is not closed.",
+    "connection() calls getconn directly and turns PoolError into ServiceUnavailable. There is no waiting queue or retry in this code, so callers beyond the 10 in use are rejected right away. connect_timeout only affects opening new sockets, and the pool never exceeds maxconn.",
+    "ping uses the same bounded pool as request traffic. With all 10 connections in use, getconn raises PoolError, which becomes ServiceUnavailable and ping returns False, even though the database responds. Depending on the load balancer's policy, that can remove a busy instance and shift its load onto others. There is no reserved connection, no waiting and no extra connection."
+  ]
+}

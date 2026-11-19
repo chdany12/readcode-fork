@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "pipeline_config.py",
+        "startLine": 20,
+        "endLine": 20
+      }
+    },
+    3,
+    1,
+    2
+  ],
+  "explanations": [
+    "dict(BUILTIN_STAGE_DEFAULTS) is a shallow copy, so every stage that does not define its own env ends up holding the same nested dict object from the module-level defaults. The following stage['env'].setdefault('STAGE_NAME', name) then writes into that shared dict: the first such stage sets STAGE_NAME and later stages keep that first value, because setdefault does not overwrite. Every stage without its own env therefore runs with the first stage's STAGE_NAME, and the module-level defaults are permanently modified for any later load in the same process. The defaults need a deep copy (or a fresh env dict per stage).",
+    "load_pipeline checks every stage and accumulates problems, raising a single ConfigError at the end. _check_stage flags unknown keys (retry is not in ALLOWED_STAGE_KEYS) and unknown needs entries. Validation does not stop at the first failure, unknown keys are not ignored, and the scheduler is never reached.",
+    "ALLOWED_DEFAULT_KEYS excludes 'needs', and the defaults check runs first and raises on its own. Because it raises before the stage loop, the error is not combined with stage problems, the key is not silently dropped, and it is never applied to stages.",
+    "Precedence is built-in defaults, then pipeline defaults, then the stage's own values, so the stage's 45 minutes beats 60 (45 * 60 = 2700). attempts is retries + 1 = 3, since a retry is an additional attempt after the first run."
+  ]
+}

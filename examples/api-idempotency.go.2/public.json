@@ -1,0 +1,50 @@
+{
+  "id": "f69e8b93-e719-4202-95ba-84f4ba3f150e",
+  "title": "Idempotent ride request",
+  "name": "Ride request endpoint",
+  "createdAt": "2026-11-19T23:02:14.220Z",
+  "durationMinutes": 11,
+  "language": "Go",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code scopes and replays idempotent ride requests? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "How long is a saved ride response eligible for replay?",
+      "choices": [
+        "Until the process restarts",
+        "For 24 hours after it is saved, then a repeat request dispatches a new ride",
+        "Forever, because entries are never deleted",
+        "Only while the original request context is alive"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Dispatcher.Assign returns an error because no drivers are available. The rider retries with the same key a few seconds later. What happens?",
+      "choices": [
+        "The retry replays the 503 from the cache",
+        "The retry returns 409 because the key is in use",
+        "The retry attempts to dispatch again, because failures are not saved",
+        "The retry is rejected because the key was already consumed"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Which concurrency hazard exists for two simultaneous requests with the same key from the same rider?",
+      "choices": [
+        "A data race on the map, because Lookup uses only a read lock",
+        "A deadlock between Lookup and Save",
+        "None: the RWMutex serializes the whole handler",
+        "Both may miss in Lookup before either calls Save, and both dispatch rides"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.idempotency",
+    "backend.caching.ttls_and_expiry",
+    "backend.concurrency.race_conditions"
+  ]
+}

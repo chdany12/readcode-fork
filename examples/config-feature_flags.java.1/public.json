@@ -1,0 +1,50 @@
+{
+  "id": "5ddf0aaf-5420-4b4c-9012-b8216f504a1c",
+  "title": "Tenant-aware feature flags for login policy",
+  "name": "Login policy flags",
+  "createdAt": "2026-11-19T23:09:24.533Z",
+  "durationMinutes": 12,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code refreshes the cached flag definitions? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The flag enforce-mfa has enabled=true, rolloutPercent=100, and tenantOverrides={\"t-42\": false}. What does mfaRequired return for a user in tenant t-42?",
+      "choices": [
+        "True, because the global flag is enabled at 100%",
+        "False, because the tenant override is checked first and returned directly",
+        "False, but only if the user also falls into the rollout bucket",
+        "True, because overrides apply only when the flag is disabled"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The flag repository's database is down for several refresh cycles, so loadAll() throws. What happens in this service?",
+      "choices": [
+        "The scheduler thread dies, so refreshes never run again, even after the database recovers",
+        "Every isEnabled call starts throwing the repository's exception",
+        "The failure is logged, the scheduler keeps running, and later cycles retry",
+        "The failed refresh is retried immediately in a tight loop until it succeeds"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "enforce-mfa is at 25% rollout. For a given user in a tenant with no override, how is mfaRequired expected to behave across repeated calls and across different server instances?",
+      "choices": [
+        "Randomly, with a 25% chance on each call",
+        "The same answer every time, because the bucket is derived deterministically from the flag key and user ID",
+        "The same answer on one instance but possibly different on others, because hashCode differs per JVM",
+        "The same answer until the next flag refresh, which re-randomizes buckets"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.feature_flags",
+    "backend.concurrency.race_conditions",
+    "backend.security.authentication"
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "id": "f694b40a-494f-4c2f-b427-b3f54a37a6f2",
+  "title": "Usage-based billing for device telemetry batches",
+  "name": "Telemetry usage billing",
+  "createdAt": "2026-11-19T23:09:24.545Z",
+  "durationMinutes": 10,
+  "language": "Go",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code turns metered usage into ledger amounts? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Which guarantee does Ledger.Post, together with the store contract, give about everything the ledger holds?",
+      "choices": [
+        "Every account balance is non-negative.",
+        "The amounts of all stored entries sum to zero, because only balanced journals are inserted and each is written atomically.",
+        "Entries for the same account are stored in the order Post was called.",
+        "A journal can be corrected later by posting another journal with the same key."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The ingestion pipeline redelivers a batch (same ID) after a timeout in which the first Bill call actually succeeded. What happens on the second call?",
+      "choices": [
+        "The account is charged twice, since Bill has no memory of earlier calls.",
+        "Post returns ErrUnbalanced because the receivable account already holds the amount.",
+        "The tariff lookup fails because it was already consumed by the first call.",
+        "The journal key batch:<ID> collides, the store returns ErrDuplicate, and Bill returns nil without a second charge."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "An account's tariff is 2,500 micros per message. A single batch of 6 messages arrives. What does Bill post for the receivable entry?",
+      "choices": [
+        "1 cent",
+        "15 cents",
+        "2 cents",
+        "Nothing; the batch is skipped"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.money_and_ledgers",
+    "backend.api.idempotency",
+    "backend.messaging.at_least_once_delivery",
+    "backend.messaging.deduplication"
+  ]
+}

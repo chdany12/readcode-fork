@@ -1,0 +1,49 @@
+{
+  "id": "b2b66b57-d28d-4fc3-a1b5-0adaa14982ee",
+  "title": "Versioned search endpoint",
+  "name": "Versioned search endpoint",
+  "createdAt": "2026-11-19T23:02:14.267Z",
+  "durationMinutes": 12,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code resolves which API version a request uses? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends the header `Accept-Version: V2 ` (capital V, trailing space) with `q=wifi`. What does it receive?",
+      "choices": [
+        "A 400 response, because only lowercase `v` prefixes are accepted",
+        "A 200 response in the version 2 shape, with `API-Version: 2`",
+        "A 200 response in the version 3 shape, because the value is not purely numeric",
+        "A 200 response in the version 1 shape with Deprecation headers"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does _respond add `Vary: Accept-Version` to every response?",
+      "choices": [
+        "It tells browsers to refuse to send the header on cross-origin requests",
+        "It makes the server reject requests whose version differs from the previous one",
+        "It declares that the same URL can return different bodies depending on the header, so shared caches must key on it",
+        "It marks responses as deprecated so clients migrate"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A developer adds `_shape_v4` and registers it as `SHAPERS[4]`, but does not touch SUPPORTED_VERSIONS. A client sends `Accept-Version: 4`. What happens?",
+      "choices": [
+        "The request is served by _shape_v4",
+        "The request is served by _shape_v3 because 4 is not a supported version",
+        "The server raises KeyError because SHAPERS and SUPPORTED_VERSIONS disagree",
+        "The request gets a 400 `unsupported_version` response listing versions 1 to 3"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.versioning",
+    "backend.api.status_codes_and_error_responses"
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "id": "5f842908-4956-4cb2-9955-d458a9b76288",
+  "title": "Ride request codec",
+  "name": "Ride request codec",
+  "createdAt": "2026-11-19T23:02:14.257Z",
+  "durationMinutes": 12,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code serializes or deserializes trip data? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "In a 409 fare_above_cap response, how does the estimate field appear in the JSON?",
+      "choices": [
+        "As a JSON number such as 18.5",
+        "As a JSON string such as \"18.50\"",
+        "As an object with unscaled value and exponent",
+        "The encoder raises TypeError, so the response fails"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A request carries \"requested_at\": \"2024-05-01T10:00:00\" (no Z and no offset). What does request_ride return?",
+      "choices": [
+        "201, assuming the timestamp is UTC",
+        "201, assuming the server's local timezone",
+        "400 saying requested_at must include a UTC offset",
+        "500, because the later encoding of a naive datetime fails"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A request has \"seats\": true and every other field is valid. What happens?",
+      "choices": [
+        "It is accepted with seats equal to 1, since True == 1",
+        "It is rejected with 400 because bool is excluded from the integer check",
+        "It is accepted and serialized back as true",
+        "It raises an unhandled exception, because bool is not an int"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.serialization_and_deserialization",
+    "backend.api.request_validation",
+    "backend.security.input_sanitization"
+  ]
+}

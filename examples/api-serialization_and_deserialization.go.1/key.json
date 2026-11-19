@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    1,
+    1
+  ],
+  "explanations": [
+    "There is no defect. Status has symmetric MarshalJSON and UnmarshalJSON, so only known names are accepted and emitted, and a zero Status fails loudly instead of leaking a number. Ticket.MarshalJSON uses a method-less alias type to avoid infinite recursion and turns a nil Tags slice into [] so clients never see null for a list. Requests are decoded with a size limit, DisallowUnknownFields, and a check for trailing data. Responses are encoded into a buffer before WriteHeader so an encoding failure becomes a 500 instead of a truncated 200. Pointer fields in TicketPatch distinguish absent from present, which is all the patch semantics here need.",
+    "UnmarshalJSON lowercases the name before the lookup, so \"SOLVED\" maps to StatusSolved. Because Status is a pointer in TicketPatch, the decoder allocates it and calls the pointer-receiver method. The response is encoded through MarshalJSON, which emits the lowercase name. Choices 0 and 2 ignore the ToLower, and choice 3 is wrong because custom unmarshalers are honored for pointer fields.",
+    "decodeStrict sets DisallowUnknownFields on the decoder, so decoding into NewTicket, which has no priority field, returns an error and create replies 400 with its message. Nothing is stored. Choices 0 and 2 assume default lenient decoding, and choice 3 invents a rule the decoder does not have.",
+    "Ticket.MarshalJSON replaces a nil Tags with an empty slice, so tags is []. AssigneeID has no omitempty, so a nil pointer is written as null. DueAt has omitempty, so a nil pointer drops the key. Choice 0 would happen without the custom marshaler, and choices 2 and 3 mismatch the struct tags."
+  ]
+}

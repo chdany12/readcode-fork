@@ -1,0 +1,50 @@
+{
+  "id": "e64474ac-68a1-48c8-87e4-c70841ab2f01",
+  "title": "Per-account storage quota for file uploads",
+  "name": "Upload quota tracker",
+  "createdAt": "2026-11-19T23:09:24.476Z",
+  "durationMinutes": 12,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code enforces the per-account storage limit when many uploads for the same account arrive at once? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "If store.write throws an IOException in upload(), what is the state of the account's quota afterwards?",
+      "choices": [
+        "The reserved bytes stay counted until the account's next successful upload corrects the total.",
+        "The reserved bytes are returned through release(), and the exception propagates to the caller.",
+        "The reserved bytes are returned and the exception is swallowed so the caller sees a failed UploadResult.",
+        "Nothing was reserved yet, because reservation happens only after the write succeeds."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "release() uses updateAndGet(current -> Math.max(0L, current - bytes)) rather than reading the value and calling set(). What does that buy?",
+      "choices": [
+        "It makes release() block until no reservation for that account is in progress.",
+        "It guarantees the counter can never exceed limitBytes.",
+        "It retries the computation if another thread changed the counter in the meantime, so concurrent releases and reservations are not overwritten.",
+        "It avoids the cost of computeIfAbsent on the map."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two threads upload different files at the same path for the same account at the same moment. What does nextVersion() guarantee?",
+      "choices": [
+        "Both uploads receive the same version, and the later write overwrites the earlier blob.",
+        "One of the two uploads fails because the merge call detects the conflict.",
+        "Both uploads receive the same version number only if their lengths match.",
+        "The two uploads receive different version numbers, so their blobs are stored under different keys."
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.atomic_operations",
+    "backend.concurrency.race_conditions",
+    "backend.errors.cleanup_on_error_paths"
+  ]
+}

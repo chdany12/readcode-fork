@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    1,
+    1
+  ],
+  "explanations": [
+    "There is no defect. PATCH uses model_dump(exclude_unset=True), so only fields the client sent are applied, and an explicit null for notes clears it while the validator rejects nulls for the schedule fields. The overlap check and the insert or update happen under the same lock, so two concurrent bookings cannot both pass the check. Candidate rows are checked against the others while skipping their own id and cancelled rows, so a reschedule does not conflict with itself. DELETE is an idempotent soft cancel returning 204.",
+    "insert holds self._lock across the overlap check and the write, so the second request sees the first one and raises SlotTaken, which the handler maps to 409. Choice 0 would need the check outside the lock, choice 2 requires seeing uncommitted work that does not exist here, and choice 3 is wrong because 422 comes from request-body validation, which both requests pass.",
+    "notes is in model_fields_set with value None, so exclude_unset keeps it in changes and the stored notes become None. The validator only forbids null for starts_at and duration_minutes. Unsent fields are excluded (choice 2 is wrong), and None values are not filtered (choice 3 is wrong).",
+    "cancel flips status to CANCELLED and returns True whether or not it was already cancelled, so both calls return 204. _overlaps skips cancelled rows, so the slot is free again. Choices 0 and 3 assume the second cancel fails; choice 2 ignores the CANCELLED skip in _overlaps."
+  ]
+}

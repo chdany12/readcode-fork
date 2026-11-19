@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "streaming/app.py",
+        "startLine": 75,
+        "endLine": 75
+      }
+    },
+    1,
+    3,
+    3
+  ],
+  "explanations": [
+    "When a Range request is honored, the status is 206 only if the range ends before the last byte; otherwise it is 200. Open-ended ranges such as bytes=1000- (the usual form from players seeking or resuming) end exactly at size-1, so they get 200 together with a Content-Range header and a partial body. A 200 tells the client it received the complete resource, so players and download managers misplace the bytes (for example append them as if from offset 0) and playback or resume breaks. Every satisfiable Range request must return 206.",
+    "The token passes the 401 checks, the video exists and is not removed, the country is not blocked, and then the premium check fails for an authenticated but unentitled viewer, which is 403. 401 is reserved for missing or invalid credentials, and 404 and 451 are earlier checks that do not apply.",
+    "The checks run in order: authentication, existence (404), removal (410), region (451), entitlement (403). The region check comes before the subscription check, so this viewer gets 451 and never reaches the 403 branch.",
+    "parse_range matches the header, sees start (9000) >= size and raises RangeNotSatisfiable(5000). The registered exception handler turns it into 416 with Content-Range: bytes */5000. The code does not fall back to serving the whole file for an unsatisfiable range, and the header is well formed, so it is not 400."
+  ]
+}

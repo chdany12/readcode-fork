@@ -1,0 +1,52 @@
+{
+  "id": "6953cefc-e690-4e1c-a6f4-ca78b2c914fa",
+  "title": "Healthcare appointment booking service",
+  "name": "Appointment booking service",
+  "createdAt": "2026-11-19T23:02:14.286Z",
+  "durationMinutes": 14,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code handles asynchronous execution (locking, background work, blocking calls)? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Many coroutines call _lock_for for the same new provider at the same time. Why does the lazy creation of the lock not produce two different Lock objects?",
+      "choices": [
+        "Dictionary reads and writes in Python acquire an internal lock that makes the whole method atomic across tasks.",
+        "There is no await between the lookup and the assignment, so no other task can run in between on the event loop.",
+        "asyncio.Lock instances are singletons per name, so a second creation returns the first.",
+        "The method is only called while the semaphore is held, which serializes callers."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The SMTP server is down and send_confirmation raises after book() has already returned the appointment to its caller. What happens?",
+      "choices": [
+        "The caller of book() receives the exception because the notification task is awaited before returning.",
+        "The exception is silently lost because the task object is garbage collected.",
+        "The appointment insert is rolled back because the lock context has already exited with an error.",
+        "The appointment stays booked; the done callback logs a warning and the failure does not reach the caller."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "book_many receives three requests for the same provider and the same start time, and the slot is initially free. What is the outcome?",
+      "choices": [
+        "One request is booked and the other two end up in the failed list with SlotTaken.",
+        "All three are booked because the checks run concurrently before any insert.",
+        "The first failure cancels the remaining requests and book_many raises.",
+        "The calls deadlock because they contend for the same provider lock and the semaphore."
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.async_await_pitfalls",
+    "backend.concurrency.locking_and_lock_ordering",
+    "backend.concurrency.race_conditions",
+    "backend.resilience.timeouts",
+    "backend.errors.swallowed_errors"
+  ]
+}

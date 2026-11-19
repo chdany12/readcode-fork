@@ -1,0 +1,48 @@
+{
+  "id": "407a8b97-17ff-46f4-b6b1-75c43fc72cbe",
+  "title": "CI pipeline stage defaults and validation",
+  "name": "Pipeline stage resolver",
+  "createdAt": "2026-11-19T23:09:24.525Z",
+  "durationMinutes": 13,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code applies default values to each stage? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A pipeline document has stage 'lint' with a valid run command and an extra key retry: 2, and stage 'test' with needs: ['unit'] where no stage 'unit' exists. What does load_pipeline do?",
+      "choices": [
+        "Raises ConfigError for 'lint' only, because validation stops at the first failing stage",
+        "Silently ignores the unknown key and raises only for the missing dependency",
+        "Returns both stages and leaves validation to the scheduler",
+        "Raises one ConfigError whose problems list contains both the unknown key and the unknown dependency"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The document's defaults section contains needs: ['setup']. What happens?",
+      "choices": [
+        "Every stage gets 'setup' as a dependency",
+        "load_pipeline raises ConfigError immediately, before any stage is resolved",
+        "The key is dropped, because needs is only meaningful per stage",
+        "The error is reported together with any stage-level problems after all stages are checked"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Pipeline defaults set timeout_minutes: 60. Stage 'build' sets retries: 2 and timeout_minutes: 45 and defines nothing else that matters. What does plan() report for 'build'?",
+      "choices": [
+        "timeout_s 3600 and attempts 2",
+        "timeout_s 2700 and attempts 2",
+        "timeout_s 2700 and attempts 3",
+        "timeout_s 3600 and attempts 3"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.defaults_and_validation"
+  ]
+}

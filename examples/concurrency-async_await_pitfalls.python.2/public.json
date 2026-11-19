@@ -1,0 +1,52 @@
+{
+  "id": "4fa8428f-6a91-4d39-9d8d-64c27304e6fa",
+  "title": "Ledger transfer service",
+  "name": "Account transfer service",
+  "createdAt": "2026-11-19T23:02:14.287Z",
+  "durationMinutes": 13,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code coordinates concurrent transfers from the same account? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The fraud service hangs for much longer than FRAUD_TIMEOUT_S during a call to transfer(). What does the caller observe?",
+      "choices": [
+        "transfer() blocks until the fraud service answers, because wait_for only applies to CPU-bound work.",
+        "transfer() returns None after the timeout and the transfer is silently skipped.",
+        "asyncio.TimeoutError is raised to the caller, the pending fraud call is cancelled, and nothing is posted to the ledger.",
+        "The ledger entries are posted anyway and the fraud result is applied afterwards."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why does _track store each audit task in self._pending_audits instead of just calling asyncio.create_task and discarding the result?",
+      "choices": [
+        "The event loop keeps only weak references to tasks, so an unreferenced task could be garbage collected before finishing; the set also lets flush_audits wait for them.",
+        "The set serializes the audit tasks so they run one at a time in order.",
+        "Without the set, create_task would run the coroutine synchronously and block the loop.",
+        "The set is what makes the task start executing; without it the coroutine never runs."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "transfer_batch is given 50 transfers and one of them raises InsufficientFunds. What does the caller get back?",
+      "choices": [
+        "The InsufficientFunds exception, raised immediately, with the other transfers cancelled.",
+        "Only the results of transfers that completed before the failure; the rest are dropped.",
+        "A list with entry ids for successes only, with the failed item omitted.",
+        "A list in input order where the failed item's slot holds the exception object and the others complete normally, at most five running at once."
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.async_await_pitfalls",
+    "backend.concurrency.race_conditions",
+    "backend.concurrency.locking_and_lock_ordering",
+    "backend.resilience.timeouts",
+    "backend.data.money_and_ledgers"
+  ]
+}

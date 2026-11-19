@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "payroll/pay.py",
+        "startLine": 39,
+        "endLine": 39
+      }
+    },
+    1,
+    2,
+    3
+  ],
+  "explanations": [
+    "raw comes from json.loads, so withholding_rate is a Python float (0.0725). Decimal(float) converts the exact binary value, 0.07249999999999999556..., not 0.0725; the other two rates are correctly routed through str(). For a gross of 1,002.00 the true withholding is exactly 72.645, which ROUND_HALF_UP should make 72.65, but with the float-derived rate it is 72.6449999... and rounds to 72.64. The result is a one-cent error on every pay stub whose exact value lands on a half cent, and the discrepancy is consistent with nothing in the books because the journal still balances. The rate should be built with Decimal(str(...)) or parsed with parse_float=Decimal.",
+    "regular_hours = min(45, 40) = 40 and overtime_hours = 5. regular_pay = 800.00 and overtime_pay = 5 * 20.00 * 1.5 = 150.00, so gross = 950.00. 900.00 ignores the overtime premium, 975.00 and 1,000.00 do not correspond to any combination of the hours and rates in the code.",
+    "Each rounded figure is computed once and the other is the exact difference, so gross == withholding + net holds by construction, which is what build_journal's zero-sum check relies on. Rounding two independent products could differ from gross by a cent. Speed is irrelevant, Decimal represents 1 - rate fine, and quantize accepts any precision.",
+    "min(hours, STANDARD_WEEK_HOURS) returns the float 37.5, and multiplying a float by employee.hourly_rate (a Decimal) raises TypeError: unsupported operand types. Python never mixes Decimal and float implicitly in arithmetic. The negative check passes for 37.5, and nothing converts the value for the caller."
+  ]
+}

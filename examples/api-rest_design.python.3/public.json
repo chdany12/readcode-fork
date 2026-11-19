@@ -1,0 +1,51 @@
+{
+  "id": "dd074560-0454-4add-bebe-9ccb8ada1238",
+  "title": "Funds transfer REST endpoints (Flask)",
+  "name": "Transfer API service",
+  "createdAt": "2026-11-19T23:02:14.251Z",
+  "durationMinutes": 9,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how the create endpoint reports the newly created resource? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client retries POST /v1/transfers with the same Idempotency-Key and an identical body after a timeout. The first attempt had succeeded. What does the retry produce?",
+      "choices": [
+        "A second transfer and a second debit, since each POST creates a resource",
+        "409 Conflict, because the key has already been used",
+        "200 with the original transfer, and balances do not change again",
+        "201 with a new transfer id but the balances only change once"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends {\"source_id\": \"acc_100\", \"destination_id\": \"acc_200\", \"amount_cents\": true} with a valid Idempotency-Key. What is the response?",
+      "choices": [
+        "201; True is an int in Python, so it is treated as 1 cent",
+        "400 with error code invalid_request",
+        "422 with insufficient_funds",
+        "404 with unknown_account"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "acc_200 has 1000 cents. A client sends a transfer of 5000 cents from acc_200 to acc_100. What is the outcome?",
+      "choices": [
+        "201; the balance goes negative and is reconciled later",
+        "422 insufficient_funds; no transfer is recorded and balances are unchanged",
+        "400 invalid_request, because the amount exceeds the available balance",
+        "422, but the Idempotency-Key is now consumed and later retries replay the failure"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.rest_design",
+    "backend.api.idempotency",
+    "backend.api.status_codes_and_error_responses",
+    "backend.data.money_and_ledgers"
+  ]
+}

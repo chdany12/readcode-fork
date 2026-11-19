@@ -1,0 +1,49 @@
+{
+  "id": "0a0dfb65-c544-4c75-8025-b00d9539c048",
+  "title": "Restaurant menu caching",
+  "name": "Restaurant menu service",
+  "createdAt": "2026-11-19T23:02:14.273Z",
+  "durationMinutes": 12,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how price changes are reflected in the caches? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "getItem is called for an item that does not exist in the repository. What happens?",
+      "choices": [
+        "An empty Optional is returned and nothing is cached, so each call goes to the repository",
+        "An empty Optional is returned and the miss is cached for 15 minutes",
+        "A NullPointerException is thrown from the cache",
+        "An exception is thrown because Optional.empty cannot be mapped"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two concurrent callers request getMenu for a restaurant that is not cached. Which statement is correct?",
+      "choices": [
+        "Both load from the repository and both store the result",
+        "The loader runs at most once per key at a time; the other caller waits for that result",
+        "Both calls fail with a concurrent modification error",
+        "The second caller gets an empty menu"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The restaurant marks an item unavailable via setAvailability. Which caches change as a result?",
+      "choices": [
+        "Only the item entry for that item",
+        "Only the menu entry for that restaurant",
+        "The item entry and the menu entry for that restaurant, for the entries that exist",
+        "All items and menus for all restaurants"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.caching.cache_invalidation",
+    "backend.caching.stale_reads"
+  ]
+}

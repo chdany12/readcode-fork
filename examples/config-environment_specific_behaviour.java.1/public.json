@@ -1,0 +1,50 @@
+{
+  "id": "b14c2163-6bff-4ad6-924a-2a8f9c9648f9",
+  "title": "Environment-aware notification senders",
+  "name": "Notification sender factory",
+  "createdAt": "2026-11-19T23:09:24.526Z",
+  "durationMinutes": 12,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code chooses and configures notification delivery for each environment? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A new container is deployed with no APP_ENV variable at all. What does SenderFactory.create do?",
+      "choices": [
+        "Returns a LoggingSender, since local is the safest mode",
+        "Returns a production ProviderSender, assuming the NOTIFY_API_KEY is present",
+        "Throws IllegalStateException before any sender is built",
+        "Returns an AllowListSender with an empty allow list"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "In STAGING with NOTIFY_ALLOW_LIST=qa@example.com, the application sends a notification to customer@example.org. What is the observable result?",
+      "choices": [
+        "send() returns normally, nothing is delivered, and an info log line with the subject is written",
+        "send() throws an exception that the caller must handle",
+        "The message is delivered through the sandbox provider anyway, because it is not production",
+        "The message is delivered to qa@example.com instead"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "In PRODUCTION the process is started with NOTIFY_ALLOW_LIST=qa@example.com and a valid NOTIFY_API_KEY. How are notifications handled?",
+      "choices": [
+        "Only qa@example.com receives notifications; others are suppressed",
+        "Startup fails because an allow list is not permitted in production",
+        "The allow list is used only when the recipient domain is example.com",
+        "The allow list is ignored and notifications go to any recipient through the production provider"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.environment_specific_behaviour",
+    "backend.config.configuration_loading",
+    "backend.integrations.third_party_adapters"
+  ]
+}

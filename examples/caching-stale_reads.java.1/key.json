@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "search/SearchService.java",
+        "startLine": 62,
+        "endLine": 62
+      }
+    },
+    1,
+    2,
+    1
+  ],
+  "explanations": [
+    "search() reads the tenant generation, runs the query, and then reads the generation a second time to build the key it stores under. If indexDocument() upserts and bumps the generation while the query is running, the hits computed from the old index state are stored under the new generation's key. Every later search for that query then hits that entry and returns results that predate the update until the 10 minute TTL runs out. The key used for storing must be the generation observed before the query ran (observed), so that results computed against older state land under a key nobody will look up again.",
+    "TtlCache can remove by key, but the service has no index of which (query, limit) keys exist for a tenant, so it cannot enumerate them. Bumping the counter changes every future key. Choice 1 is false (the cache has remove logic internally), choice 3 is not a real effect, and tenant separation comes from the tenantId in the key, not the generation.",
+    "Nothing reads old-generation keys again, so get()'s lazy removal never triggers for them; the sweeper scheduled in the constructor calls evictExpired every minute and drops entries past their 10 minute expiry. bump() only changes a counter, and the map is bounded by the TTL plus the sweep interval rather than growing forever.",
+    "The registry keeps one counter per tenant and the tenant id is part of the key, so A's writes do not alter B's keys. B's entries live until the 10 minute TTL. The sweeper only checks expiry timestamps and does not look at tenants."
+  ]
+}

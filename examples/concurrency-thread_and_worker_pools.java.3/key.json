@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/main/java/com/streamly/manifest/ManifestRefresher.java",
+        "startLine": 48,
+        "endLine": 48
+      }
+    },
+    1,
+    1,
+    2
+  ],
+  "explanations": [
+    "`refreshAll` only catches IOException. `parser.parse` throws IllegalArgumentException for a malformed playlist, which escapes the task. For a periodic task scheduled on a ScheduledExecutorService, an uncaught exception silently cancels all further executions: no log line from the pool, no restart, and the single thread simply idles. One bad playlist from the origin therefore stops refreshing every stream, and `current()` keeps serving ever-staler manifests. The task should catch RuntimeException (per stream) and log it.",
+    "scheduleWithFixedDelay measures the delay from the end of one execution to the start of the next, so the period is run time plus delay, about 14 seconds. scheduleAtFixedRate would give the 10-second start-to-start period of the first choice. There is no zero-delay re-run, and runs are never skipped; they are simply serialized on the single thread.",
+    "The failed fetch is logged and the `put` is skipped, so the map keeps the previous entry. `current` just reads from the ConcurrentHashMap, so readers never see a partially updated or removed value. Nothing removes entries on failure and exceptions are not surfaced to readers.",
+    "shutdown() (not shutdownNow()) does not interrupt a running task, and by default a ScheduledThreadPoolExecutor cancels pending periodic tasks on shutdown. awaitTermination then waits for the running iteration to finish, up to 10 seconds. It does not run the next occurrence, and it does not throw."
+  ]
+}

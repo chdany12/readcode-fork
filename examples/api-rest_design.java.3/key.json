@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "api/CampaignController.java",
+        "startLine": 87,
+        "endLine": 87
+      }
+    },
+    0,
+    1,
+    1
+  ],
+  "explanations": [
+    "getCreative checks that the campaign in the path exists, but then loads the creative by creativeId alone. It never verifies that the creative belongs to that campaign, so GET /campaigns/1/creatives/900 returns creative 900 even if it belongs to campaign 2. The URL then lies about the hierarchy, and it can leak creatives across advertisers. The sibling delete handler scopes by both ids (deleteByIdAndCampaignId); the read should use a lookup scoped to the campaign too, returning 404 when the pair does not match.",
+    "addCreative calls requireCampaign first, which throws ResponseStatusException(404) before creatives.save is reached, so nothing is persisted. Choices 1 and 3 assume the save happens before or without the check. Choice 2 is wrong because the method does not validate or inspect the body against campaigns; the existence check is on the path id.",
+    "archive is a soft delete: it sets ARCHIVED only if not already archived, then returns 204. The second call finds the row, skips the save, and still returns 204. Because findById still finds the archived row, requireCampaign passes and nested routes keep working. Choices 0, 2 and 3 describe behavior that this code does not implement.",
+    "size is clamped with Math.min(Math.max(size, 1), MAX_PAGE_SIZE) and the page is used as given (floored at 0), so page index 2 is searched with size 100, and the response echoes those bounded values. There is no validation that returns 400 (choice 0), the cap applies to any request (choice 2), and the code does not treat pages as 1-based (choice 3)."
+  ]
+}

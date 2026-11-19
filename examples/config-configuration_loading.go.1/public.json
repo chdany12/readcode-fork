@@ -1,0 +1,51 @@
+{
+  "id": "45c42400-0400-4d06-86c9-d651cff677f4",
+  "title": "Dispatch service configuration loader",
+  "name": "Dispatch config loader",
+  "createdAt": "2026-11-19T23:09:24.514Z",
+  "durationMinutes": 12,
+  "language": "Go",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code loads and combines configuration from defaults, a file and the environment? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The config file contains `{\"surge_pricing_on\": false}` and no environment variables are set. What is `SurgePricingOn` after `Load`?",
+      "choices": [
+        "true, because the default is only replaced by non-zero values",
+        "false, because a non-nil pointer in the file overrides the default",
+        "true, because the environment variable is missing",
+        "Load returns an error because booleans are not supported in the file"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The file sets `max_active_orders` to 5, and `DISPATCH_MAX_ACTIVE_ORDERS` is set to the empty string. What value is used?",
+      "choices": [
+        "0, because the empty string parses as zero",
+        "Load fails because the empty string is not an integer",
+        "3, the default, because the env value overrides the file",
+        "5, because an empty environment value is ignored"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The file has a misspelled key, `\"max_active_order\": 8`. What happens at startup?",
+      "choices": [
+        "The key is ignored and the default of 3 is used",
+        "Load returns an error naming the unknown field",
+        "The value 8 is applied because the decoder matches keys case-insensitively and by prefix",
+        "A warning is logged and the service starts with defaults"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.configuration_loading",
+    "backend.config.defaults_and_validation",
+    "backend.security.secrets_handling",
+    "backend.errors.error_wrapping_and_context"
+  ]
+}

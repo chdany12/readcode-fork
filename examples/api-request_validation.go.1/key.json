@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    2,
+    3
+  ],
+  "explanations": [
+    "There is no defect. The risky-looking parts are handled: the body is capped with http.MaxBytesReader before decoding, so oversized payloads are cut off and reported as 413 via errors.As on *http.MaxBytesError; DisallowUnknownFields rejects misspelled keys; the second dec.Token() call rejects trailing data after the first JSON object; and the optional Priority is a pointer, so an omitted value (nil) is distinguishable from an explicit 0 and is only range-checked when present. Map iteration order is random, but the errors are sorted before being written, so responses are deterministic. Variables are bounded in count before the loop runs, so the loop cannot be made arbitrarily large.",
+    "json.Decoder returns a *json.UnmarshalTypeError when a string is assigned to an *int field, and the typeErr case turns it into a 400 naming the field. validate() never runs, so it cannot be the 422 path (A). The decoder does not silently skip mismatched values (C), and only errors that are not type or size errors fall into the default malformed-JSON branch (D).",
+    "After Decode, the code calls dec.Token() and requires io.EOF. A second object yields a token, so the check fails and a 400 is returned. A single Decode call reads only one value, so A is wrong, and B would be the behaviour without the Token check. The body is tiny, so the size limit (D) is not involved.",
+    "The if/else means the loop only runs when the count is within maxVariables; otherwise one error is added. A is therefore wrong. C is wrong because utf8.RuneCountInString counts runes. B is wrong because HasPrefix(name, \"CI_\") is part of the rejection condition."
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "flags/flags.go",
+        "startLine": 102,
+        "endLine": 102
+      }
+    },
+    1,
+    2,
+    3
+  ],
+  "explanations": [
+    "The bucket is computed from the user ID alone (`h.Write([]byte(userID))`), not from the flag key. Every flag therefore uses the same user-to-bucket mapping: the users in the first 5% of one flag are the same users in the first 5% of every other flag. Rollouts are not independent, so the same small group of users receives every experimental feature first and absorbs all of the risk, and experiments cannot be compared cleanly. The fix is to hash the flag key together with the user ID (for example key + \":\" + userID).",
+    "refresh only calls current.Store after fetch and decode both succeed. On failure poll just logs and the previous snapshot stays in place, so IsEnabled keeps evaluating against it. defaultValue is used only when the key is absent from the snapshot. Nothing resets the snapshot to empty, and IsEnabled never waits on the source.",
+    "refresh builds a brand-new map, wraps it in a new snapshot and publishes it with an atomic pointer store. Readers load one pointer and only read from that immutable snapshot. Go maps are not safe for concurrent writes with reads, nothing coordinates polling with requests, and IsEnabled does not copy the map.",
+    "The key is found, so defaultValue is not used. `if !f.Enabled { return false }` runs before the allow list and percentage checks, so Enabled=false acts as a kill switch that overrides both. The allow list and the 100% rollout are never reached."
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "id": "e4ca0f91-e991-4262-a307-2a6f22fca6e7",
+  "title": "Matching open orders to idle drivers",
+  "name": "Driver dispatch board",
+  "createdAt": "2026-11-19T23:09:24.490Z",
+  "durationMinutes": 13,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how DispatchBoard.assign() acquires and releases its lock across all the paths through the method? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "assign() scans every idle driver while holding the lock. What does this imply as the number of idle drivers grows?",
+      "choices": [
+        "Assignments run in parallel, because each worker scans its own copy of the driver map.",
+        "The time the lock is held, and so the delay for every other operation, grows in proportion to the number of idle drivers.",
+        "The scan is safe because HashMap iteration is thread-safe.",
+        "Late drivers are skipped because values() is a snapshot taken before the loop."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two requests call submit() with the same order id but different details before any driver is assigned. What is on the board afterwards?",
+      "choices": [
+        "Both orders, under the same id.",
+        "An exception is thrown for the second call.",
+        "The first order, because put() ignores existing keys.",
+        "Only the later order; the earlier one is replaced."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A monitoring endpoint calls stats() while dispatch workers are busy. How does it behave if the lock is held for longer than 50 ms?",
+      "choices": [
+        "It blocks until the lock is released, so the endpoint can hang.",
+        "It reads the maps without the lock and may return slightly stale numbers.",
+        "It returns Optional.empty() and does not wait further.",
+        "It interrupts the thread that holds the lock."
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.locking_and_lock_ordering",
+    "backend.errors.cleanup_on_error_paths",
+    "backend.concurrency.thread_and_worker_pools"
+  ]
+}

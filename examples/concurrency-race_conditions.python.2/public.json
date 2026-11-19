@@ -1,0 +1,50 @@
+{
+  "id": "8dab6056-b958-4cdd-a13b-3a13226392e7",
+  "title": "Customer credit ledger",
+  "name": "Customer credit ledger",
+  "createdAt": "2026-11-19T23:09:24.504Z",
+  "durationMinutes": 12,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code handles concurrent changes to a customer's credit balance? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two threads call apply_to_invoice for the same customer and the same invoice at the same time, with a 500 cent balance and a 300 cent invoice. What is the result?",
+      "choices": [
+        "Both deduct 300 and the balance goes to -100",
+        "Both return 0 because the balance is locked",
+        "The second raises because the invoice was already applied",
+        "The first deducts 300; the second returns the recorded 300 without deducting again"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two requests for a customer who has never been seen both call _account() simultaneously. Why can't they end up with different _Account objects?",
+      "choices": [
+        "The dictionary's get method is atomic and blocks others",
+        "The lookup, creation and insertion all happen while holding _accounts_guard",
+        "Each _Account has its own lock so duplicates are harmless",
+        "CPython serializes all method calls on one object"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "InvoiceFinalizer calls gateway.charge() after apply_to_invoice has returned, not inside it. What is the main reason this matters?",
+      "choices": [
+        "It lets the gateway see the credit-adjusted amount",
+        "It guarantees charge() runs at most once",
+        "A slow or hung network call does not keep the customer's credit lock held, so other credit operations for that customer proceed",
+        "It prevents reverse() from deadlocking with apply_to_invoice"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.race_conditions",
+    "backend.concurrency.locking_and_lock_ordering",
+    "backend.api.idempotency"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/main/java/com/adlytics/pipeline/config/ConfigLoader.java",
+        "startLine": 50,
+        "endLine": 50
+      }
+    },
+    1,
+    1,
+    2
+  ],
+  "explanations": [
+    "`dedupe.enabled` is read with `Boolean.parseBoolean`, which returns false for anything that is not exactly \"true\" (ignoring case), including \"yes\", \"1\", \"ture\" or an empty value. A typo in an override file or environment variable therefore silently turns deduplication off, and duplicate events flow into billing and analytics with no error. Every other setting is validated strictly and fails at startup; this one should use the same `requireBool` helper that rejects values other than true or false.",
+    "The environment lookup iterates `props.stringPropertyNames()`, which contains keys loaded from defaults and the overrides file. A variable for a key present in neither source is never consulted. Defaults are overridable, and the type of the setting has no bearing on the env step.",
+    "The overrides file is guarded by `Files.exists`, so a nonexistent path is skipped silently and the packaged defaults are used. The IllegalStateException is only for the packaged resource. A missing overrides file is a deliberate optional layer, but it means a mistyped path is not noticed.",
+    "`requireInt` parses the number, then checks it against [100, 60000] and throws on violation, so the service fails fast at startup. It does not clamp, does not fall back and does not accept out-of-range values."
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    2,
+    0,
+    3
+  ],
+  "explanations": [
+    "There is no defect. The environment must be set explicitly and unknown values fail startup, so a missing variable cannot silently select a more permissive mode. Staging uses the provider's sandbox URL with its own key, and wraps it in an allow list that must be non-empty (an empty or absent list throws), so staging fails closed instead of messaging real users. Production requires its own API key. Suppressed staging messages are logged by subject only, so recipient addresses do not reach the logs.",
+    "Environment.parse throws IllegalStateException for null or blank input, and create calls it first, so no sender is constructed. It does not default to local or production, and an allow list is only created for STAGING (and an empty one would be rejected by its constructor anyway).",
+    "AllowListSender lower-cases and trims the recipient, finds it absent from the set, logs the suppression and returns without calling the delegate. It does not throw, does not reach the sandbox provider, and does not redirect the message.",
+    "The PRODUCTION branch of the switch builds a bare ProviderSender and never reads NOTIFY_ALLOW_LIST. So the variable has no effect there, nothing validates its absence, and no domain-based rule exists."
+  ]
+}

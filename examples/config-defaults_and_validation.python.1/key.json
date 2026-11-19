@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "settings.py",
+        "startLine": 77,
+        "endLine": 78
+      }
+    },
+    1,
+    0,
+    2
+  ],
+  "explanations": [
+    "The cross-field checks (cutoff before last pickup, minimum weight below maximum) are written as assert statements. Single-field problems raise ConfigError, but asserts are removed entirely when Python runs with optimizations (python -O or PYTHONOPTIMIZE), and they raise AssertionError rather than ConfigError, so callers that handle ConfigError miss them. In an optimized production image, a configuration with a cutoff after the last pickup, or a minimum weight above the maximum, loads silently and then rejects every parcel in accept(). These checks should raise ConfigError explicitly.",
+    "_raw strips the value and returns None when nothing is left, so _int returns the default of 100 before attempting int(). The int() conversion is never reached, so there is no ConfigError, no 0 and no clamping; out-of-range values raise rather than clamp.",
+    "The label format is lower-cased before the membership check, so 'PDF' is accepted. SHIP_WAREHOUSES has no default: an unset variable yields an empty tuple, and from_env raises ConfigError('... at least one warehouse code'). There is no default warehouse and an empty list is never returned.",
+    "Parcels are grouped by upper-cased warehouse code, then sliced with range(0, len(items), batch_size), producing slices of 200, 200 and 50. Grouping does not override the batch size, slices are not balanced, and leftover parcels are not rejected; only parcels failing accept() go to rejected."
+  ]
+}

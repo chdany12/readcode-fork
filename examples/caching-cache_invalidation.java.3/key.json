@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "ChannelSettingsCache.java",
+        "startLine": 62,
+        "endLine": 63
+      }
+    },
+    2,
+    1,
+    1
+  ],
+  "explanations": [
+    "invalidate publishes the invalidation to the other nodes before deleting the shared entry. A peer that receives the message clears its local entry and, on the next read, can reload from the shared cache while it still holds the old value, putting the old settings back into its local cache for up to 2 minutes. The shared entry should be deleted first, and only then should the message be published.",
+    "onInvalidation only calls local.invalidate; it does not touch the shared cache (the originator handles that), does not reload (the next get does) and does not republish.",
+    "loadShared stores with SHARED_TTL of 30 minutes. The 2 minute expiry belongs to the local Caffeine cache. Nothing links the cache to repository writes except the explicit invalidate.",
+    "local.get(key, mappingFunction) is computed atomically per key in Caffeine, so a single loadShared runs and the other thread receives the same value. Nulls and exceptions do not arise from this."
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "id": "2eafed9d-b452-4eef-85a8-845cfa1ced5f",
+  "title": "Per-environment authentication policy",
+  "name": "Login policy by environment",
+  "createdAt": "2026-11-19T23:09:24.529Z",
+  "durationMinutes": 12,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code determines which environment's authentication policy applies? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "In STAGING a user submits the correct password but no one-time code. What does LoginService.login do?",
+      "choices": [
+        "Returns a session whose cookie is marked Secure but whose lifetime is shortened",
+        "Raises LoginDenied('second factor required') and counts it as a failed login",
+        "Raises LoginDenied('invalid credentials') because the password check is repeated with the OTP",
+        "Returns a session, since MFA is only enforced in production"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Under the PRODUCTION policy, which next_url does login return unchanged as the redirect target?",
+      "choices": [
+        "javascript:alert(1)",
+        "https://app.example.com.evil.io/x",
+        "http://localhost:3000/",
+        "https://app.example.com/billing"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "IDP_ENV is set to 'Production ' (capital P, trailing space). What does load_policy return?",
+      "choices": [
+        "It raises RuntimeError because the value does not match 'production' exactly",
+        "The production policy, because the value is stripped and lower-cased before matching",
+        "The development policy, as the fallback for unrecognized values",
+        "The staging policy, as the closest match"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.environment_specific_behaviour",
+    "backend.security.authentication",
+    "backend.security.session_and_token_handling"
+  ]
+}

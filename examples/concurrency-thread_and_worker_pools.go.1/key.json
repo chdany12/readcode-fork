@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "dispatch/pool.go",
+        "startLine": 65,
+        "endLine": 66
+      }
+    },
+    0,
+    2,
+    3
+  ],
+  "explanations": [
+    "Yes. worker() calls p.wg.Add(1) from inside the goroutine, so the WaitGroup counter is incremented only once the scheduler runs that goroutine. If Shutdown() is called soon after Start(), wg.Wait() can observe a zero counter and return before any worker has registered; Shutdown then closes p.results while workers are still starting and draining jobs, and a worker's send on the closed channel panics (and queued rides are not processed). wg.Add must happen in Start() before each `go` statement.",
+    "The select with a default case makes the send non-blocking, so a full channel yields ErrQueueFull right away. Nothing blocks, nothing is evicted, and the pool never grows beyond its fixed size.",
+    "A closed buffered channel still delivers its remaining items to receivers; `for req := range p.jobs` exits only after the buffer is empty. ErrClosed is only returned from Submit calls made after the closed flag is set, and no further Submit is needed.",
+    "The timeout only works if FindDriver honors ctx; a call that ignores it holds its worker forever. With every worker occupied nothing drains the queue, so it fills and Submit sheds load. The pool is fixed-size and Shutdown would wait on wg for those stuck workers rather than return early."
+  ]
+}

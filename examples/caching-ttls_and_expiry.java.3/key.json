@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "playback/ManifestService.java",
+        "startLine": 14,
+        "endLine": 14
+      }
+    },
+    1,
+    1,
+    2
+  ],
+  "explanations": [
+    "Each manifest embeds signed rendition URLs that expire after signedUrlTtl (10 minutes), but the finished manifest is cached for manifestCacheTtl (15 minutes). A manifest generated just before a cache entry would be written can be served for up to 15 minutes while its URLs are valid for only 10, so viewers receive manifests whose segment URLs already return 403 from the CDN. The cache TTL must be shorter than the signed URL lifetime by at least the time a player needs to use the manifest, for example 10 minute URLs with a cache TTL of a few minutes.",
+    "manifestFor checks entitlements before it looks at the cache, so access control does not depend on cache state. The cached manifest is user-independent (the key has only video, region and device profile), which is why it can be shared. Choices 1, 3 and 4 assume the check comes after, or has an effect on, the cache.",
+    "There is no locking or in-flight tracking, so concurrent misses each call renditionsFor and the signer, then each put. Later puts just replace earlier ones. No failure is implied unless the renditions list is empty.",
+    "The expiry check uses clock.instant() against expiresAt, then calls entries.remove(key, entry) (the two-argument form only removes if the same entry is still mapped) and returns empty. A concurrent fresher put is not clobbered. Nothing is refreshed and no exception is thrown."
+  ]
+}

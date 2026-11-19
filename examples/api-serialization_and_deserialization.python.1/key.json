@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "dispatch/codec.py",
+        "startLine": 25,
+        "endLine": 25
+      }
+    },
+    1,
+    2,
+    1
+  ],
+  "explanations": [
+    "The encoder turns any dataclass into a dict with dataclasses.asdict, which recursively includes every field. get_trip and request_ride return a Trip whose driver is a Driver dataclass containing phone and payout_account, so those private fields are sent to the rider in every trip response. Serialization of rider-facing data should go through an explicit view or whitelist of public driver fields (display name, plate, rating) rather than a generic dump of the model.",
+    "DispatchEncoder.default returns str(o) for Decimal, so the value is a JSON string that preserves the exact digits and scale. A JSON number would need float conversion, which is not done. There is no structured Decimal representation, and Decimal is explicitly handled, so no TypeError occurs.",
+    "fromisoformat parses the string successfully into a naive datetime, then parse_ride_request explicitly rejects naive values with a RequestError, which request_ride maps to 400. No timezone is assumed, and since the request is rejected before dispatch, the encoder's naive-datetime TypeError is never reached.",
+    "In Python bool is a subclass of int, so isinstance(True, int) is true; the explicit isinstance(seats, bool) test is what rejects it, producing a RequestError and a 400. Without that test it would be accepted as 1, and nothing in this path raises an unhandled exception."
+  ]
+}

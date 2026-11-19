@@ -1,0 +1,51 @@
+{
+  "id": "f6c298ac-73d9-4fb6-9ab1-4708d0f479be",
+  "title": "Telemetry batch ingestor",
+  "name": "Telemetry batch ingestor",
+  "createdAt": "2026-11-19T23:09:24.512Z",
+  "durationMinutes": 12,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code coordinates the polling loop with the writer pool? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The store becomes very slow, so each `insert_many` takes 30 seconds. With `workers=4`, how does the polling loop behave?",
+      "choices": [
+        "It keeps polling and buffers unlimited batches in the executor's queue",
+        "It raises an error once the pool's queue is full",
+        "It polls until 8 batches are outstanding, then blocks in `acquire` until a write finishes",
+        "It polls at the same rate but drops batches when all 4 workers are busy"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two consecutive batches contain readings from the same device. Which statement about the order in which they reach the store is correct?",
+      "choices": [
+        "They are always written in poll order because the queue is FIFO",
+        "They may be written concurrently by different workers, so their relative order is not guaranteed",
+        "The semaphore forces batches to complete one at a time",
+        "Readings are sorted by timestamp inside `_write_batch` before insertion"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "`close()` is called while 3 batches are still being written and 2 more are queued. What happens?",
+      "choices": [
+        "Queued batches are discarded and running ones are interrupted",
+        "close() returns immediately and the writes continue in the background",
+        "close() blocks until all 5 batches have been processed by the workers",
+        "Only the 3 running batches finish; the 2 queued ones are cancelled"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.thread_and_worker_pools",
+    "backend.messaging.backpressure",
+    "backend.messaging.at_least_once_delivery",
+    "backend.errors.swallowed_errors"
+  ]
+}

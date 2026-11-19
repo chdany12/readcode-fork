@@ -1,0 +1,50 @@
+{
+  "id": "a33b1493-daa7-4953-bfed-ddc7e0e17c39",
+  "title": "Bounded connection pool for build results",
+  "name": "Build results pool",
+  "createdAt": "2026-11-19T23:09:24.539Z",
+  "durationMinutes": 14,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code limits, hands out and recycles database connections? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Eight threads hold connections and a ninth calls pool.connection(). The pool's max_size is 8. What happens?",
+      "choices": [
+        "A ninth connection is opened because creation is not capped",
+        "The call waits up to acquire_timeout for a returned lease and then raises PoolExhausted",
+        "The call blocks until a connection is returned, with no time limit",
+        "The ninth thread shares one of the eight leased connections"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Inside `with pool.connection()`, a query raises sqlite3.OperationalError. What happens to that connection?",
+      "choices": [
+        "It is returned to the idle queue after a rollback",
+        "It stays leased until the process exits",
+        "It is closed rather than reused, and its slot is freed for another caller",
+        "It is closed, but its slot stays consumed so the pool shrinks permanently"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A pool with max_age=1800 receives a burst of traffic, then goes quiet for two hours with several idle connections. When are those idle connections closed?",
+      "choices": [
+        "Exactly at 1800 seconds, by a background reaper thread",
+        "As soon as the burst ends, because release() closes extra connections",
+        "Never, because max_age applies only to leased connections",
+        "Lazily: each is closed when a later checkout pops it and finds it older than max_age"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.connection_pooling",
+    "backend.resources.file_and_socket_handle_leaks",
+    "backend.concurrency.thread_and_worker_pools"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "com/pingwire/notify/TopicSubscriptions.java",
+        "startLine": 18,
+        "endLine": 18
+      }
+    },
+    2,
+    1,
+    3
+  ],
+  "explanations": [
+    "subscribe() takes the read lock and, while still holding it, calls ensureTopic(), which asks for the write lock when the topic does not exist yet. ReentrantReadWriteLock does not support upgrading a read lock to a write lock: the write lock waits until all read locks are released, including the one the same thread holds, so the thread blocks forever on its own lock (and later readers queue behind the waiting writer). Even if it did not hang, mutating the HashSet under only a read lock would let concurrent subscribers corrupt it. subscribe() should take the write lock for the whole check-and-add.",
+    "The copy is taken under the read lock and the lock is released before the loop starts, so the loop iterates a private list. Later changes to the set do not affect it (no ConcurrentModificationException, no blocking of unsubscribe) and are not reflected in that list either.",
+    "Read locks are shared, so many subscribersOf() calls can hold them simultaneously; the write lock in unsubscribe() is exclusive and makes readers wait only for its duration. The lock is released before the sends happen, so the delivery loop does not hold anything.",
+    "The try/catch is inside the loop, so a failure is logged and counted and the loop moves on. Nothing is rethrown, nothing resets the delivered count, and there is no retry logic."
+  ]
+}

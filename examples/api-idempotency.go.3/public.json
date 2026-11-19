@@ -1,0 +1,50 @@
+{
+  "id": "4b1d9a2a-4e7b-4c71-b756-01270273a076",
+  "title": "Idempotent food order payment",
+  "name": "Checkout payment handler",
+  "createdAt": "2026-11-19T23:02:14.222Z",
+  "durationMinutes": 12,
+  "language": "Go",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code records the outcome of idempotent payment requests? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two requests with the same new key arrive at nearly the same moment. What does the second one receive while the first is still calling the gateway?",
+      "choices": [
+        "The gateway is called twice, and one charge is later refunded",
+        "A 409 Conflict with the in-flight message",
+        "The first request's response once it completes, because the second waits",
+        "A 400 because the key is already present"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends a request with a malformed JSON body and then retries the identical request. What happens on the retry?",
+      "choices": [
+        "It returns the stored 400 response without re-parsing the body",
+        "It is processed again and fails again with a fresh 400",
+        "It returns 409 because the key is still in flight",
+        "It panics because the saved body is nil"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What is a design consequence of keying the journal only by the Idempotency-Key header value?",
+      "choices": [
+        "Different customers cannot ever reuse a key value, since keys are unique by construction",
+        "Concurrent requests for different keys are serialized behind one lock for the full charge",
+        "A client reusing a key with a different amount or customer gets the first request's saved response without any comparison",
+        "Replayed responses lose their status code"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.idempotency",
+    "backend.api.status_codes_and_error_responses",
+    "backend.resilience.retries_and_backoff"
+  ]
+}

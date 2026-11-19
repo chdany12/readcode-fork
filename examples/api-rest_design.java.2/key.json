@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "api/IndexController.java",
+        "startLine": 77,
+        "endLine": 77
+      }
+    },
+    1,
+    1,
+    2
+  ],
+  "explanations": [
+    "The reindex operation is mapped with @GetMapping. GET is defined as safe: crawlers, link prefetchers, browsers, monitoring probes and caching proxies may call it freely and repeatedly. Here a GET starts a background reindex job, so any of those could trigger expensive work against the index. It should be a POST (for example POST /{name}/reindex or POST /{name}/reindexes, returning 202 with a job resource). The other handlers use methods correctly: create is POST with 201 and Location, document upsert is an idempotent PUT, and delete is DELETE.",
+    "upsertDocument returns true only when the id was not present, so the first call yields ResponseEntity.created(...) and the second falls through to noContent(). A PUT to a client-chosen id is idempotent, so the final state is the same. Choice 1 is wrong because created is conditional on the boolean. Choice 3 ignores the created branch. Choice 4 is wrong because nothing in this controller raises a conflict for documents; only index creation maps a conflict.",
+    "search clamps size into [1, 100] and page to a minimum of 0 before calling the service, and the SearchPage carries the bounded page and size back to the client. No validation annotations are on these parameters, so nothing produces 400 or 422 (choices 0 and 3), and the raw values are never passed through (choice 2).",
+    "The @ExceptionHandler for IndexExists returns ProblemDetail with status CONFLICT, so the client sees 409 with a problem body. It is not 201 (choice 0) because create never returns an existing index; it is not 500 (choice 1) because the controller-level handler catches the exception; and bean validation (choice 3) only checks the name pattern and shard bounds, with no uniqueness check."
+  ]
+}

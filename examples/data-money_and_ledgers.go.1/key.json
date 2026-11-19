@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "billing/meter.go",
+        "startLine": 55,
+        "endLine": 59
+      }
+    },
+    1,
+    3,
+    2
+  ],
+  "explanations": [
+    "Each batch is rounded to whole cents on its own (and rounded-to-zero batches are dropped) before being posted. Rounding error therefore accumulates per batch instead of once per invoice: with a price of 2,500 micros, a stream of one-message batches is billed 0 cents each, so a customer sending a million such messages is billed nothing instead of $2,500, while 6-message batches (1.5 cents) round up to 2 cents each and are over-billed by a third. Usage should be accumulated in micros (or in a higher-precision unit) and rounded once when an invoice is produced.",
+    "Post rejects any journal whose entries do not sum to zero and the store writes a journal's entries atomically, so partial or unbalanced journals never appear. Nothing checks balances against zero, ordering across calls is not addressed, and a repeated key yields ErrDuplicate rather than a correction.",
+    "The journal key is derived from the batch ID, so a replay produces the same key; the store reports ErrDuplicate and Bill treats that as success. Bill itself is stateless, balance checks are not part of Post, and the tariff source is a plain read.",
+    "micros = 6 * 2,500 = 15,000. Adding half a cent (5,000) gives 20,000, and integer division by 10,000 yields 2, so a 2-cent debit is posted against receivable with a matching credit to revenue. 15 would be the micros value mistaken for cents, 1 would be truncation instead of round-half-up, and the skip only happens when the rounded charge is 0."
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "id": "1bea9c36-d745-4be3-8185-82792fd901cd",
+  "title": "Feed building worker pool",
+  "name": "Feed builder worker pool",
+  "createdAt": "2026-11-19T23:09:24.508Z",
+  "durationMinutes": 13,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code handles per-task state on its pooled worker threads? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The pool has 4 core threads, 8 maximum threads and an `ArrayBlockingQueue` of 200. 4 tasks are running and a 5th arrives. What happens?",
+      "choices": [
+        "A fifth thread is started immediately because the core threads are busy",
+        "The caller runs the task itself because the pool is at its core size",
+        "The task waits in the queue; extra threads are only started once the 200-slot queue is full",
+        "The task is rejected because only 4 threads are guaranteed"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Under a sustained overload, all 8 threads are busy and the queue holds 200 tasks. A request thread calls `trending(20)`. What is the most likely result?",
+      "choices": [
+        "The call throws RejectedExecutionException to the request thread",
+        "The task is dropped and the returned future never completes",
+        "The oldest queued task is discarded to make room",
+        "The request thread executes `buildTrending` itself, which slows that caller and throttles new submissions"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "`ranker.rank` throws a RuntimeException for one viewer. What does the caller of `personalized(...)` observe?",
+      "choices": [
+        "A future that completes exceptionally; the pool thread itself keeps running",
+        "The exception propagates to the thread that called `personalized`",
+        "The pool thread terminates and is replaced by a new one",
+        "An empty list, because supplyAsync swallows exceptions"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.thread_and_worker_pools",
+    "backend.concurrency.shared_state_in_request_handlers",
+    "backend.errors.cleanup_on_error_paths",
+    "backend.caching.cache_aside_vs_write_through"
+  ]
+}

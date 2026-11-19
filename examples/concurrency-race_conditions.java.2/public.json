@@ -1,0 +1,50 @@
+{
+  "id": "40e5c13f-6020-4480-bcdf-95bed63f0fba",
+  "title": "Login lockout service",
+  "name": "Login lockout service",
+  "createdAt": "2026-11-19T23:09:24.500Z",
+  "durationMinutes": 12,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code counts failed logins for the lockout? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "An attacker sends 50 concurrent requests for an account that is already locked. What does authenticate() do for those requests?",
+      "choices": [
+        "Rejects each with the lock message before invoking the PasswordVerifier",
+        "Verifies each password, then rejects them because the account is locked",
+        "Queues them until the lock expires",
+        "Rejects them with the generic invalid-credentials message"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "An unknown username and a known username with a wrong password both produce the same exception message. What is the likely intent?",
+      "choices": [
+        "To keep error handling consistent for logging",
+        "To make the lockout counter apply to both cases equally",
+        "To stop callers from learning which usernames exist",
+        "To avoid calling the PasswordVerifier for unknown users"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The service runs on 4 identical nodes behind a round-robin load balancer, each with its own LoginThrottle. What is the consequence for the lockout policy?",
+      "choices": [
+        "Locks are shared automatically because the maps are ConcurrentHashMaps",
+        "Successful logins on one node clear failures on all nodes",
+        "Locks expire four times faster",
+        "A user's failures are counted per node, so an attacker can make roughly four times maxFailures attempts before every node locks"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.race_conditions",
+    "backend.concurrency.atomic_operations",
+    "backend.security.authentication"
+  ]
+}

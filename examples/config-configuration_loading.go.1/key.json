@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    3,
+    1
+  ],
+  "explanations": [
+    "There is no defect. The file struct uses pointer fields, so an explicit `false` or `0` in the file is distinguishable from an absent key and overrides the default correctly. Unknown keys are rejected, durations and numbers are parsed with errors collected rather than ignored, the environment is applied after the file so precedence is defaults < file < env, and validation runs on the merged result. The URL password is stripped in `Redacted`. An empty environment value is treated as unset, which is a deliberate and consistent convention here.",
+    "`SurgePricingOn` in `fileConfig` is a `*bool`; a present `false` decodes to a non-nil pointer to false, so `applyFile` assigns it. With a plain bool the zero value could not be told apart from an absent key and the default true would win. A missing env var changes nothing.",
+    "`applyEnv` only acts when `getenv` returns a non-empty string, so an empty value leaves the file's 5 in place. It does not reach `Atoi`, so there is no error and no zero.",
+    "`DisallowUnknownFields` makes the decoder fail on any key that is not in `fileConfig`, so typos fail fast instead of silently running with defaults. Go's decoder does case-insensitive matching but not prefix matching, so this key would not match, and nothing here logs and continues."
+  ]
+}

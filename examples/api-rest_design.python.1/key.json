@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "app/main.py",
+        "startLine": 37,
+        "endLine": 37
+      }
+    },
+    2,
+    1,
+    1
+  ],
+  "explanations": [
+    "CampaignPatch declares targeting_tags with default_factory=list, so when a client omits the field the model still contains an empty list. model_dump(exclude_none=True) only drops None values, so [] is kept and passed to store.update, silently wiping the campaign's targeting tags on any PATCH that changes only the name or budget. The handler should use model_dump(exclude_unset=True) (and the field should default to None), so only fields the client actually sent are applied.",
+    "limit is declared Query(20, ge=1, le=100), so FastAPI validates it and returns 422 for 500 without calling list_campaigns. The code never clamps (choice 0), and the bound is enforced rather than ignored (choice 1). A large limit is not a missing resource (choice 3).",
+    "The route sets status_code=201, adds Location from the generated id, and returns the Campaign through response_model, so the body is included. Choice 0 contradicts status_code=201 and the header; choice 2 ignores response_model and the return value; choice 3 is not produced anywhere.",
+    "DELETE is implemented as an update to ARCHIVED. The row stays in the store, so the second DELETE finds it and also returns 204, and GET still finds it and returns 200 with status archived. Choices 0 and 2 assume the row is removed; choice 3 assumes a conflict is raised on re-archiving, which the code never does."
+  ]
+}

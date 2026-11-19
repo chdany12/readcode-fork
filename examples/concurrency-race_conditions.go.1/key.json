@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "ledger/store.go",
+        "startLine": 88,
+        "endLine": 91
+      }
+    },
+    1,
+    3,
+    0
+  ],
+  "explanations": [
+    "Yes. Withdraw reads the balance under a read lock, releases it, checks the funds, and only then takes the write lock to subtract. The check and the debit are not atomic: two concurrent withdrawals of 80 from an account holding 100 both read 100, both pass the check, and the account ends at -60. Deposit and Transfer hold the write lock across their check and update; Withdraw should do the same (take the write lock first and check inside it).",
+    "Transfer holds the exclusive lock for the whole check, both balance updates and both journal records; Balance's RLock cannot be acquired until it releases, so it sees only the before or after state. Read locks do not allow intermediate views of a writer's work, and Balance never returns ErrInsufficientFunds.",
+    "Once RUnlock runs, other goroutines may append to s.journal; handing out the shared backing array would let the caller read it concurrently with writers. The copy is made while the read lock is held. It does not sort, entries are values so mutation concerns are secondary, and RWMutex places no restriction on returned slices.",
+    "There is one RWMutex for the entire map and journal, so a Deposit to one account blocks writes to all others. Balance uses RLock so readers do not block each other; Transfer takes only one lock, so opposite-direction transfers cannot deadlock; there are no per-account locks."
+  ]
+}

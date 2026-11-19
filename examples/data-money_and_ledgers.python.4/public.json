@@ -1,0 +1,49 @@
+{
+  "id": "28d86fcf-3205-4bcb-a081-d71c2477f04c",
+  "title": "Driver fare settlement and payouts",
+  "name": "Driver payout settlement",
+  "createdAt": "2026-11-19T23:09:24.554Z",
+  "durationMinutes": 13,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code decides which ledger entries are included in a driver's payout? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "For a fare of 1,001 cents with no tip, what do split_fare and the balance check in settle_trip produce?",
+      "choices": [
+        "A fee of 250 and a driver share of 751; the entries sum to zero.",
+        "A fee of 251 and a driver share of 750; the entries sum to zero.",
+        "A fee of 250 and a driver share of 750; one cent is left unallocated, so the AssertionError is raised.",
+        "A fee of 250.25 stored as a decimal, so the entries sum to zero only approximately."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "settle_trip is called twice for the same trip_id, for example because the trip-completed event is delivered twice. What is the result?",
+      "choices": [
+        "Both calls write ledger entries, and the payout later nets them out.",
+        "The second call raises sqlite3.IntegrityError to its caller.",
+        "The second call overwrites the first call's ledger entries with the same values.",
+        "The second call writes nothing and returns False, because the settlement insert fails and the transaction rolls back."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A driver is owed 1,500 cents of eligible earnings when run_payout executes. What happens, and what happens the next time it runs?",
+      "choices": [
+        "The payout is paid out anyway, since any positive balance is eligible.",
+        "Nothing is paid or recorded; no payout row is written, so the next run's window still starts at the earlier period_end and includes these earnings.",
+        "Nothing is paid, and the 1,500 cents is written off because period_end advances to the cutoff.",
+        "A payout row for 1,500 is recorded with a zero transfer, to be topped up later."
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.money_and_ledgers",
+    "backend.data.transactions_and_isolation_levels"
+  ]
+}

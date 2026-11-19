@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    3,
+    1,
+    1
+  ],
+  "explanations": [
+    "There is no defect. All arithmetic is on integer cents, and prorate rounds once, half-to-even, using only integer comparisons. allocate uses the largest-remainder method, so shares always sum exactly to the total and leftover is always smaller than the number of weights. change_plan books both sides from the same three integers (net = new_charge - unused_credit, revenue = unused_credit - new_charge), so the journal sums to zero for every input, including downgrades where net is negative, and the key makes replays harmless. The divisions and the negative amounts look risky but are exact and intentional.",
+    "999 * 15 = 14,985; divmod by 30 gives quotient 499 and remainder 15. twice = 30 equals days_in_period (an exact half), and since 499 is odd the quotient is bumped to 500, which is the even neighbour. 499 would be truncation, 499.5 is not an integer cent amount, and 501 overshoots.",
+    "Each base share is 100 // 3 = 33 with remainder 1, so leftover = 100 - 99 = 1. All remainders tie, and the sort key breaks ties by lowest index, so the first share gets the extra cent: [34, 33, 33]. [33, 33, 33] would lose a cent, and the others would give the extra cent to the wrong positions.",
+    "Nothing in change_plan rejects a negative net. receivable gets net (negative) and revenue gets unused_credit - new_charge, which is its exact positive mirror, so the journal still sums to zero; the return value is the negative net. Returning 0 only happens when ledger.post reports the journal key was already posted."
+  ]
+}

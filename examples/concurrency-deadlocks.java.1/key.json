@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "com/northgate/ledger/LedgerService.java",
+        "startLine": 23,
+        "endLine": 24
+      }
+    },
+    3,
+    0,
+    1
+  ],
+  "explanations": [
+    "The code tries to avoid opposite lock orders by ranking the accounts with System.identityHashCode. That value is not unique: two distinct objects can have the same identity hash. When the hashes tie, the comparison is false in both directions, so transfer(A, B) picks B first while a concurrent transfer(B, A) picks A first. Each thread then holds one monitor and waits for the other, a deadlock. A total order that cannot tie, such as comparing the unique account ids (with a tie-break lock only if ids could be equal), avoids this.",
+    "debit() checks the balance before mutating anything and throws; credit() is never reached. synchronized blocks release their monitors when an exception leaves them. There is no reversal logic, no partial debit, and no monitor leak.",
+    "Two transfers can finish their synchronized blocks in one order and reach record() in the other, so ordering is not guaranteed. Because record() runs outside the account monitors, the audit lock is never nested under them. A contended lock only delays the append, it does not skip it, and auditSnapshot() takes only the audit lock, which transfers hold only briefly after their balance work.",
+    "Each read locks only one account at a time, so a transfer can debit an account the loop has not yet read and credit one it already read (or the reverse), giving a total that never existed. Per-read synchronization gives visibility, not a consistent multi-account snapshot. Account objects are not copied, and no collection is modified, so no exception arises."
+  ]
+}

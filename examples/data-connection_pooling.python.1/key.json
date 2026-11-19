@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    2,
+    3
+  ],
+  "explanations": [
+    "There is no defect. The semaphore is acquired before a connection is taken and is released in a finally in release(), and acquire() releases it itself if checkout fails, so a failing factory cannot leak a slot. A connection goes into the idle queue before its slot is released, so a waiter that gets the slot always finds it, and new connections are created only when the idle queue is empty, which keeps the open total at or below max_size. Leases are rolled back on return, and connections that raised a driver error, are too old or fail the health check are closed instead of reused.",
+    "The bounded semaphore has 8 slots, all held, so slots.acquire(timeout=3.0) waits and returns False on expiry, which raises PoolExhausted. If a lease is returned in the meantime the ninth caller proceeds. Connections are created only after a slot is acquired, and a connection is never shared.",
+    "OperationalError is in broken_errors, so connection() sets broken=True and re-raises. The finally block calls release(lease, True), which closes the connection and still frees the slot via its own finally. A later acquire creates a fresh connection. The slot is not lost and the connection is not recycled.",
+    "There is no background thread. The age check runs in _checkout when an idle entry is popped, and in release for the returning lease. Idle connections can therefore stay open past max_age until a caller reaches them; at that point they are closed and the next one is tried. release() does not trim idle connections, and the age check applies to idle ones too."
+  ]
+}

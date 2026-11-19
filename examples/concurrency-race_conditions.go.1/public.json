@@ -1,0 +1,50 @@
+{
+  "id": "fc5a9144-1c09-4b5b-a95a-cd8f81c1dfba",
+  "title": "In-memory account ledger",
+  "name": "In-memory account ledger",
+  "createdAt": "2026-11-19T23:09:24.497Z",
+  "durationMinutes": 12,
+  "language": "Go",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code protects account balances when money leaves an account? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client calls Balance(\"A\") while Transfer(\"A\", \"B\", 50) is executing. Which outcomes can the Balance call observe?",
+      "choices": [
+        "A balance with the debit applied but no credit recorded in the journal yet",
+        "Either the balance before the transfer or after it, never a state where B has been credited but A not yet debited",
+        "Any intermediate value, because Balance uses only a read lock",
+        "The call fails with ErrInsufficientFunds if the transfer is in flight"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Statement copies matching entries into a new slice instead of returning s.journal or a sub-slice of it. Why does that matter?",
+      "choices": [
+        "It sorts the entries by account so callers get a stable order",
+        "It lets the caller mutate entries without affecting other accounts' statements",
+        "It is required because RWMutex forbids returning slices",
+        "The returned data no longer aliases storage that record() appends to under the write lock, so the caller can read it after the lock is released"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What is the main throughput trade-off of the Store's locking design?",
+      "choices": [
+        "A single store-wide mutex serializes all writes across every account, even for unrelated accounts",
+        "Readers block each other because Balance takes the same lock as Deposit",
+        "Deadlock is likely when two transfers go in opposite directions between the same accounts",
+        "Each account has its own lock, so memory use grows with account count"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.race_conditions",
+    "backend.data.money_and_ledgers",
+    "backend.concurrency.shared_state_in_request_handlers"
+  ]
+}

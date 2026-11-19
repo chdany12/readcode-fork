@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    2,
+    2,
+    1
+  ],
+  "explanations": [
+    "There is no defect. Money is carried as a decimal string and parsed through BigDecimal, so no binary floating point is involved. Parsing rejects more fraction digits than the currency allows, and the amount is written with toPlainString, avoiding scientific notation. Unknown event types fall back to the Unknown record and unknown fields are ignored, which is the right tolerance for a third party that adds event types, and the signature is verified over the raw bytes before any parsing. Timestamps are ISO-8601 through JavaTimeModule. The 400 for a signed-but-malformed body is a deliberate non-retriable answer.",
+    "defaultImpl routes unrecognized type names to PaymentEvent.Unknown, FAIL_ON_UNKNOWN_PROPERTIES is disabled and Unknown also ignores unknown properties, so parsing succeeds. handle then returns 200 without calling the sink, which stops the provider retrying an event this service does not care about. Choices 0 and 1 assume strict polymorphic resolution; choice 3 is wrong because defaultImpl names Unknown, not the first subtype.",
+    "The scale of 10.505 is 3, greater than the 2 fraction digits of USD, so Money.parse throws IllegalArgumentException. Jackson wraps it in a ValueInstantiationException, a subclass of IOException, which handle catches and maps to 400. setScale is only reached after the check, and without a rounding mode it would throw rather than round anyway, so choices 0 and 1 are wrong. The signature was already verified over the raw bytes, so it is unrelated to amount content (choice 3).",
+    "The provider signs the exact bytes it sent. Parsing discards unknown properties and the mapper formats values its own way, so a re-serialized form could differ from the original and fail or, worse, be forged to match. Choice 0 is false: the mapper can serialize records. Choice 2 is not a requirement of isEqual (it compares the hex strings after encoding), and choice 3 is unrelated, since the fallback only matters after the signature passes."
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "builds/api.go",
+        "startLine": 34,
+        "endLine": 34
+      }
+    },
+    1,
+    0,
+    3
+  ],
+  "explanations": [
+    "The Location header returned from the create handler points to /v1/builds/<id>, but builds are only routed under /v1/projects/{project}/builds/{id}. A client (or SDK) that follows the 201 Location header to fetch the new build gets a 404 from the mux. The header should be built from the project path value: \"/v1/projects/\"+b.Project+\"/builds/\"+b.ID.",
+    "In Store.Cancel the \"cancelling\" case is an empty case that falls out of the switch without error, so the handler writes 202 with the current build. That makes repeated cancels safe. Conflicts are only returned for other terminal states (A), the build exists so not 404 (C), and the handler always writes the build body with 202 (D).",
+    "Store.Delete does nothing when the id is missing and the handler always writes 204, so DELETE is idempotent from the client perspective. 404 (B) is never produced by this handler, 409 (C) is only used for cancel, and the comma-ok lookup cannot fail (D).",
+    "List returns a nil slice when nothing matches, and the handler replaces it with an empty slice before encoding so the JSON is [] rather than null. A listing of an empty collection is a normal 200, not 204 (A) or 404 (B), and without the nil check C would have been the output."
+  ]
+}

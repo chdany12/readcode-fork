@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/main/java/com/adtech/billing/ImpressionBilling.java",
+        "startLine": 49,
+        "endLine": 49
+      }
+    },
+    2,
+    0,
+    1
+  ],
+  "explanations": [
+    "BigDecimal.divide(divisor, RoundingMode) keeps the scale of the dividend. cpm comes from a NUMERIC(10,2) column, so it has scale 2: 2.50 / 1000 = 0.00250 is rounded to two decimals, giving 0.00. Every impression of a typical campaign costs zero, so spent never grows, the budget never runs out, and the advertiser's campaign serves unbounded impressions that are never billed. The division needs an explicit scale that matches campaign_spend.spent (divide(IMPRESSIONS_PER_MILLE, 6, RoundingMode.HALF_EVEN)) or should be done on higher-precision values.",
+    "claimImpression returns executeUpdate() == 1, which is false for the duplicate, so charge() rolls back and returns false before bumpSpend runs. ON CONFLICT DO NOTHING prevents the exception, and returning false (not true) is what the code does for a duplicate.",
+    "The budget check lives inside the UPDATE's WHERE clause, and a row being updated is locked until commit; under READ COMMITTED the waiting update re-checks the predicate against the new value and matches no row. The two charged_impressions rows have different IDs and do not block each other, and the check is not in Java.",
+    "The claim insert and the spend update share one transaction; when bumpSpend returns false the code calls conn.rollback(), which also removes the claim. Nothing carries spend to another day, and the update either applies the full cost or no row."
+  ]
+}

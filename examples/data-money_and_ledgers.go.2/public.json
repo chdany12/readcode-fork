@@ -1,0 +1,50 @@
+{
+  "id": "ff9f3aa0-4e05-4fdc-bf65-c0ddfb24b62b",
+  "title": "Cancelled booking refunds split across travelers",
+  "name": "Booking refund poster",
+  "createdAt": "2026-11-19T23:09:24.546Z",
+  "durationMinutes": 10,
+  "language": "Go",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code computes and records refund amounts? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A cancelled booking has Total 10,001 cents and FeeBps 1,500. What fee and refundable amount does Refund compute before splitting?",
+      "choices": [
+        "Fee 1,500 and refundable 8,500.",
+        "Fee 1,500 and refundable 8,501.",
+        "Fee 1,501 and refundable 8,500.",
+        "Fee 1,500.15 and refundable 8,500.85."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The refund request times out at the client, which retries after the first call actually posted. What does the second Refund call do?",
+      "choices": [
+        "Posts a second journal and refunds the travelers twice.",
+        "Returns ErrNotCancelled, because refunding changes the booking status.",
+        "Fails with an unbalanced-journal error.",
+        "Builds the same journal key, receives ErrDuplicate from the ledger and returns nil without posting again."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Refund is called for a cancelled booking whose Travelers slice is empty. What happens?",
+      "choices": [
+        "ErrNoTravelers is returned before any splitting or ledger call.",
+        "splitEven panics with an integer divide by zero.",
+        "A journal containing only the fee and liability entries is posted.",
+        "The full amount is refunded to a default account."
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.money_and_ledgers",
+    "backend.api.idempotency",
+    "backend.errors.error_wrapping_and_context"
+  ]
+}

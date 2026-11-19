@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "dispatch/validation.py",
+        "startLine": 23,
+        "endLine": 23
+      }
+    },
+    3,
+    1,
+    0
+  ],
+  "explanations": [
+    "The range check is written as \"reject if out of range\" using < and >. Flask parses JSON with the standard json module, which accepts the non-standard literals NaN and Infinity, and every comparison involving NaN is False. A pickup of {\"lat\": NaN, \"lon\": NaN} is a float, so the type check passes, and none of the four comparisons fire, so the point is accepted. Downstream, haversine_km returns NaN, \"distance_km > MAX_TRIP_KM\" is False so the length cap is bypassed, and round(NaN * ...) raises ValueError, giving a 500 (or a poisoned location if enqueue is reached some other way). Writing the check positively, e.g. \"if not (-90 <= lat <= 90 and -180 <= lon <= 180)\" or using math.isfinite, rejects NaN. (Infinity is caught by the range comparisons.)",
+    "validate_ride_request accumulates errors in a dict and only returns them at the end, so both problems are reported, and the view answers 400 for validation errors. It does not stop at the first failure (A), the 422 in this view is only for the trip-length cap (B), and an explicit invalid vehicle_class is rejected rather than defaulted (C); only a missing key defaults.",
+    "A timestamp without an offset parses to a naive datetime, so tzinfo is None and the code reports that an offset is required. A converts to 2030-01-04T18:00Z, inside the 7-day window; C is two days ahead and also inside it; and omitting the field is allowed because raw_time is None.",
+    "get_json(silent=True) returns None for unparseable bodies and a list for arrays; validate_ride_request returns the single \"body\" error for anything that is not a dict, and the view answers 400. No exception occurs (B), no content-type check exists (C), and defaults are never applied because errors short-circuit the result (D)."
+  ]
+}

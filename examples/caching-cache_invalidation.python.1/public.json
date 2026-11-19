@@ -1,0 +1,51 @@
+{
+  "id": "4a02b17d-5060-4f95-9405-b141fd7a75c1",
+  "title": "Billing settings cache",
+  "name": "Billing settings cache",
+  "createdAt": "2026-11-19T23:02:14.275Z",
+  "durationMinutes": 12,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code keeps cached billing settings consistent with updates? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A reader calls get() and is slow loading settings from the database. Meanwhile update() commits and bumps the version. What happens to the slow reader's cache write?",
+      "choices": [
+        "It overwrites the new entry with older data",
+        "It is stored under the old version's key, which later calls no longer read",
+        "It raises an error because the version changed",
+        "It is dropped by Redis because the version key was incremented"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Why is `_invalidate` called after the `with` block, not inside it?",
+      "choices": [
+        "So a reader that repopulates the cache right after the invalidation cannot load pre-commit data",
+        "So the update works even if Redis is slow",
+        "Because incr cannot run in a transaction",
+        "So the lock on the row is held longer"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The Redis incr in _invalidate raises a connection error after the database commit. What does update() do?",
+      "choices": [
+        "Raises the error and the caller assumes the update failed",
+        "Rolls back the database change",
+        "Logs a warning and returns the updated settings; stale entries age out after the TTL",
+        "Retries the incr until it succeeds"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.caching.cache_invalidation",
+    "backend.caching.ttls_and_expiry",
+    "backend.caching.stale_reads",
+    "backend.data.transactions_and_isolation_levels"
+  ]
+}

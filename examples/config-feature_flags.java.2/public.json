@@ -1,0 +1,50 @@
+{
+  "id": "5da52571-496b-4648-82bb-ab2660c0ed25",
+  "title": "Device telemetry batch compression rollout",
+  "name": "Telemetry flag rollout",
+  "createdAt": "2026-11-19T23:09:24.534Z",
+  "durationMinutes": 13,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code decides which devices fall inside a percentage rollout? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "An operator saves the flag file with percent=abc for one flag. What does the running service do on the next reload tick?",
+      "choices": [
+        "It enables that flag for 0% of devices and applies all other rules from the file",
+        "It logs a warning and keeps applying the previously loaded rules for every flag",
+        "It stops the reload timer because the exception escapes the scheduled task",
+        "It skips only the bad flag and applies the new values of the other flags"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A flag has percent=100, models=\"\" and kill=true. What does isEnabled return for any device?",
+      "choices": [
+        "True, because 100 percent includes every device",
+        "True for devices whose model is listed, which is none, so all devices",
+        "False, because the kill check returns before the percentage is considered",
+        "It depends on whether the file has been reloaded since the flag was added"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "reloadIfChanged is synchronized, while isEnabled is not. What is the consequence for device ingest threads?",
+      "choices": [
+        "Ingest threads block whenever a reload is in progress",
+        "Two reloads can run at once and corrupt the rules map",
+        "isEnabled can observe a half-parsed rule set during a reload",
+        "Ingest threads read the current immutable map through a volatile field and never wait for a reload"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.feature_flags",
+    "backend.config.configuration_loading",
+    "backend.config.defaults_and_validation"
+  ]
+}

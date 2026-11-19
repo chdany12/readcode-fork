@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    2,
+    1
+  ],
+  "explanations": [
+    "There is none. Each outcome has a fitting status: 401 with WWW-Authenticate for missing credentials, 415 and 400 for wrong content type and malformed JSON, 422 for field validation, 429 with Retry-After, 201 with Location on creation, and 304 for a matching ETag. Returning 404 for posts the viewer is blocked from or not permitted to see is deliberate, since 403 would confirm the post exists; 403 is used only after the viewer is already allowed to see the post. DELETE is idempotent and returns 204 even if the post was already deleted by its author. Unexpected exceptions return a generic 500 without internal details.",
+    "_visible_post checks social.is_blocked before returning and raises the same 404 post_not_found used for a missing post, so a blocked viewer cannot tell whether the post exists. 403 would reveal existence, 410 is used only for deleted posts the viewer may otherwise see, and visibility 'public' does not override a block.",
+    "delete_post finds the post (soft-deleted posts are still returned by posts.get), confirms the viewer is the author, deletes only if it is not already deleted, and returns 204 either way. The author branch skips the visibility function entirely, so the 404, 410 and 403 paths are not taken, making the operation safe to retry.",
+    "The route computes the ETag from the current items and, when request.if_none_match contains it, returns an empty 304 with the ETag header set. 200 would be returned only when the tag differs, 204 is not used by this route, and 412 relates to If-Match style preconditions, not If-None-Match on GET."
+  ]
+}

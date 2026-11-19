@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "payroll/adjustments.py",
+        "startLine": 47,
+        "endLine": 47
+      }
+    },
+    1,
+    3,
+    0
+  ],
+  "explanations": [
+    "Yes. preview() iterates self._pending without holding self._lock, while add() inserts new employee keys (and appends to lists) under the lock from other threads. Iterating a dict while another thread adds a key can raise RuntimeError: dictionary changed size during iteration, and even when it does not, _net() can see a list mid-update. The dashboard endpoint would intermittently fail during busy periods. preview() must take the lock (or copy the data while holding it).",
+    "Under the lock the old dict is detached (self._pending now points to a fresh defaultdict) and _closed is set, so add() either finished before the swap or raises afterward. Only this thread references the detached dict. The GIL does not make iteration-while-mutating safe in general, purity of _net() is irrelevant if the input can change, and _closed does not stop reads.",
+    "Both methods use the same lock and the swap and the _closed flag change together inside it. An add() that wins the lock first lands in the dict that gets totaled; one that comes after sees _closed and raises. It does not wait for the totals, and adds that completed first are not rejected.",
+    "close_period() raises PeriodClosedError for whichever caller loses the race for the lock, and run() catches it and returns 0 before reaching any payout. Duplicate payment would need both calls to get adjustments, which the closed flag prevents; there is no splitting and no second payout."
+  ]
+}

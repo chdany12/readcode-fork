@@ -1,0 +1,51 @@
+{
+  "id": "55b91860-d120-4df6-a549-c644c90ee526",
+  "title": "Parallel group membership resolver",
+  "name": "Group membership resolver",
+  "createdAt": "2026-11-19T23:09:24.511Z",
+  "durationMinutes": 11,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code uses its thread pool and per-thread connections? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "`resolve_many` is called with 100 ids, of which only 40 are distinct, on a resolver with `max_workers=8`. What is true?",
+      "choices": [
+        "Up to 100 directory lookups run concurrently because each is submitted as a future",
+        "40 lookups are submitted; at most 8 run at once and the rest wait in the executor's queue",
+        "Duplicates are looked up again, but their results overwrite each other safely",
+        "At most 8 lookups are submitted; the others are rejected"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "How many directory connections can this resolver hold open at the same time?",
+      "choices": [
+        "Exactly one, shared and reused by all workers",
+        "One per `resolve_many` call",
+        "One per worker thread that has handled at least one lookup, so at most max_workers",
+        "One per principal id looked up"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The 3-second deadline passes while 2 lookups are still executing in worker threads. Which statement is correct?",
+      "choices": [
+        "Both threads are interrupted and the lookups stop immediately",
+        "`resolve_many` waits until both lookups finish, ignoring the deadline",
+        "The caller gets those two ids as failures at about the deadline, but the lookups may keep occupying their workers until they finish",
+        "The two ids are retried automatically on fresh threads"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.thread_and_worker_pools",
+    "backend.resilience.timeouts",
+    "backend.security.authorization_checks",
+    "backend.data.connection_pooling"
+  ]
+}

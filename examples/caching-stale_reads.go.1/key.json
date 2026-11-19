@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "scheduling/service.go",
+        "startLine": 67,
+        "endLine": 67
+      }
+    },
+    2,
+    1,
+    1
+  ],
+  "explanations": [
+    "On a cache miss, OpenSlots refills the cache from the read replica. Book() commits on the primary and then deletes the cache key, but the replica may not have applied that write yet. A request arriving right after the delete misses, reads pre-booking data from the lagging replica, and caches it for the full 2 minute TTL, so the slot just booked keeps appearing as open. The invalidation is only effective if the refill reads from a source that already reflects the write, for example the primary (as SlotsForConfirmation does) or a replica read that is known to be caught up.",
+    "Book returns the bare ErrSlotTaken from the errors.Is branch before reaching s.invalidate, so the cache is untouched (the winning booking already invalidated it). Choice 1 is wrong since invalidate is only reached on success; choice 2 is wrong because the sentinel is returned directly; choice 4 is wrong because Book never reads the cache.",
+    "OpenSlots logs the Get error and continues to the replica; the Set error is logged too. Book ignores the result of Delete (invalidate only logs). So reads and writes both keep working. Choice 1 and 3 assume cache errors are returned; choice 4 is wrong because the double-booking guard is the primary's BookSlot returning ErrSlotTaken, not the cache.",
+    "The cache is a read optimization with a TTL and best-effort invalidation; it cannot be authoritative for a decision that must be exclusive. The primary write is where the conflict is detected. Undecodable entries are handled gracefully (logged and ignored), the speed comparison is not the reason, and Duration marshals as an integer number of nanoseconds without problems."
+  ]
+}

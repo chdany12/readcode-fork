@@ -1,0 +1,51 @@
+{
+  "id": "d1519277-8e19-4e80-b0aa-61f462ef5521",
+  "title": "Cached home feed with TTL",
+  "name": "Home feed cache",
+  "createdAt": "2026-11-19T23:02:14.282Z",
+  "durationMinutes": 12,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code handles expired feed entries? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "What is the purpose of the random jitter added in put()?",
+      "choices": [
+        "It makes feeds slightly different for each user",
+        "It stops many entries written at about the same moment from expiring simultaneously and causing a burst of rebuilds",
+        "It ensures the TTL is never shorter than configured, which cannot otherwise be guaranteed",
+        "It compensates for clock drift between servers"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "An author with 2 million followers publishes a post. When do those followers see it in a feed that was cached before the post?",
+      "choices": [
+        "Immediately, because onPostPublished invalidates all followers",
+        "After their cached feed expires, since fan-out invalidation is skipped above the follower limit",
+        "Never, until they follow the author again",
+        "Only after the next deploy"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two threads call getFeed for the same user whose entry has just expired. What happens?",
+      "choices": [
+        "One thread blocks until the other finishes building the feed",
+        "Both build the feed and both put it; the last put wins and either result is a valid feed",
+        "An exception is thrown by ConcurrentHashMap",
+        "The feed is built once because put is atomic"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.caching.ttls_and_expiry",
+    "backend.resources.memory_leaks",
+    "backend.caching.stale_reads",
+    "backend.caching.cache_stampedes"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "flags.py",
+        "startLine": 45,
+        "endLine": 45
+      }
+    },
+    3,
+    0,
+    2
+  ],
+  "explanations": [
+    "The bucket uses Python's built-in hash() on a string. String hashing is randomized per process (PYTHONHASHSEED), so every dispatcher worker, and every restart, computes different buckets for the same rider. The same rider can get the old ranking from one worker and the new one from another, the percentage of exposed riders is only right on average, and a rollout cannot be reproduced when investigating a complaint. A stable hash such as sha256 or crc32 of the same string should be used.",
+    "load_rules defaults percent to 100 when it is missing, and is_on returns False for cities outside a non-empty cities set before it looks at percent. So all SEA riders match and riders elsewhere do not. A default of 0 or an unrestricted flag would need different code.",
+    "load_rules raises ValueError while building the dict, so it returns nothing and the caller never reaches swap, leaving the old rules in place. There is no clamping or per-rule skipping in the code, and the evaluator is not reset.",
+    "The first guard returns False when rule.kill is set, ahead of the city check and the percentage. Percent 100 would otherwise return True, but it is never reached, and the bucket is not computed."
+  ]
+}

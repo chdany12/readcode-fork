@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    0,
+    1
+  ],
+  "explanations": [
+    "There is no defect. Structural constraints are declared on the record, including cascading into each Traveler via List<@NotNull @Valid Traveler> elements, so null dates are rejected with 400 before BookingRules runs and the rules can safely dereference checkIn, checkOut and dateOfBirth. The cross-field and clock-dependent rules live in BookingRules: the night count is only computed when checkOut is after checkIn, Currency.getInstance is wrapped because it throws IllegalArgumentException for unknown codes, and today comes from an injected Clock so tests are deterministic.",
+    "@Valid on the request body runs bean validation before the controller body; @NotEmpty on travelers fails, so MethodArgumentNotValidException results in a 400 and rules.check is never invoked. The past-date message (A, D) only comes from BookingRules, which has not run. C is wrong because the controller rejects before calling service.reserve.",
+    "The !checkOut.isAfter(checkIn) branch adds the ordering message and the else branch, where nights are computed, is skipped. The negative value is never compared (B), DAYS.between handles negative spans without throwing (C), and the night-limit message is not produced (D). The separate too-far-in-future check may or may not also fire depending on today, but is unrelated to this ordering.",
+    "An injected Clock lets tests pin \"today\" and lets the deployment decide the zone. LocalDate.now() is thread-safe (A), bean validation has no such requirement (C), and reading the clock is cheap (D)."
+  ]
+}

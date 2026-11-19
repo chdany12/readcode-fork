@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    2,
+    1
+  ],
+  "explanations": [
+    "There is no defect. Prices are looked up server-side from the menu and never read from the request; unknown fields are rejected by extra=\"forbid\"; quantities and tips use strict ints so strings or floats are not coerced; the pattern fields are anchored with ^ and $; item and note sizes are bounded; the scheduled time must be timezone-aware before it is compared with an aware \"now\", avoiding a naive/aware TypeError; and the cross-field rules live in a model_validator so they run only after every field is individually valid. Duplicate item ids are rejected before the price lookup so a quantity cap cannot be bypassed by splitting a line.",
+    "The \"asap\" branch of check_schedule raises ValueError if scheduled_for is set; FastAPI turns the resulting validation error into a 422 before the route body (and thus the restaurant lookup) runs. It is not ignored (A), no 409 is involved (C), and the type is never switched (D).",
+    "The model has no uniqueness rule; the route checks len(set(ids)) != len(ids) after confirming the restaurant exists and is open, returning a 422. The per-line limit alone would allow it (A), merging never happens (D), and the model-level validators do not look for duplicates (B).",
+    "quantity is declared with strict=True, which disables the usual str-to-int coercion, so validation fails and FastAPI answers 422. Without strict mode A would be true. The JSON is well formed (C) and the lookup is never reached (D)."
+  ]
+}

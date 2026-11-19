@@ -1,0 +1,50 @@
+{
+  "id": "f8b33f14-43de-4be4-8b28-8dad47117d98",
+  "title": "Order reservations behind a rollout flag",
+  "name": "Order reservation migration",
+  "createdAt": "2026-11-19T23:09:24.537Z",
+  "durationMinutes": 14,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code switches between the two reservation implementations? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "reservation-v2 is configured with percent=20. How are customers assigned to the new reservation path?",
+      "choices": [
+        "Each create_order call independently has a 20% chance of using V2",
+        "The first 20% of orders after the flag is enabled use V2",
+        "A given customer is assigned deterministically by a hash of the flag key and customer ID, so new orders from them take the same path while the percentage is unchanged",
+        "Customers are assigned by order ID, so the same customer can alternate between paths"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A customer orders two lines, and the second SKU has too little stock under V2. What is the end state?",
+      "choices": [
+        "The order is saved as pending with only the first line reserved",
+        "The order is not saved and the first line's hold has been given back",
+        "The order is not saved but the first line's units stay unavailable until a cancel",
+        "The order is saved as cancelled with both holds released"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "An engineer renames the flag in the flag store to \"reservation_v2\" but not in this service. What do new orders do?",
+      "choices": [
+        "create_order raises because the flag does not exist",
+        "All customers get the V2 path because the lookup falls back to enabled",
+        "The service logs an error and retries the lookup",
+        "All new orders silently use V1"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.feature_flags",
+    "backend.errors.cleanup_on_error_paths",
+    "backend.distributed.cross_service_consistency"
+  ]
+}

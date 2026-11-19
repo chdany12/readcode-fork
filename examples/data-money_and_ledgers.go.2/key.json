@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "booking/split.go",
+        "startLine": 5,
+        "endLine": 9
+      }
+    },
+    1,
+    3,
+    0
+  ],
+  "explanations": [
+    "splitEven uses integer division and gives every share total/n, discarding the remainder. With a refundable amount of 10,001 cents across 3 travelers each gets 3,333 and 2 cents vanish. Because Refund computes the liability debit as the sum of what it pays out plus the fee, the journal still balances and Post accepts it, so nothing flags the loss: the leftover cents stay on the booking liability account forever and customers are refunded less than they are owed. The remainder has to be distributed (for example one extra cent to the first few shares) so the shares sum exactly to total.",
+    "fee = 10,001 * 1,500 / 10,000 in integer arithmetic = 15,001,500 / 10,000 = 1,500 (truncated). refundable = Total - fee = 8,501, so fee plus refundable always equals Total exactly. Money is an integer type, so fractional cents (last choice) cannot exist, and 1,501 would require rounding up.",
+    "The key is 'refund:' plus the booking ID, so every attempt for a booking targets the same journal; the ledger reports ErrDuplicate and Refund maps it to success. Refund never modifies the booking, so the status check passes again, and the retry builds an identical, balanced set of entries.",
+    "The explicit len check precedes splitEven, so the divide by zero in total / Money(n) is never reached and the ledger is untouched. The other outcomes would only occur if the guard were missing."
+  ]
+}

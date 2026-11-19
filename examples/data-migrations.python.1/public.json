@@ -1,0 +1,51 @@
+{
+  "id": "a519393c-4419-4766-a658-c6be2db1d3a6",
+  "title": "Migration runner for the e-commerce schema",
+  "name": "Schema migration runner",
+  "createdAt": "2026-11-19T23:09:24.543Z",
+  "durationMinutes": 10,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this runner keeps the schema and its migration history consistent, including when a process dies mid-run? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two instances boot simultaneously and both call upgrade(). Why can they not both run migration 2?",
+      "choices": [
+        "The primary key on schema_migrations.version rejects the second record, which aborts its migration.",
+        "Each migration is wrapped in BEGIN/COMMIT, and PostgreSQL serializes concurrent transactions touching the same table.",
+        "pg_advisory_lock blocks the second instance on the same session-level lock until the first has released it, and the applied set is read only after acquiring it.",
+        "The connection pool hands out a single connection at a time, so upgrade() calls never overlap."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "In migration 2, the UPDATE succeeds but SET NOT NULL fails because another process inserted an order with a NULL warehouse_id in between. What state does the database end up in for that migration's changes?",
+      "choices": [
+        "The warehouse_id column does not exist, as the statements ran in one transaction and were rolled back together.",
+        "The warehouse_id column exists with the backfilled values, but is still nullable.",
+        "The column exists and is NOT NULL, since the UPDATE already removed all NULLs.",
+        "The column exists, and the runner retries the failing statement until it succeeds."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The migration process is killed while the advisory lock is held, in the middle of a statement inside BEGIN. What can be said about the lock and the half-run statements?",
+      "choices": [
+        "The lock stays held until an operator calls pg_advisory_unlock, because the finally block never ran.",
+        "The statements are committed because the connection is in autocommit mode.",
+        "Nothing is rolled back; the server waits for the client to reconnect and continue the transaction.",
+        "The server releases the session-level lock when the connection closes and rolls back the open transaction, so other instances can proceed."
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.migrations",
+    "backend.data.transactions_and_isolation_levels",
+    "backend.concurrency.locking_and_lock_ordering",
+    "backend.errors.cleanup_on_error_paths"
+  ]
+}

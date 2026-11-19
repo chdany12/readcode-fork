@@ -1,0 +1,49 @@
+{
+  "id": "4862ca0a-abbf-4758-ae87-301ae69463ed",
+  "title": "Ad event schema upgrades",
+  "name": "Ad event normalizer",
+  "createdAt": "2026-11-19T23:02:14.269Z",
+  "durationMinutes": 12,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code validates and upgrades events of different schema versions? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A raw event `{\"campaign\": \"c9\", \"cost\": 0.29, \"ts\": 1700000000}` (no schema_version) goes through upgrade(). What is returned?",
+      "choices": [
+        "An event with schema_version 1 unchanged, because no version was given",
+        "An event with campaign_id \"c9\", cost_micros 289999, and no currency",
+        "An event with campaign_id \"c9\", cost_micros 290000, currency \"USD\", schema_version 3",
+        "An InvalidEvent, because v1 events are no longer accepted"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The upgraders are chained one version at a time instead of having a direct function from every old version to the current one. What is the main consequence for maintainers?",
+      "choices": [
+        "Introducing version 4 needs one new upgrader and one new requirements entry, and all older events flow through it",
+        "Events must be upgraded in the order they arrived within a batch",
+        "Each event is upgraded in place, so the caller's original dictionary changes",
+        "Version 1 events can no longer be validated once version 3 exists"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A batch contains nine valid v3 events and one v3 event without a `currency` field. What does ingest_batch do?",
+      "choices": [
+        "Raises InvalidEvent and aggregates nothing",
+        "Aggregates the nine valid events, and records the invalid one with its raw payload and reason in rejections",
+        "Aggregates all ten, treating the missing currency as USD",
+        "Aggregates nothing and records all ten as rejected"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.versioning",
+    "backend.api.request_validation"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "com/quickplate/dispatch/DispatchBoard.java",
+        "startLine": 53,
+        "endLine": 54
+      }
+    },
+    1,
+    3,
+    2
+  ],
+  "explanations": [
+    "assign() calls lock.lock() and then unlocks manually on each return path, with no try/finally around the work in between. An Order built with null coordinates (the record uses boxed Double) makes the unboxing in distanceKm(order.lat(), ...) throw a NullPointerException while the lock is held. The exception skips every unlock() call, the ReentrantLock stays held by that thread forever, and every other caller of submit, driverAvailable and assign blocks indefinitely (stats() merely times out). The DispatchWorker catches the RuntimeException and keeps going, which hides the problem. The body should run in try { ... } finally { lock.unlock(); }, as the other methods do.",
+    "The loop is O(n) inside the critical section, so submit(), driverAvailable() and other assigns all queue behind it; larger driver pools mean longer waits for everyone. Workers share one map and one lock, HashMap is not thread-safe (it is safe here only because the lock is held), and values() is a live view rather than a snapshot.",
+    "Map.put replaces the value for an existing key, and nothing checks for duplicates, so the second submit wins and the first disappears. A Map cannot hold two entries under one key, put does not throw, and put does not keep the old value (putIfAbsent would).",
+    "tryLock(50, MILLISECONDS) gives up after the timeout and returns false, in which case the method returns Optional.empty() immediately. It does not block indefinitely, does not bypass the lock, and has no way to interrupt the holder."
+  ]
+}

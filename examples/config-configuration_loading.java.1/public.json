@@ -1,0 +1,51 @@
+{
+  "id": "71a26309-4e57-4950-a877-f793ee1423e9",
+  "title": "Event pipeline configuration loader",
+  "name": "Pipeline settings loader",
+  "createdAt": "2026-11-19T23:09:24.516Z",
+  "durationMinutes": 11,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code parses and validates the settings it loads? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Which setting can be overridden through an `ADS_PIPELINE_...` environment variable?",
+      "choices": [
+        "Any variable named with the prefix, even for settings that appear in neither properties source",
+        "Only settings that are present in defaults.properties or the overrides file",
+        "Only settings in the overrides file, since defaults are fixed",
+        "Only the integer settings, because strings are not trimmed"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "An operator passes an overrides path with a typo, so the file does not exist, and sets no environment variables. What happens at startup?",
+      "choices": [
+        "IOException is thrown for the missing file",
+        "The service starts using only the packaged defaults",
+        "IllegalStateException is thrown because defaults.properties is missing",
+        "The service starts with all settings unset"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "An override file sets `flush.interval.ms=50`. What does `load` do?",
+      "choices": [
+        "Clamps the value to 100 and continues",
+        "Accepts it, since the value is a valid integer",
+        "Throws IllegalArgumentException describing the allowed range",
+        "Falls back to the default from defaults.properties and logs a warning"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.configuration_loading",
+    "backend.config.defaults_and_validation",
+    "backend.config.environment_specific_behaviour",
+    "backend.messaging.deduplication"
+  ]
+}

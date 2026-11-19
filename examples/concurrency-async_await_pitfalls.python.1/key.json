@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    1,
+    3,
+    0
+  ],
+  "explanations": [
+    "There is no defect. The lock dictionary is populated without an await between the lookup and the assignment, so on a single event loop it cannot interleave. The slot check and insert happen together under the per-provider lock, while the eligibility check, which does not depend on the slot, is correctly outside it. Background notification tasks are kept in a set so they are not garbage collected, and their failures are logged. The blocking SMTP client is moved to a thread with asyncio.to_thread, and the SMS call has a timeout.",
+    "Tasks on one event loop switch only at await points. _lock_for is a plain synchronous function, so the get and the set run without interruption. The dict has no internal locking that matters here (first choice is wrong), Lock instances are not singletons (third), and _lock_for is called after the semaphore block has exited, not inside it (fourth).",
+    "_spawn schedules the coroutine without awaiting it, so book() returns independently. The task is held in self._background, so it is not collected, and _on_background_done retrieves and logs the exception. The insert was committed inside the lock block earlier and nothing undoes it. The first choice is wrong because the task is never awaited in book(); the second because of the strong reference; the third because the lock block finished normally.",
+    "The provider lock serializes the is_taken check plus insert, so the second and third requests see the first one's insert and raise SlotTaken. gather uses return_exceptions=True, so those exceptions are collected and book_many partitions them into failed. All three booked would require the check and insert to be unprotected; with return_exceptions there is no cancellation of siblings; and there is no deadlock, since the semaphore is released before the lock is taken."
+  ]
+}

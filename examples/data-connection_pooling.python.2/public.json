@@ -1,0 +1,50 @@
+{
+  "id": "29f207e5-38c7-42fe-9adf-96ecdefb52c7",
+  "title": "Login accounts over a shared connection pool",
+  "name": "Account login repository",
+  "createdAt": "2026-11-19T23:09:24.541Z",
+  "durationMinutes": 13,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code borrows and returns database connections? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Inside `with db.connection() as conn:` a statement raises an exception. What state is the connection left in?",
+      "choices": [
+        "Committed, then returned to the pool",
+        "Rolled back and returned to the pool, and the exception propagates to the caller",
+        "Closed and discarded, shrinking the pool by one",
+        "Left checked out until the garbage collector reclaims it"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The pool is created with maxconn=10 and a burst of 50 simultaneous logins arrives, each query taking about 200 ms. What do the logins that cannot get a connection experience?",
+      "choices": [
+        "They wait in the pool's queue until one of the 10 connections is free",
+        "They are given extra connections up to the database's own limit",
+        "They fail immediately with ServiceUnavailable",
+        "They retry automatically after the connect timeout of 3 seconds"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "ping() borrows a connection through the pool and is used as a readiness probe. What is the consequence during heavy load?",
+      "choices": [
+        "The probe has its own reserved connection, so it always reports the database state accurately",
+        "The probe can fail with the pool saturated even though the database is healthy, so the instance might be marked unready",
+        "The probe waits for a free connection, slowing it but never failing",
+        "The probe forces a new connection, adding load to the database"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.connection_pooling",
+    "backend.errors.cleanup_on_error_paths",
+    "backend.observability.health_checks"
+  ]
+}

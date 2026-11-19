@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "payouts.py",
+        "startLine": 23,
+        "endLine": 23
+      }
+    },
+    0,
+    3,
+    1
+  ],
+  "explanations": [
+    "The defect is the inclusive lower bound `created_at >= ?`. Each payout covers the window [period_start, cutoff], and the next payout starts at period_start = the previous cutoff, so the window edges overlap. created_at has one-second resolution, and a trip settled in exactly the second equal to a previous cutoff is counted in both payouts: the driver is paid for it twice and payouts_clearing absorbs the extra money. The lower bound should be exclusive (`>`) so each window is (period_start, cutoff]. Everything else is sound: amounts are integer cents, the fee rounding assigns the remainder to the driver so the three settlement entries sum to zero, and duplicate settlements are rejected by the primary key on settlement.",
+    "Correct: 1001 * 0.25 = 250.25, which quantizes to 250 with ROUND_HALF_UP, and the driver share is computed as fare - fee, so it absorbs the remainder (751). The rider charge of -1001 then offsets 250 + 751 exactly. Choice 2 would need rounding up; 250.25 does not round up. Choice 3 is wrong because the driver share is a subtraction, not an independent rounding. Choice 4 is wrong because the value is converted to int before use.",
+    "Correct: settlement.trip_id is the unique key, so the INSERT raises IntegrityError inside the with-block, which rolls back before the entries are inserted; the except clause converts that to False. Choice 1 is wrong because no second set of entries is committed. Choice 2 is wrong because the exception is caught. Choice 3 is wrong because there is no upsert; the transaction is rolled back instead.",
+    "Correct: total < MIN_PAYOUT_CENTS returns None before any insert, so MAX(period_end) is unchanged and the next run's window starts from the same period_start and picks up these earnings plus new ones. Choice 1 ignores the 2,000 minimum. Choice 3 is wrong because period_end is only recorded by the payout insert. Choice 4 is wrong because no row is written on that path."
+  ]
+}

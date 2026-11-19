@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "SurgeQuoteService.java",
+        "startLine": 48,
+        "endLine": 49
+      }
+    },
+    2,
+    3,
+    2
+  ],
+  "explanations": [
+    "updateSurge invalidates the key inside the transaction, before it commits. A concurrent quoteFor between the invalidation and the commit misses, reads the old row from the database (the new value is not visible yet), and caches it; after the commit the cache keeps the old multiplier until expireAfterWrite (5 minutes). resetZones does it right by invalidating after the transaction returns. The invalidation should run after commit.",
+    "loadQuote maps an empty Optional to a default SurgeQuote with DEFAULT_MULTIPLIER (1) and Instant.EPOCH, and the cache stores it like any other value, so a later upsert must invalidate it to take effect. The other choices do not match orElseGet.",
+    "The invalidateAll call comes after inTransaction returns; if the transaction throws, the exception propagates and invalidateAll is not reached. It takes the whole collection, so every zone is removed. Entries are not removed beforehand.",
+    "The builder uses expireAfterWrite(5 minutes), which counts from when the entry was written regardless of reads. maximumSize only evicts when the cache is full (and not by age), and expireAfterAccess is not configured."
+  ]
+}

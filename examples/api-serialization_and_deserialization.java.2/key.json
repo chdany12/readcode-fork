@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/main/java/com/shopfront/orders/web/OrderResponse.java",
+        "startLine": 15,
+        "endLine": 15
+      }
+    },
+    1,
+    3,
+    3
+  ],
+  "explanations": [
+    "OrderResponse.from computes the order total with doubleValue() on each BigDecimal unit price and sums as double. Binary floating point cannot represent most decimal prices exactly, so for example three lines at 0.10 produce 0.30000000000000004 in the JSON, and large or many-line orders drift further. The line prices are kept as BigDecimal and serialized exactly, so the response can disagree with its own lines. The total should be accumulated with BigDecimal (multiply by BigDecimal.valueOf(quantity), then add) and serialized as BigDecimal.",
+    "JsonConfig enables FAIL_ON_UNKNOWN_PROPERTIES, so readValue throws an UnrecognizedPropertyException, a subclass of JsonProcessingException, which placeOrder maps to 400 malformed_body. The field is not ignored; ignoring would require the feature to be disabled. The 422 path only runs after parsing succeeds and the per-line checks fail. 500 is only used when writing the response fails.",
+    "ACCEPT_FLOAT_AS_INT is disabled, so Jackson refuses to coerce the floating-point token into the int field and throws a MismatchedInputException (a JsonProcessingException), giving 400 malformed_body. Truncation would be Jackson's default behavior but it was turned off, and no rounding exists. The invalid_line check only sees the already-parsed int, so it is never reached.",
+    "JavaTimeModule is registered and WRITE_DATES_AS_TIMESTAMPS is disabled, so Instant is written as an ISO-8601 UTC string. The numeric epoch forms and the array form are what Jackson produces only when that feature is enabled (the array form is for LocalDateTime-style types with timestamps on)."
+  ]
+}

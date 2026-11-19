@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "inventory_service.py",
+        "startLine": 67,
+        "endLine": 67
+      }
+    },
+    1,
+    2,
+    1
+  ],
+  "explanations": [
+    "In reserve(), the cache entry is deleted inside the open transaction, before it commits. Between the delete and the commit, a concurrent get_stock() misses, reads the still-uncommitted-and-therefore-old row from the database, and puts that old snapshot into the cache with a fresh 300 second TTL. The transaction then commits, and the cache holds pre-reservation availability that nothing will invalidate again, so other orders see inventory that is already reserved. release() and receive_shipment() do it correctly by invalidating after the with block has committed; reserve() should collect the lines and invalidate after the transaction exits.",
+    "StockCache.get catches ConnectionError, logs and returns None, so get_stock falls through to the database query. StockCache.put also catches ConnectionError and only logs. So the read succeeds (choice 2). Choice 1 is wrong because get does not re-raise; choice 3 is wrong because put swallows the error; choice 4 is wrong because StockNotFound is raised only when the database row is None.",
+    "invalidate() does not catch exceptions, and the loop runs after the with block, so the commit has already happened. The error propagates to the caller although the database changed, and entries not yet deleted stay in the cache until the 300 second TTL ends. Choice 1 is wrong since the transaction is already closed; choice 2 is wrong because invalidate has no try/except; choice 4 is wrong because the loop stops at the first exception.",
+    "StockNotFound is raised before self._cache.put, so unknown SKUs are never cached and each request goes to the database. That means a flood of lookups for bad SKUs is not absorbed by the cache. The other choices assume negative caching or a previous snapshot, which this code never creates."
+  ]
+}

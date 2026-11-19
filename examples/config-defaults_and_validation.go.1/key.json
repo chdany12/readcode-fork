@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "config.go",
+        "startLine": 101,
+        "endLine": 101
+      }
+    },
+    2,
+    2,
+    1
+  ],
+  "explanations": [
+    "Validate rejects a negative search timeout but accepts zero. Because values are only defaulted when the variable is absent (os.LookupEnv), BOOKING_SEARCH_TIMEOUT=0s is parsed successfully, passes validation, and reaches http.Client{Timeout: cfg.SearchTimeout}, where a zero Timeout means no timeout at all. A slow inventory service can then hold search requests, and their goroutines, open indefinitely. The check should be <= 0, matching the error message and the other range checks.",
+    "Load collects every parse error in errs and still runs Validate. The Atoi failure is wrapped and recorded; the passenger field keeps its default of 9, but the 30s hold TTL is below one minute so Validate adds a second error. errors.Join returns both. Parsing does not stop at the first failure, failures do not fall back silently, and the passenger error is not dropped.",
+    "envString uses os.LookupEnv, which reports ok=true for a variable that is set to an empty string, so the empty value overwrites the default. url.Parse(\"\") succeeds with an empty Host, so Validate records the 'not an absolute url' error, Load returns it, and main calls log.Fatalf. The default is not restored, startup does not continue, and url.Parse does not panic.",
+    "Validate only checks that the code is three bytes long. There is no upper-casing or ISO lookup, so 'usd' passes and handleSearch forwards it verbatim as the currency query parameter. Nothing rejects, normalizes or falls back."
+  ]
+}

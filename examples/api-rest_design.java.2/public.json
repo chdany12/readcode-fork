@@ -1,0 +1,51 @@
+{
+  "id": "aa907b77-3d9d-448f-8c54-672ba3388025",
+  "title": "Search index management REST controller",
+  "name": "Search index API",
+  "createdAt": "2026-11-19T23:02:14.245Z",
+  "durationMinutes": 9,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this controller maps its operations onto HTTP methods and resources? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends the same PUT /v1/indexes/products/documents/42 request with an identical JSON body twice in a row, and document 42 did not exist before. What do the two responses look like?",
+      "choices": [
+        "201 Created both times, each with a Location header, because every PUT is treated as a creation",
+        "201 Created with a Location header the first time, then 204 No Content the second time, with the index in the same final state",
+        "204 No Content both times, because PUT never creates resources",
+        "201 Created the first time, then 409 Conflict the second time because the id already exists"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client calls GET /v1/indexes/products/search?q=shoes&page=-3&size=500. What does the controller do?",
+      "choices": [
+        "It returns 400 Bad Request because size exceeds the maximum",
+        "It returns 200 with the first page of 100 results; the response reports the page and size actually used",
+        "It returns 200 with page -3 and size 500 passed through to the service unchanged",
+        "It returns 422 because page is negative"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two clients call POST /v1/indexes with {\"name\":\"orders\",\"shards\":4}. The service throws IndexExists for the second one. What does the second client see?",
+      "choices": [
+        "201 Created with the existing index in the body, since creation is treated as idempotent",
+        "500 Internal Server Error, because the exception is not caught in the handler method",
+        "409 Conflict with a problem-details body describing the duplicate name",
+        "400 Bad Request because bean validation rejects names that are already taken"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.rest_design",
+    "backend.api.status_codes_and_error_responses",
+    "backend.api.idempotency",
+    "backend.api.request_validation"
+  ]
+}

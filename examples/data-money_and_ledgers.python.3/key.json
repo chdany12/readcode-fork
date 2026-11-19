@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "money.py",
+        "startLine": 6,
+        "endLine": 6
+      }
+    },
+    2,
+    0,
+    3
+  ],
+  "explanations": [
+    "The defect is the floor division in allocate(). Each share is computed as total_cents * w // total_weight, and the remainder is never handed out. For a 100-cent refund over lines of 333, 333 and 334 cents, every share is 33, so the shares sum to 99. refund_order then credits cash_clearing with sum(shares), so the ledger is internally balanced and the LedgerImbalance check never fires. But the gateway was asked to refund 100 and orders.refunded_cents grows by 100, so the ledger records one cent less revenue reversal than actually left the business. The error is a few cents per refund and is invisible to the balance check; it only shows up in reconciliation against the payment processor. The fix is to distribute the leftover cents (largest remainder) so the shares always sum to total_cents.",
+    "Correct: the ref is derived from order_id and request_id, and the ledger.exists(ref) check runs before the capture check, the gateway call and any write, so a completed request returns early. Choice 1 is wrong because we never reach the gateway. Choice 2 would be true if the capture check ran first, but it runs after the early return. Choice 4 is wrong because the early return happens before the UPDATE, so refunded_cents is not touched.",
+    "Correct: ledger.exists(ref) is false because nothing was committed, so the flow runs again; the gateway receives the same idempotency_key=ref and (being idempotent on that key) returns the original refund rather than creating a new one, and the with-block then commits the ledger entries and the refunded_cents update. Choice 2 and 3 misread how the idempotency key is used. Choice 4 is wrong: early return depends only on the ledger row, which does not exist yet.",
+    "Correct: both writes share one database transaction, and an exception (including the rowcount check or an IntegrityError on a duplicate ref) rolls both back. Choice 1 is wrong: the ref is per request, so different requests do not conflict on it. Choice 2 is wrong: the gateway call happened outside the transaction and cannot be rolled back by it. Choice 3 is wrong: nothing commits until the with-block exits."
+  ]
+}

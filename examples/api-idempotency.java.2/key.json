@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "com/acme/search/ingest/IngestService.java",
+        "startLine": 39,
+        "endLine": 39
+      }
+    },
+    2,
+    1,
+    0
+  ],
+  "explanations": [
+    "The request is recorded as processed only after both index writes complete, and the record is not written atomically with them. If appendTags (or the process) fails after upsert, no processed marker exists, so the client retries and the upsert and tag append run again, appending the tags a second time (appendTags is not idempotent). Likewise a crash between appendTags and markProcessed re-applies everything. The marker must be recorded atomically with the effects, or the effects must themselves be idempotent (set rather than append).",
+    "validate passes, versionFor finds the recorded version, and handle returns it without calling the index. The body is never compared, so the different fields are silently dropped. No exception is thrown, and the version is the recorded one, not looked up fresh.",
+    "versionFor and markProcessed both take tenant and requestId, so lookups are per tenant. Validation only checks for null or blank values, and docId is not part of the lookup.",
+    "The guard !req.tags().isEmpty() skips appendTags, so only upsert runs. An empty list is not rejected by validate, and upsert is always called on a first-time request."
+  ]
+}

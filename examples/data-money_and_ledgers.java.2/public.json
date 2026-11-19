@@ -1,0 +1,51 @@
+{
+  "id": "3c1b5fad-0198-4462-b5c1-3fce748d28e1",
+  "title": "Billing for no-show fees and deposit application in appointment scheduling",
+  "name": "Appointment billing postings",
+  "createdAt": "2026-11-19T23:09:24.549Z",
+  "durationMinutes": 10,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code records money movements in the ledger? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two workers call chargeNoShowFee for the same no-show appointment at the same time. What is the outcome?",
+      "choices": [
+        "Both post the fee, since the status check happens before the transaction.",
+        "Both fail with IllegalStateException because the status is checked twice.",
+        "The fee is posted once: markNoShowFeeCharged returns true for only one transaction (assuming it is a conditional update), and the other returns from the lambda without posting.",
+        "Math.multiplyExact serializes the calls, so only the first computes a fee."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A visit has a price of 2,501 cents and the no-show fee is 2,000 basis points. What fee is posted?",
+      "choices": [
+        "501 cents",
+        "500 cents",
+        "500.2 cents",
+        "5,002 cents"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Inside chargeNoShowFee's transaction, the second Entry cannot be written because the database rejects it. What is the state of the ledger and the fee flag afterwards?",
+      "choices": [
+        "The receivable entry is stored, the revenue entry is missing, and the flag is set.",
+        "The receivable entry is stored and the flag is not set.",
+        "The flag is set and no entries are stored.",
+        "Neither entry is stored and the flag is unchanged, assuming TransactionRunner rolls back when the body throws."
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.money_and_ledgers",
+    "backend.data.transactions_and_isolation_levels",
+    "backend.concurrency.race_conditions",
+    "backend.errors.cleanup_on_error_paths"
+  ]
+}

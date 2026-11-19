@@ -1,0 +1,50 @@
+{
+  "id": "48ae7d95-57e8-4b4a-a849-a5818003e5e0",
+  "title": "Food order intake serialization",
+  "name": "Food order intake",
+  "createdAt": "2026-11-19T23:02:14.259Z",
+  "durationMinutes": 11,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code serializes or deserializes order data? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client sends {\"tip\": 2.50} as a JSON number with a valid customer and items. What happens to the tip?",
+      "choices": [
+        "It is parsed as a binary float and could be stored as 2.5 with rounding error",
+        "The request is rejected because tip must be a string",
+        "It is accepted as the exact Decimal 2.50 and returned as \"2.50\"",
+        "It is accepted but silently rounded to a whole number"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The body contains the bare token NaN as the value of unit_price. What is the result?",
+      "choices": [
+        "400 with error invalid_json",
+        "400 with error unit_price_invalid",
+        "201, with the price stored as NaN",
+        "An unhandled exception and a 500"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "An item has \"qty\": 2.0. How is it handled?",
+      "choices": [
+        "Accepted as 2, since 2.0 is numerically an integer",
+        "Accepted and the quantity is rounded up",
+        "Rejected with 400 qty_invalid because parse_float produced a Decimal, not an int",
+        "Rejected with 400 invalid_json because floats are not allowed anywhere"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.serialization_and_deserialization",
+    "backend.api.request_validation",
+    "backend.data.money_and_ledgers"
+  ]
+}

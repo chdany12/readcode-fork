@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/main/java/com/cloudlocker/sync/StorageExceptionHandler.java",
+        "startLine": 49,
+        "endLine": 50
+      }
+    },
+    3,
+    1,
+    2
+  ],
+  "explanations": [
+    "A storage quota is a persistent account state, not a request rate, yet QuotaExceededException is returned as 429 Too Many Requests with Retry-After: 3600. Sync clients and HTTP libraries treat 429 as transient and retry the same upload after the delay, so a full account keeps re-sending large files (each retry re-streaming up to gigabytes) without the user learning the account is full. A non-retryable status such as 507 Insufficient Storage or 403 with a quota_exceeded code, and no Retry-After, tells the client to stop and surface the problem.",
+    "upload throws PreconditionRequiredException when ifMatch is null, and the advice maps it to 428 Precondition Required, which signals that the request must be conditional. 400 is used only for IllegalArgumentException (for example an unparsable header). 412 is for a supplied If-Match that does not match, and no 409 mapping exists in this handler.",
+    "StaleVersionException is mapped to 412 Precondition Failed, the status for a failed If-Match, and the handler puts the store's current version into details so the client can fetch and merge. It is not a 409 here and not silently overwritten, and the handler does cover this exception, so it is not a 500.",
+    "parseRange parses start=1000 and sees start >= size, so it throws InvalidRangeException(size). The advice maps it to 416 Range Not Satisfiable and sets Content-Range to bytes */1000 to tell the client the real length. The range is syntactically valid, so it is not a 400, and the code never falls back to returning the whole file."
+  ]
+}

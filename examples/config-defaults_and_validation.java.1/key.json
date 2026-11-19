@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "com/example/streaming/ConfigLoader.java",
+        "startLine": 23,
+        "endLine": 23
+      }
+    },
+    3,
+    0,
+    2
+  ],
+  "explanations": [
+    "The start-versus-max comparison only runs when both properties are explicitly set. Defaults are applied afterwards, so the effective values are never compared. With stream.maxBitrateKbps=1000 and no start bitrate, the start bitrate defaults to 1500 and the loader returns a config whose start bitrate exceeds its maximum, and PlaybackPlanner then hands out initial bitrates above the cap. The comparison should use startBitrate and maxBitrate after defaults are resolved.",
+    "optionalInt returns null for a null or blank value, so the start bitrate falls back to DEFAULT_START_BITRATE_KBPS (1500). Blank is not passed to Integer.valueOf (so no NumberFormatException or ConfigException), it never becomes 0, and nothing derives it from the maximum.",
+    "The default is only used when the property is absent (getProperty with a default does not consider whitespace). The string is split, trimmed, and the empty entries are filtered out, leaving an empty list, which parseRegions rejects with a ConfigException. Empty strings are not retained, the default does not apply, and an empty list never reaches the record.",
+    "usable = 400 * 0.8 = 320, and min(320, 8000) = 320. The result is then raised to at least half the start bitrate: max(1500 / 2, 320) = 750. The start bitrate is only returned when the measurement is zero or negative, and the measured value is never returned unchanged."
+  ]
+}

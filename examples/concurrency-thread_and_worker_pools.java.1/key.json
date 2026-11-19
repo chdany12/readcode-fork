@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/main/java/com/pingly/notify/NotificationDispatcher.java",
+        "startLine": 46,
+        "endLine": 46
+      }
+    },
+    3,
+    0,
+    1
+  ],
+  "explanations": [
+    "The defect is the line that submits each per-device push to `workers`, the same fixed-size pool that is already running `deliverCampaign`. Each campaign occupies one worker while it blocks in `result.get(...)` waiting for pushes that are queued behind it. With poolSize campaigns in flight (for example 4 campaigns on a pool of 4), every worker is a blocked parent and no thread is free to run any push. The pushes sit in the queue until each `get` times out after 5 seconds, so every device is counted as failed even though the gateway was never called. The fix is to use a separate pool for the leaf pushes (or avoid blocking a pool thread on work from the same pool).",
+    "An unbounded queue never fills, so ThreadPoolExecutor never rejects (ruling out the first choice), never needs to create threads beyond the core size because core equals max anyway (second choice), and never invokes a rejection policy such as caller-runs (third choice). Work simply accumulates in the queue, which `backlog()` exposes.",
+    "The push runs inside a FutureTask, which captures the exception. `result.get` rethrows it as ExecutionException, which the loop catches and counts as a failure. The worker thread is unaffected, the campaign loop continues, and the audit record is still written. The other choices assume the exception escapes the task or the loop.",
+    "Future.get with a timeout only stops the caller from waiting; it does not cancel or interrupt the task. A push that was queued or in flight can still be delivered later, so a device counted as failed may still receive the message. Nothing in the code cancels the future, interrupts a thread or retries the wait."
+  ]
+}

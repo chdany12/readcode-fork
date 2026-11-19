@@ -1,0 +1,16 @@
+{
+  "answers": [
+    {
+      "defect": null
+    },
+    2,
+    1,
+    2
+  ],
+  "explanations": [
+    "There is no defect. PUT is idempotent and uses conditional requests: creation returns 201 with a Location that matches the real route and an ETag; replacement requires If-Match (428 if absent, 412 on mismatch), which prevents lost updates; If-None-Match: * gives create-only semantics. The precondition check and the write happen inside ConcurrentHashMap.compute, so two racing uploads cannot both pass the check. DELETE returns 204 whether or not the file existed, which keeps retries safe, and conditional GET returns 304 with the ETag. The listing clamps the client-supplied limit and uses a name-based cursor fetched with limit+1 to know whether another page exists.",
+    "In write(), an existing entry with ifMatch == null and createOnly false throws PreconditionRequired, which the controller advice maps to 428; compute leaves the entry unchanged when the function throws. Overwriting silently (A) would allow lost updates, 201 is only for creation (B), and 412 is reserved for a supplied-but-stale condition (D).",
+    "The If-Match comparison and the replacement occur within the same compute call for the key, which is atomic per key, so the second caller sees the new ETag and gets PreconditionFailed (412). Without atomicity A could happen; 428 applies to a missing header (C), and this API does not use 409 (D).",
+    "download() compares the stored ETag with the If-None-Match header and returns 304 with the ETag and no body when they match, letting caches revalidate cheaply. If-None-Match is honoured on GET (A), is not a version selector (B), and the 304 has no content rather than a 200 with an empty body (D)."
+  ]
+}

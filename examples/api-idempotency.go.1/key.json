@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "orders/handler.go",
+        "startLine": 46,
+        "endLine": 47
+      }
+    },
+    1,
+    3,
+    0
+  ],
+  "explanations": [
+    "The lookup (Get) and the later save (Put) are separate steps; no record is reserved before inventory is reserved and the order inserted. Two concurrent requests with the same Idempotency-Key can both miss in Get, both reserve stock and both insert an order, and the second Put overwrites the first. The KeyStore mutex only protects each individual call, not the check-then-act sequence. The key must be claimed atomically (for example an in-progress record inserted under one lock) before side effects run.",
+    "Get finds the record (within the TTL) and the handler writes the saved status and body with the replay header, returning before Reserve or Insert run. A 409 is only produced by a failed Reserve. A new order is not created on replay. The body is decoded once per request, so no 400 arises.",
+    "The store key is customerID + \":\" + key, so the two keys differ and each customer has an independent record. Nothing is rejected, and no cross-customer replay occurs. The overwrite option is wrong because the records are under different map keys.",
+    "Failure responses on the Reserve and Insert paths return before Put, so nothing is stored for that key. The retry misses in Get and runs the full flow again. No locking or failed-attempt marker exists in this code."
+  ]
+}

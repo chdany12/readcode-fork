@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "adsapi/handler.go",
+        "startLine": 54,
+        "endLine": 54
+      }
+    },
+    0,
+    2,
+    1
+  ],
+  "explanations": [
+    "The default branch of statusFor reports every unrecognised error as 400 Bad Request and echoes err.Error() to the caller. Store failures such as a lost database connection or an unexpected internal error are server-side faults, so they should be 500 (or 503 when retryable) with a generic message. As written, ingestion clients treat outages as their own mistake and do not retry, server-side alerting keyed on 5xx never fires, and internal error text leaks to callers.",
+    "statusFor uses errors.Is, which walks the whole %w chain (the store's wrap and the handler's own wrap), so it matches ErrCampaignPaused and returns 409 campaign_paused. Comparing with == would have failed on wrapped errors, but that is not what the code does. 404 is reserved for ErrCampaignNotFound.",
+    "MaxBytesReader caps the body at 1 MiB and makes Decode fail with a *http.MaxBytesError once the limit is crossed. The handler checks for that type with errors.As before falling back to the generic malformed_json response, so the answer is 413. It is not truncated and accepted, and the validation step is never reached.",
+    "The handler validates every impression in a loop before calling the store, and the first failing element returns a ValidationError, which statusFor maps to 422. The store is never called, so there is no partial write. malformed_json applies only to decode failures, and the JSON here is well formed."
+  ]
+}

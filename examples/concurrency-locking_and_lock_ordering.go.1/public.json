@@ -1,0 +1,50 @@
+{
+  "id": "38290a6f-8745-4421-b0f7-c0c7ff8af52e",
+  "title": "CI job scheduler with runner heartbeats",
+  "name": "Build runner scheduler",
+  "createdAt": "2026-11-19T23:09:24.489Z",
+  "durationMinutes": 13,
+  "language": "Go",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code acquires the job and runner mutexes across its operations? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A job is cancelled after Next() pops it from the queue but before Assign() is called for it. What happens when Assign runs?",
+      "choices": [
+        "The job is started on the runner anyway, since the queue no longer contains the cancellation.",
+        "Assign returns ErrNotPending and the runner stays idle, because the state check happens under both locks.",
+        "Assign blocks until the job is re-enqueued.",
+        "Assign marks the runner busy and the job is Canceled, leaving the runner stuck."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "reapOne() checks the runner's last heartbeat after taking r.mu, even though ReapStale could have checked it earlier. Why does that matter?",
+      "choices": [
+        "It avoids requeueing a job from a runner that sent a heartbeat between the snapshot and the moment the runner lock was acquired.",
+        "It lets ReapStale skip taking the registry lock.",
+        "It makes reaping atomic with respect to Enqueue.",
+        "It prevents two ReapStale calls from ever running concurrently."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "ReapStale calls s.Enqueue(j) after reapOne returns rather than inside reapOne. What is the effect of that structure?",
+      "choices": [
+        "The job can be lost if the process stops between the two calls.",
+        "Enqueue can run concurrently with Assign for the same job without any ordering.",
+        "The queue lock is never held while a runner or job lock is held, so qmu cannot take part in a lock cycle with them.",
+        "Enqueue is guaranteed to happen before any Heartbeat for that runner."
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.locking_and_lock_ordering",
+    "backend.concurrency.deadlocks",
+    "backend.concurrency.race_conditions"
+  ]
+}

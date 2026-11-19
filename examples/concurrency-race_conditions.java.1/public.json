@@ -1,0 +1,50 @@
+{
+  "id": "aeeedaf8-9e8f-458b-b4c4-f3d41a4b134d",
+  "title": "Build trigger coordinator",
+  "name": "Build trigger coordinator",
+  "createdAt": "2026-11-19T23:09:24.498Z",
+  "durationMinutes": 12,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code ensures a commit is built only once at a time? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "In execute(), the finally block calls activeBuilds.remove(run.commitSha(), run) rather than remove(run.commitSha()). What does the two-argument form accomplish?",
+      "choices": [
+        "It removes all entries whose value equals this run",
+        "It removes the entry in a way that is atomic with respect to executor shutdown",
+        "It throws if the entry is missing, surfacing double-completion bugs",
+        "It removes the entry only if it is still mapped to this exact BuildRun, so it cannot evict a different run stored under the same commit"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "When the executor has been shut down and submit() throws RejectedExecutionException inside trigger(), what is the resulting state?",
+      "choices": [
+        "The run stays in activeBuilds as QUEUED, so later triggers for that commit return a build that never runs",
+        "The run is removed from activeBuilds and the exception propagates to the caller",
+        "The run is removed and trigger() returns it with state FAILED",
+        "The exception is swallowed and the run is retried on the calling thread"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "What does activeCount() report at a given moment?",
+      "choices": [
+        "Only builds currently executing on a worker thread",
+        "Builds that have finished but not yet been cleaned up",
+        "Builds that are queued or running, since entries are removed only after execution completes",
+        "The number of builds ever triggered"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.race_conditions",
+    "backend.concurrency.atomic_operations",
+    "backend.concurrency.thread_and_worker_pools"
+  ]
+}

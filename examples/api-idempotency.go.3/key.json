@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "checkout/pay.go",
+        "startLine": 42,
+        "endLine": 42
+      }
+    },
+    1,
+    0,
+    2
+  ],
+  "explanations": [
+    "Complete is called for every outcome, including the 502 produced when the payment gateway is down. That transient failure is saved permanently under the key, so every retry with the same key replays \"payment gateway unavailable\" even after the gateway recovers, and the customer can never pay with that key. Only definitive outcomes (success, or non-retryable client errors) should be saved; for transient failures the in-flight marker should be released without storing a response. Note also that done entries never expire.",
+    "Begin runs under a mutex and marks the key busy, so the second caller gets ErrInFlight, which the handler maps to 409. Nothing blocks and waits, and only one charge is attempted.",
+    "process returns a 400 body that Complete stores; the retry finds it in done and replays it. The busy marker was removed by Complete, so no 409, and the stored body is a non-nil byte slice.",
+    "Begin looks up only the key; no request fingerprint is stored or compared, so a reused key with a different body replays the old result. The lock is held only briefly inside Begin and Complete (not during the charge), and Saved retains the status code."
+  ]
+}

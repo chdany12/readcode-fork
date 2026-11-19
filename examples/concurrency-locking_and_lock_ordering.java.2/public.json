@@ -1,0 +1,50 @@
+{
+  "id": "b3cf64e4-0712-4eee-837e-2fde4ea046da",
+  "title": "Subscription registry and notification fan-out",
+  "name": "Topic subscription registry",
+  "createdAt": "2026-11-19T23:09:24.492Z",
+  "durationMinutes": 12,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how TopicSubscriptions uses its read-write lock when adding a subscriber? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "subscribersOf() returns a new ArrayList rather than the internal set. What does that mean for publish() when a user unsubscribes during delivery?",
+      "choices": [
+        "publish() throws ConcurrentModificationException because the underlying set changed.",
+        "Unsubscribing blocks until the in-flight publish has finished its loop.",
+        "The unsubscribe is invisible to the in-progress publish, so the user may still receive that message.",
+        "The user is removed from the loop immediately, so no further sends occur for them."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Under steady traffic with many publishers and occasional unsubscribes, how do concurrent publish() calls interact at the registry?",
+      "choices": [
+        "They run strictly one after another because every access goes through the same ReentrantReadWriteLock.",
+        "They can look up subscribers at the same time, and only wait while an unsubscribe holds the write lock.",
+        "They never wait for anything, since reads are lock-free.",
+        "They block each other during the sending phase, because the lock is held for the whole publish."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "One recipient's sender.send() throws an exception partway through the list. What does publish() return?",
+      "choices": [
+        "The exception propagates and the remaining recipients are not notified.",
+        "A Result with zero deliveries, since a partial failure aborts the batch.",
+        "The call retries the failed recipient until it succeeds.",
+        "A Result with the failure counted, after the remaining recipients have still been attempted."
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.locking_and_lock_ordering",
+    "backend.concurrency.deadlocks",
+    "backend.concurrency.shared_state_in_request_handlers"
+  ]
+}

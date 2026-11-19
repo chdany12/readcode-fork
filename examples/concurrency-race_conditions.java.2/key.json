@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/iam/auth/LoginThrottle.java",
+        "startLine": 36,
+        "endLine": 37
+      }
+    },
+    0,
+    2,
+    3
+  ],
+  "explanations": [
+    "Yes. recordFailure reads the count with getOrDefault, adds one locally and writes it back with put. That read-modify-write is not atomic even though the map is a ConcurrentHashMap: concurrent failed attempts for the same user can read the same value and each write count+1, so increments are lost and the lockout threshold is reached late or never under a parallel guessing attack. Use failures.merge(username, 1, Integer::sum) (or compute) so the update is atomic.",
+    "isLocked() is checked before verifier.verify(), so locked accounts throw 'account temporarily locked' without running the (expensive) verification. Nothing is queued, and the invalid-credentials message is used only for failed verification or malformed usernames.",
+    "A uniform 'invalid credentials' response prevents account enumeration through error text. Logging does not depend on identical messages, the verifier is still called for any well-formed username, and the lockout counter is a separate mechanism.",
+    "The state lives in each JVM's memory, so counts and locks are per node and lost on restart; with round-robin routing an attacker's attempts spread across nodes. ConcurrentHashMap only provides thread-safety inside one process, expiry is per entry on each node's own clock, and recordSuccess affects only the local maps."
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "src/iot/telemetry/TelemetryAggregator.java",
+        "startLine": 48,
+        "endLine": 49
+      }
+    },
+    2,
+    0,
+    3
+  ],
+  "explanations": [
+    "Yes. average() reads count and sum as two independent atomic loads, while record() updates sum first and count second. A reader that runs between the two updates in record() sees a sum that already includes a reading the count does not, so it divides too large a total by too small a count and returns an inflated average. Each field is atomic but the pair is not a consistent snapshot; keep both in one immutable object swapped atomically, guard both with a lock, or use LongAdder-style accumulation inside a single synchronized update.",
+    "ConcurrentHashMap.computeIfAbsent runs the mapping function atomically per key, so only one Bucket is created and both threads receive it. There is no last-put-wins, computeIfAbsent never returns null for a non-null function result, and only the map operation, not the following adds, is serialized.",
+    "record() derives the key from the reading's own timestamp and computeIfAbsent creates a fresh Bucket; its startMs is older than the cutoff, so the next scheduled eviction deletes it. Nothing rejects the reading, the old bucket was already removed, and the map is never frozen.",
+    "Long.parseLong(\"abc\") throws NumberFormatException before aggregator.record is reached; the catch increments dropped and the method returns, so the MQTT thread is unaffected. No default timestamp is substituted and no partial record is made."
+  ]
+}

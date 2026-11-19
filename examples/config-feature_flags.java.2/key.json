@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "flags/RolloutFlags.java",
+        "startLine": 66,
+        "endLine": 66
+      }
+    },
+    1,
+    2,
+    3
+  ],
+  "explanations": [
+    "In Java, % keeps the sign of the dividend, so hashCode() % 100 returns values from -99 to 99. Roughly half of all device IDs have a negative hash, and every negative bucket is less than any non-negative percent, so those devices are enabled even at 0 or 1 percent (a 0 percent rule is enabled for about half the fleet). A 1% canary of compressed batches would reach about half the devices. Math.floorMod(hashCode, 100) gives a value in 0..99.",
+    "Integer.parseInt throws NumberFormatException, which is a RuntimeException, before `rules = Map.copyOf(parsed)` runs, so no partial result is published. FlagReloader.tick catches RuntimeException and logs it, so the timer survives and the old rules remain. The bad flag is not defaulted or skipped individually, because parsing is all-or-nothing.",
+    "isEnabled returns false as soon as rule.kill() is true, before the model filter or bucket are looked at. An empty models set only means no model restriction. Reload timing affects only which rules are loaded, not how a loaded rule is evaluated.",
+    "Parsing happens into a local HashMap, which is published in a single volatile write of an immutable Map.copyOf. isEnabled just reads the volatile field, so it neither blocks nor sees partial state. synchronized only serializes concurrent reloads with each other; it does not affect readers."
+  ]
+}

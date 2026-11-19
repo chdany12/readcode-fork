@@ -1,0 +1,50 @@
+{
+  "id": "f44dbf6b-b292-4eef-86d8-7a49386db427",
+  "title": "Dispatch matching behind city-scoped flags",
+  "name": "Driver matching flags",
+  "createdAt": "2026-11-19T23:09:24.538Z",
+  "durationMinutes": 12,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code decides whether a rider falls inside a percentage rollout? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A new flag is stored as {\"key\": \"match-by-acceptance\", \"enabled\": true, \"cities\": [\"SEA\"]} with no percent. Which riders get the new ranking?",
+      "choices": [
+        "Nobody, because percent defaults to 0",
+        "All riders in every city, because enabled is true",
+        "Half of the riders in SEA",
+        "All riders in SEA and nobody elsewhere"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "An operator pushes a config in which one rule has percent=140. What happens to the flags already being served?",
+      "choices": [
+        "load_rules raises before swap is called, so the evaluator keeps serving its existing rules",
+        "The bad rule is clamped to 100 and the rest of the config is applied",
+        "All flags are disabled until a valid config is pushed",
+        "The bad rule is skipped and the other rules are applied"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A rule has enabled=true, percent=100 and kill=true. What does is_on return?",
+      "choices": [
+        "True, because percent is 100",
+        "True only for cities listed in the rule",
+        "False for everyone, because kill short-circuits before any other check",
+        "It depends on the rider's hash bucket"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.config.feature_flags",
+    "backend.distributed.cross_service_consistency",
+    "backend.config.defaults_and_validation"
+  ]
+}

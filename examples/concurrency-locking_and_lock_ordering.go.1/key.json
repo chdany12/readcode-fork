@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "scheduler/scheduler.go",
+        "startLine": 117,
+        "endLine": 119
+      }
+    },
+    1,
+    0,
+    2
+  ],
+  "explanations": [
+    "Assign, Complete and reapOne all take the runner's mutex first and the job's mutex second. Cancel takes the job's mutex first and then, for a running job, the runner's mutex. If Cancel(j) runs while Complete or reapOne holds r.mu and waits for j.mu, each side holds the lock the other needs and both block forever. Cancel should acquire the runner lock before the job lock (reading j.runner safely first, then re-validating), to follow the same order as everything else.",
+    "Next() releases qmu before returning, so cancellation can interleave. Assign locks the runner and the job and checks j.state != Pending before changing anything, returning ErrNotPending; the deferred unlocks release both mutexes and r.current is untouched. It never blocks on re-enqueueing and never marks the runner busy for a canceled job.",
+    "ReapStale copies the runner list and releases rmu before looking at individual runners. Between that and reapOne locking r.mu, Heartbeat may have updated lastBeat; the check inside the lock sees the fresh value and skips the runner. The registry lock is already released by then, Enqueue happens afterwards outside reapOne, and two concurrent ReapStale calls are still allowed.",
+    "reapOne's deferred unlocks run before it returns, so Enqueue acquires qmu with no runner or job lock held, and nothing acquires qmu while holding those locks either. That keeps qmu out of any ordering problem. A stop between the calls would lose in-memory state in any case, and there is no ordering guarantee relative to Heartbeat."
+  ]
+}

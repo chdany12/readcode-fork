@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "notify/prefs/PreferenceCache.java",
+        "startLine": 46,
+        "endLine": 46
+      }
+    },
+    1,
+    1,
+    1
+  ],
+  "explanations": [
+    "KeyValueStore.put takes its TTL in seconds, but putPresent passes ttl.toMillis(). The entry therefore lives 1000 times longer than configured (a 10 minute TTL becomes roughly a week). Since the only other invalidation is evict() on update through this service, any preference change made through another path, or an eviction that is missed, leaves users on outdated channels for days. putAbsent correctly uses toSeconds().",
+    "The first call is a Miss, the repository returns empty, and putAbsent stores the marker; subsequent calls return Absent and answer with DEFAULT_CHANNELS without touching the repository. Choice 1 ignores the marker, 3 and 4 do not match the code.",
+    "encode of an empty set is the empty string, which is not equal to ABSENT_MARKER (\"-\"); decode returns an empty EnumSet for blank input rather than splitting it, so Present(emptySet) is returned and the opt-out is respected. The other choices assume the cases are conflated or that valueOf is called on an empty token, which decode prevents.",
+    "update() writes to the repository and evicts the user's key, replacing the absent marker with a miss, so the next channelsFor loads the new row. The marker is not left to expire, and no restart or second call is required."
+  ]
+}

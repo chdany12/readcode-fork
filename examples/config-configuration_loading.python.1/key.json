@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "ledger/settings.py",
+        "startLine": 34,
+        "endLine": 34
+      }
+    },
+    2,
+    1,
+    3
+  ],
+  "explanations": [
+    "The merge is shallow: `{**defaults, **file_data}` replaces each top-level section wholesale. A file such as `{\"limits\": {\"daily_per_account\": 8000}}` discards the default `per_transfer` entry, so `limits.get(\"per_transfer\")` returns None, which `transfer_allowed` treats as no limit. An operator tightening one limit silently removes the other, and in a banking service that means unlimited single transfers. The sections need to be merged recursively, so that missing keys keep their defaults. The deepcopy is correct but does not prevent the section-level replacement.",
+    "`_apply_env` calls `int(port)` directly, so a malformed value raises ValueError at startup rather than falling back to a default or being stored as a string.",
+    "json.load yields floats for numbers with a fractional part, and `Decimal(0.1)` captures the binary approximation (0.1000000000000000055...). Going through `str` gives the shortest repr, `Decimal('0.1')`. Decimal accepts strings, it does not produce cents, and JSON numbers are not strings.",
+    "The merge starts from a deepcopy of DEFAULTS, so the env override mutates only the copy. Without it, `_apply_env` would write into the nested `limits` dict shared by every call. There is no cache and nothing is frozen."
+  ]
+}

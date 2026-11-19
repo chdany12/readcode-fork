@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "search_api.py",
+        "startLine": 91,
+        "endLine": 91
+      }
+    },
+    1,
+    2,
+    3
+  ],
+  "explanations": [
+    "The defect is the fallback `or max(SUPPORTED_VERSIONS)` in handle_search. A request with no Accept-Version header (or an empty one) is served the newest version instead of a fixed baseline. Every time a new version ships, clients that never pinned a version silently start receiving the new response shape (for example `items`/`next_cursor` instead of `results`) and break without any change on their side. The default should be a fixed, documented version (or the request should be rejected), not whatever is newest.",
+    "parse_version strips whitespace, then lstrip(\"vV\") removes the leading V, leaving \"2\", which is a digit string in SUPPORTED_VERSIONS. SHAPERS[2] builds the `results`/`relevance` shape and _respond adds `API-Version: 2`. The first choice is wrong because both cases of the prefix are removed. The third is wrong because the value is numeric after cleaning and there is no fallback for it. The fourth is wrong because only version 1 is listed in DEPRECATED_VERSIONS.",
+    "The version comes from a request header rather than the URL, so one URL yields different JSON per version. Vary tells intermediary and browser caches to store separate entries per Accept-Version value; without it a v1 body could be served to a v3 client. It has nothing to do with CORS, request rejection, or deprecation (that is the Deprecation and Sunset headers, only set for versions in DEPRECATED_VERSIONS).",
+    "parse_version checks membership in SUPPORTED_VERSIONS, not SHAPERS, and raises UnsupportedVersion for 4. handle_search catches it and returns 400 with the supported list, so the new shaper is unreachable until the tuple is updated. The first choice ignores the gate. The second assumes a downgrade that no code performs. The third is wrong because the lookup in SHAPERS never happens for 4."
+  ]
+}

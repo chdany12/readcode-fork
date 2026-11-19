@@ -1,0 +1,50 @@
+{
+  "id": "8d5fac3c-09bd-4b1a-afe0-f03a5468bda5",
+  "title": "Account-to-account transfers with ordered locking",
+  "name": "Ledger transfer service",
+  "createdAt": "2026-11-19T23:09:24.485Z",
+  "durationMinutes": 12,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code acquires the locks for a transfer between two accounts, in terms of whether concurrent transfers can get stuck? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A transfer is requested for more than the source account holds. What is the state of the two accounts and their monitors after the call?",
+      "choices": [
+        "The destination is credited first and then the credit is reversed in a finally block.",
+        "The monitors stay held until the caller retries with a smaller amount.",
+        "The source is debited to zero and the remainder is rejected.",
+        "InsufficientFundsException propagates, neither balance has changed, and both monitors are released."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "transfer() appends to the audit trail after the account monitors have been released. What follows from that?",
+      "choices": [
+        "The audit trail can list entries in a different order than the balance changes were applied, but no thread ever waits for the audit lock while holding an account monitor.",
+        "A transfer can succeed without an audit entry if the audit lock is contended.",
+        "The audit trail is guaranteed to be in exactly the order the balances were changed.",
+        "Readers of auditSnapshot() block every transfer for the duration of the copy."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "totalHeld() is called while transfers are running. Each balanceMinor() call is synchronized. What can the returned total look like?",
+      "choices": [
+        "It is always exactly the sum of all balances at one instant, because each read is synchronized.",
+        "It can be wrong, for example missing or double counting an amount that moves between two accounts while the loop runs.",
+        "It always equals the sum at the start of the call, because the loop iterates a snapshot.",
+        "It throws ConcurrentModificationException if a transfer happens during the loop."
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.deadlocks",
+    "backend.concurrency.locking_and_lock_ordering",
+    "backend.data.money_and_ledgers"
+  ]
+}

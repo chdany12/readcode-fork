@@ -1,0 +1,50 @@
+{
+  "id": "8bbf7e8c-d8a9-4caa-97e9-494a8b5e7014",
+  "title": "Idempotent ledger transfers with client retries",
+  "name": "Ledger transfer service",
+  "createdAt": "2026-11-19T23:02:14.230Z",
+  "durationMinutes": 13,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how long this system remembers idempotency keys relative to how clients retry? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A transfer fails with InsufficientFunds. The customer later deposits money and the client retries with the same key within two minutes. What happens?",
+      "choices": [
+        "The transfer is attempted again and may now succeed",
+        "An exception propagates to the caller",
+        "The key is rejected as a duplicate with an error status",
+        "The stored rejection is returned and no transfer is attempted"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Which property of Ledger.transfer matters for two concurrent transfers from the same source account?",
+      "choices": [
+        "Each transfer uses its own lock, so they run in parallel",
+        "The balance check and both updates happen under one lock, so the balance cannot be overdrawn by interleaving",
+        "The check is outside the lock, so overdrafts are possible",
+        "The lock is released before the entry is recorded"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Two simultaneous calls arrive with the same new key and payload. What does TransferService do?",
+      "choices": [
+        "The service lock serializes them, so the second finds the stored result and replays it",
+        "Both execute the transfer, since the cache is only written afterwards",
+        "The second is rejected with a conflict status",
+        "The second waits on the ledger lock and then moves the money again"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.api.idempotency",
+    "backend.caching.ttls_and_expiry",
+    "backend.resilience.retries_and_backoff"
+  ]
+}

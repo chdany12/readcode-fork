@@ -1,0 +1,51 @@
+{
+  "id": "93ca576c-3d43-4ea5-97ad-3e50e8a8d6ca",
+  "title": "Ride match worker pool",
+  "name": "Ride match worker pool",
+  "createdAt": "2026-11-19T23:09:24.505Z",
+  "durationMinutes": 12,
+  "language": "Go",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code starts and stops its worker goroutines? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "Submit() is called when all queue slots are occupied and every worker is busy. What happens?",
+      "choices": [
+        "It returns ErrQueueFull immediately, pushing the decision about retrying or shedding to the caller",
+        "The caller blocks until a slot frees up",
+        "The oldest queued request is dropped to make room",
+        "A new worker goroutine is started"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Shutdown() closes jobs while the queue still holds requests. What happens to those requests?",
+      "choices": [
+        "They are discarded because the channel is closed",
+        "They are returned to callers as ErrClosed",
+        "Workers continue ranging over the closed channel until it is drained, so they are still processed before the workers exit",
+        "They are processed only if Submit is called again"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A Matcher implementation ignores its context and blocks indefinitely on a downstream call. With 4 workers, what is the effect after 4 such requests?",
+      "choices": [
+        "The timeout cancels each call and the workers are freed",
+        "Shutdown returns early because the workers are blocked",
+        "The pool starts additional goroutines to compensate",
+        "All workers are stuck, so queued requests accumulate until Submit starts returning ErrQueueFull"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.thread_and_worker_pools",
+    "backend.concurrency.race_conditions",
+    "backend.messaging.backpressure",
+    "backend.resilience.graceful_shutdown"
+  ]
+}

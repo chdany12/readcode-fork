@@ -1,0 +1,50 @@
+{
+  "id": "cd843748-9dd3-4d10-a458-1362df7b5aad",
+  "title": "Push notification campaign dispatcher",
+  "name": "Campaign push dispatcher",
+  "createdAt": "2026-11-19T23:09:24.506Z",
+  "durationMinutes": 12,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code uses its worker pool to deliver a campaign? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "The pool is built with `poolSize` core and max threads and a `LinkedBlockingQueue<>()` with no capacity. A marketing tool submits 50,000 campaigns in a burst while every worker is busy. What happens?",
+      "choices": [
+        "Submissions beyond poolSize are rejected with RejectedExecutionException",
+        "The pool grows beyond poolSize threads to absorb the burst",
+        "The calling thread runs the excess campaigns itself, slowing the caller",
+        "All campaigns are accepted into the queue, so memory use grows with the backlog while thread count stays at poolSize"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "One call to `gateway.push` throws an IOException for a single device token while the rest of the campaign is healthy. What is the effect?",
+      "choices": [
+        "That token is counted in `failed`; the other tokens are still processed and the worker thread survives",
+        "The whole campaign future fails with the IOException and no audit record is written",
+        "The worker thread that ran the push dies and the pool shrinks by one",
+        "The remaining tokens in the campaign are skipped"
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "`result.get(5, SECONDS)` throws TimeoutException for a slow push. What is true afterwards?",
+      "choices": [
+        "The push task is cancelled automatically when the timeout elapses",
+        "The push may still run or complete later even though it was already counted as failed",
+        "The worker thread running the push is interrupted and replaced",
+        "The timeout is retried once with a doubled wait"
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.thread_and_worker_pools",
+    "backend.resilience.timeouts",
+    "backend.messaging.backpressure"
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "id": "f0a61111-0489-49bf-af27-486be6ecf379",
+  "title": "Buffered document indexing with snapshot publishing",
+  "name": "Index refresh coordinator",
+  "createdAt": "2026-11-19T23:09:24.482Z",
+  "durationMinutes": 13,
+  "language": "Java",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code maintains the pending-document counter while documents are being added and refreshes run? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "compact() and refresh() can both publish a new snapshot. If compact() builds its merged snapshot from a stale prev and a refresh publishes first, what happens?",
+      "choices": [
+        "Both updates are applied, and the refresh's new segment is merged in automatically.",
+        "compareAndSet fails, the loop re-reads the current snapshot and rebuilds the merge from it, so the refreshed segment is not lost.",
+        "The compaction overwrites the snapshot and the newly refreshed segment is dropped.",
+        "compact() throws an IllegalStateException because the snapshot changed."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "A writer thread's add() pushes the counter past refreshThreshold while another thread is already inside refresh(). What does that writer do?",
+      "choices": [
+        "It blocks until the running refresh finishes, then runs its own refresh.",
+        "It runs a second refresh concurrently, since the buffer is a concurrent queue.",
+        "It throws an exception to signal back-pressure.",
+        "It returns right away without refreshing; its document stays buffered until a later refresh drains it."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "search() copies current.get() into a local variable and uses only that variable for the whole query. Why does that matter?",
+      "choices": [
+        "It stops refreshes from running while a query is in progress.",
+        "The query sees one consistent set of segments and one generation number even if a new snapshot is published mid-query.",
+        "It makes the AtomicReference read cheaper than reading the field twice.",
+        "It guarantees the query sees documents that were added just before it started."
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.concurrency.atomic_operations",
+    "backend.concurrency.race_conditions",
+    "backend.observability.metrics"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "policy.py",
+        "startLine": 46,
+        "endLine": 46
+      }
+    },
+    1,
+    3,
+    1
+  ],
+  "explanations": [
+    "When IDP_ENV is missing, current_environment defaults to 'development', the most permissive policy: no MFA, non-Secure cookies, week-long sessions, 100 failed logins, and localhost redirects. A production container that loses or misspells the variable name starts without error and silently runs with the weakest authentication settings. Only unrecognized values are rejected; an absent value is not. The environment should be required, raising when unset, so the default is never a relaxed one.",
+    "The STAGING policy has require_mfa=True, and an empty otp_code fails the 'not otp_code' check, so login records a failure and raises 'second factor required'. MFA is not production-only, no session is returned, and the password is not re-checked with the OTP.",
+    "_safe_redirect compares the parsed hostname exactly against allowed_redirect_hosts; app.example.com is in the production set, so the URL is returned. app.example.com.evil.io has a different hostname, localhost is only allowed in development, and the javascript: URL has a scheme but no allowed hostname; those three fall back to '/'.",
+    "current_environment strips whitespace and lower-cases the value before building Environment('production'), so the production policy is selected. Unrecognized values raise RuntimeError rather than falling back to any policy, and there is no fuzzy matching."
+  ]
+}

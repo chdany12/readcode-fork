@@ -1,0 +1,50 @@
+{
+  "id": "93e2dd85-a165-485f-972e-c93ae524f782",
+  "title": "Order refund posting to the ledger",
+  "name": "Order refund service",
+  "createdAt": "2026-11-19T23:09:24.553Z",
+  "durationMinutes": 14,
+  "language": "Python",
+  "questions": [
+    {
+      "kind": "locate",
+      "prompt": "Is there a defect in how this code splits a refund across order lines and records it in the ledger? If so, mark the line(s) where it is; otherwise answer that there is none."
+    },
+    {
+      "kind": "choice",
+      "prompt": "A client times out and re-sends refund_order with the same order_id and request_id after the first call had fully completed. What happens on the second call?",
+      "choices": [
+        "The gateway is called again with the same idempotency key, and the ledger posts a second set of entries.",
+        "It raises RefundExceedsCaptured whenever the first call refunded the full captured amount.",
+        "It returns the same ref immediately, without calling the gateway or touching the ledger or the order.",
+        "It re-runs the allocation and updates refunded_cents again, but the unique ref stops the ledger insert."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "The process is killed right after self._gateway.refund(...) returns successfully but before the with-block commits. The client retries with the same request_id. What is the outcome?",
+      "choices": [
+        "The retry reuses the same idempotency key, so the gateway does not refund twice, and the ledger and order are then written.",
+        "The retry is rejected because the gateway has already refunded the charge.",
+        "The retry issues a second refund at the gateway, because the ledger has no record of the first.",
+        "The retry returns early because the gateway call counts as having completed the request."
+      ]
+    },
+    {
+      "kind": "choice",
+      "prompt": "Ledger.post() never commits, and RefundService calls it inside `with self._conn:` together with the UPDATE on orders. What does this arrangement ensure?",
+      "choices": [
+        "Concurrent refunds on the same order are serialized by the ledger insert.",
+        "The gateway refund is rolled back if the ledger insert fails.",
+        "Each ledger entry is committed separately, so a partial refund can be recorded line by line.",
+        "The refunded_cents update and the ledger transaction with its entries commit together or not at all."
+      ]
+    }
+  ],
+  "taxonomyVersion": "0.1.0",
+  "concepts": [
+    "backend.data.money_and_ledgers",
+    "backend.api.idempotency",
+    "backend.data.transactions_and_isolation_levels"
+  ]
+}

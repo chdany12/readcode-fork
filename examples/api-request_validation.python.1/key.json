@@ -1,0 +1,20 @@
+{
+  "answers": [
+    {
+      "defect": {
+        "path": "orders/schemas.py",
+        "startLine": 9,
+        "endLine": 9
+      }
+    },
+    1,
+    3,
+    0
+  ],
+  "explanations": [
+    "The sku pattern has no ^ and $ anchors. Pydantic v2 applies Field(pattern=...) with search semantics, not a full match, so any string that merely contains four or more characters from [A-Z0-9-] passes, for example a very long string, lowercase text with an embedded \"ABCD\", or a value containing newlines and other control characters. The unanchored value is then logged in log.info and passed to the inventory backend, enabling log injection (forged log lines via newlines), oversized keys, and lookups of garbage SKUs. The other patterns in the file (customer_ref, currency, coupon) are anchored, which is what sku should be: r\"^[A-Z0-9-]{4,20}$\".",
+    "OrderIn sets extra=\"forbid\", so the unknown key produces a validation error that the view turns into a 422 with the problems list. It is not ignored (A), not stored (D), and the 400 branch is only for bodies that are not JSON objects (C).",
+    "InsufficientStock is caught outside the loop; the reservations collected so far are released with release_all and the response is a 409 naming the sku. It never returns partial success (A), does not keep reservations (B), and uses 409 rather than 422 for state conflicts (C).",
+    "request.get_json(silent=True) returns the list; the isinstance(body, dict) check fails first, so the view returns 400 and OrderIn is never invoked. B is wrong because validation never runs, C because the guard prevents the call, and D because there is no coercion of a top-level array."
+  ]
+}
