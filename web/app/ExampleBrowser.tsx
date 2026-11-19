@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useState } from "react";
 import { ChevronRight, FileSearch, Search, X } from "lucide-react";
 import type { ExampleSummary } from "@/lib/examples";
+import { Button } from "@/components/ui/button";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { areaName, topicName } from "@/lib/format";
 
 // Curriculum order (fundamentals first) and a one-line description per module.
@@ -74,45 +77,40 @@ export default function ExampleBrowser({ examples, roles }: { examples: ExampleS
         length && { key: "l", label: LENGTHS.find((l) => l.id === length)!.label, clear: () => setLength("") },
     ].filter(Boolean) as { key: string; label: string; clear: () => void }[];
 
-    const select = "h-9 rounded-lg border bg-background px-2.5 text-sm outline-none hover:border-foreground/30 focus:border-foreground/40";
-
     return (
         <div>
             {/* sticky filter bar */}
             <div className="sticky top-0 z-20 -mx-6 border-b bg-background/90 px-6 py-3 backdrop-blur">
                 <div className="flex flex-wrap items-center gap-2">
-                    <label className="flex h-9 min-w-56 flex-1 items-center gap-2 rounded-lg border bg-muted/30 px-3 focus-within:border-foreground/40 sm:max-w-xs">
-                        <Search className="size-4 shrink-0 text-muted-foreground" />
-                        <input
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Search exercises or topics"
-                            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                        />
-                    </label>
-                    <select aria-label="Module" value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)} className={select}>
-                        <option value="">All modules</option>
-                        {modules.map((m) => <option key={m.area} value={m.area}>{String(m.n).padStart(2, "0")} {areaName(`x.${m.area}`)}</option>)}
-                    </select>
-                    <select aria-label="Role" value={roleId} onChange={(e) => setRoleId(e.target.value)} className={`${select} max-w-60`}>
-                        <option value="">Any role</option>
-                        {roles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
-                    </select>
-                    <select aria-label="Length" value={length} onChange={(e) => setLength(e.target.value)} className={select}>
-                        {LENGTHS.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
-                    </select>
+                    <InputGroup className="min-w-56 flex-1 sm:max-w-xs">
+                        <InputGroupAddon>
+                            <Search />
+                        </InputGroupAddon>
+                        <InputGroupInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search exercises or topics" />
+                    </InputGroup>
+                    <NativeSelect aria-label="Module" value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)}>
+                        <NativeSelectOption value="">All modules</NativeSelectOption>
+                        {modules.map((m) => <NativeSelectOption key={m.area} value={m.area}>{String(m.n).padStart(2, "0")} {areaName(`x.${m.area}`)}</NativeSelectOption>)}
+                    </NativeSelect>
+                    <NativeSelect aria-label="Role" value={roleId} onChange={(e) => setRoleId(e.target.value)} className="max-w-60">
+                        <NativeSelectOption value="">Any role</NativeSelectOption>
+                        {roles.map((r) => <NativeSelectOption key={r.id} value={r.id}>{r.label}</NativeSelectOption>)}
+                    </NativeSelect>
+                    <NativeSelect aria-label="Length" value={length} onChange={(e) => setLength(e.target.value)}>
+                        {LENGTHS.map((l) => <NativeSelectOption key={l.id} value={l.id}>{l.label}</NativeSelectOption>)}
+                    </NativeSelect>
                     <span className="ml-auto text-sm text-muted-foreground tabular-nums">{total} of {examples.length} exercises</span>
                 </div>
                 {active.length > 0 && (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                         {active.map((f) => (
-                            <button key={f.key} type="button" onClick={f.clear} className="flex h-7 max-w-72 items-center gap-1.5 rounded-full border px-2.5 text-xs hover:border-foreground/40">
-                                <span className="truncate">{f.label}</span> <X className="size-3 shrink-0" />
-                            </button>
+                            <Button key={f.key} variant="outline" size="xs" onClick={f.clear} className="max-w-72 rounded-full">
+                                <span className="truncate">{f.label}</span> <X data-icon="inline-end" />
+                            </Button>
                         ))}
-                        <button type="button" onClick={() => { setQuery(""); setModuleFilter(""); setRoleId(""); setLength(""); }} className="text-xs text-muted-foreground hover:text-foreground hover:underline">
+                        <Button variant="link" size="xs" onClick={() => { setQuery(""); setModuleFilter(""); setRoleId(""); setLength(""); }} className="text-muted-foreground">
                             Clear all
-                        </button>
+                        </Button>
                     </div>
                 )}
             </div>

@@ -15,7 +15,7 @@ export default function Home() {
         <main className="relative isolate mx-auto w-full max-w-5xl px-6 pb-12">
             <section className="relative py-16 text-center">
                 {/* soft glow behind the hero */}
-                <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 mx-auto h-72 max-w-3xl rounded-full bg-gradient-to-r from-sky-500/20 via-violet-500/20 to-emerald-500/20 blur-3xl" />
+                <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 mx-auto h-72 max-w-3xl rounded-full bg-gradient-to-r from-hero-1/20 via-hero-2/20 to-hero-3/20 blur-3xl" />
                 <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">Practice reading code for the role you want</h1>
                 <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
                     Paste a job posting. We weigh the concepts the role depends on and build a code-reading practice plan in that mix.

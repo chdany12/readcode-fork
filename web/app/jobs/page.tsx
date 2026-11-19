@@ -7,7 +7,7 @@ export default function JobsPage({ searchParams }: PageProps<"/jobs">) {
     return (
         <main className="p-6 text-sm">
                         <p className="text-muted-foreground">
-                each posting's plan matched to bank examples
+                each posting&apos;s plan matched to bank examples
             </p>
             <hr className="my-3" />
             <Suspense fallback={<p>loading…</p>}>

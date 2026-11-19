@@ -9,7 +9,7 @@ import { areaName as areaLabel, jobTitle, topicName } from "@/lib/format";
 const PREVIEW = 3;
 
 // Distinct hues for a role's top topics; the rest are grey.
-const TOPIC_COLORS = ["oklch(0.7 0.16 250)", "oklch(0.75 0.15 160)", "oklch(0.8 0.15 80)"];
+const TOPIC_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)"]; // theme tokens (globals.css)
 const GREY = "color-mix(in oklch, var(--muted-foreground) 45%, transparent)";
 
 // Chart heights are weight^PROFILE_POWER, scaled so the top concept is full height: raising to a power
