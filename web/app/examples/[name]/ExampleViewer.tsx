@@ -1,11 +1,13 @@
 "use client";
 
-import Editor, { type OnMount } from "@monaco-editor/react";
+import Editor, { type BeforeMount, type OnMount } from "@monaco-editor/react";
 import { useEffect, useRef, useState } from "react";
 import type { LoadedExample } from "@/lib/examples";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Check, ChevronDown, FileCode, RotateCcw, TextSelect, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { codeFont } from "@/lib/fonts";
 import type { DefectLocation, LocateAnswer } from "../../../../shared/types";
 
 type MonacoEditor = Parameters<OnMount>[0];
@@ -80,11 +82,18 @@ export default function ExampleViewer({ example }: { example: LoadedExample }) {
 
     const canSubmit = (qi: number) => (questions[qi].kind === "locate" ? marks[qi] !== null : picked[qi] !== null);
 
+    const reset = () => {
+        setPicked(questions.map(() => null));
+        setMarks(questions.map(() => null));
+        setSubmitted(questions.map(() => false));
+    };
+    const submit = (qi: number) => setSubmitted((s) => s.map((v, i) => (i === qi ? true : v)));
+
     return (
         <div className="flex min-h-0 flex-1">
-            {/* file explorer */}
-            <nav className="w-60 shrink-0 overflow-auto border-r p-2 font-mono">
-                <div className="mb-1 text-muted-foreground">explorer</div>
+            {/* files */}
+            <nav className={cn("w-56 shrink-0 overflow-auto border-r py-3 text-[13px]", codeFont.className)} aria-label="Files">
+                <div className="mb-2 px-3 font-sans text-xs font-medium text-muted-foreground">Files</div>
                 <FileTree node={buildTree(example.files.map((f) => f.path))} current={current} onOpen={setCurrent} depth={0} />
             </nav>
 
@@ -94,119 +103,176 @@ export default function ExampleViewer({ example }: { example: LoadedExample }) {
                     path={current}
                     value={file?.content ?? ""}
                     language={languageFor(current)}
-                    theme="vs-dark"
+                    theme="readcode-dark"
+                    beforeMount={defineTheme}
                     onMount={onMount}
-                    options={{ readOnly: true, minimap: { enabled: false }, fontSize: 13, scrollBeyondLastLine: false }}
+                    options={{
+                        readOnly: true,
+                        minimap: { enabled: false },
+                        fontSize: 13,
+                        fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
+                        scrollBeyondLastLine: false,
+                        renderLineHighlight: "none",
+                        padding: { top: 12 },
+                    }}
                 />
             </section>
 
             {/* questions */}
-            <aside className="w-[28rem] shrink-0 overflow-auto border-l p-3">
-                {questions.map((q, qi) => {
-                    const done = submitted[qi];
-                    const answer = example.key.answers[qi];
-                    const explanation = example.key.explanations?.[qi];
-                    return (
-                        <Card key={qi} className="mb-4 gap-2 px-4">
-                            <div className="font-semibold">Question {qi + 1}</div>
-                            <p className="whitespace-pre-wrap">{q.prompt}</p>
+            <aside className="flex w-[28rem] shrink-0 flex-col border-l">
+                {/* progress */}
+                <div className="border-b px-4 py-3">
+                    <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">
+                            {doneCount} of {questions.length} answered{doneCount > 0 && <> · <span className="text-foreground">{score} correct</span></>}
+                        </span>
+                        {doneCount > 0 && (
+                            <Button variant="ghost" size="xs" onClick={reset} className="text-muted-foreground">
+                                <RotateCcw /> Reset
+                            </Button>
+                        )}
+                    </div>
+                    <div className="mt-2 flex gap-1">
+                        {questions.map((_, qi) => (
+                            <span
+                                key={qi}
+                                className={cn(
+                                    "h-1 flex-1 rounded-full",
+                                    !submitted[qi] ? "bg-muted" : isCorrect(qi) ? "bg-emerald-500" : "bg-red-500",
+                                )}
+                            />
+                        ))}
+                    </div>
+                </div>
 
-                            {q.kind === "locate" ? (
-                                <div>
-                                    {!done && (
-                                        <div className="mb-1 flex flex-wrap gap-2">
-                                            <Button size="sm" onClick={() => markSelection(qi)}>
-                                                Mark selected lines
-                                            </Button>
-                                            <Button size="sm" variant="outline" onClick={() => setMarks((m) => m.map((v, i) => (i === qi ? "none" : v)))}>
-                                                No defect
-                                            </Button>
-                                        </div>
-                                    )}
-                                    <p className="text-muted-foreground">
-                                        {marks[qi] === null && "select the line(s) in the editor, then mark them"}
-                                    </p>
-                                    {marks[qi] === "none" && <p>your answer: no defect</p>}
-                                    {marks[qi] && marks[qi] !== "none" && (
-                                        <p>
-                                            your answer:{" "}
-                                            <button className="underline" onClick={() => jumpTo(marks[qi] as DefectLocation)}>
-                                                {describe(marks[qi] as DefectLocation)}
-                                            </button>
-                                        </p>
+                <div className="flex-1 space-y-3 overflow-auto p-4">
+                    {questions.map((q, qi) => {
+                        const done = submitted[qi];
+                        const answer = example.key.answers[qi];
+                        const explanation = example.key.explanations?.[qi];
+                        const correct = done && isCorrect(qi);
+                        return (
+                            <Card key={qi} className={cn("gap-3 px-4 py-4", done && (correct ? "ring-emerald-500/40" : "ring-red-500/40"))}>
+                                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                    <span>
+                                        <span className="font-medium text-foreground">Q{qi + 1}</span> · {q.kind === "locate" ? "Find the defect" : "Multiple choice"}
+                                    </span>
+                                    {done && (
+                                        <span className={cn("flex items-center gap-1 font-medium", correct ? "text-emerald-400" : "text-red-400")}>
+                                            {correct ? <Check className="size-3.5" /> : <X className="size-3.5" />}
+                                            {correct ? "Correct" : "Incorrect"}
+                                        </span>
                                     )}
                                 </div>
-                            ) : (
-                                q.choices.map((c, ci) => {
-                                    const correct = done && ci === answer;
-                                    const wrong = done && picked[qi] === ci && ci !== answer;
-                                    return (
-                                        <label
-                                            key={ci}
-                                            className={`flex gap-2 rounded-md px-2 py-1 ${correct ? "bg-green-500/15" : ""} ${wrong ? "bg-red-500/15" : ""}`}
-                                        >
-                                            <input
-                                                type="radio"
-                                                name={`q${qi}`}
-                                                checked={picked[qi] === ci}
-                                                disabled={done}
-                                                onChange={() => setPicked((p) => p.map((v, i) => (i === qi ? ci : v)))}
-                                            />
-                                            <span>{String.fromCharCode(65 + ci)}. {c}</span>
-                                        </label>
-                                    );
-                                })
-                            )}
+                                <p className="leading-relaxed whitespace-pre-wrap">{q.prompt}</p>
 
-                            {!done ? (
-                                <Button
-                                    className="w-fit"
-                                    disabled={!canSubmit(qi)}
-                                    onClick={() => setSubmitted((s) => s.map((v, i) => (i === qi ? true : v)))}
-                                >
-                                    Submit
-                                </Button>
-                            ) : (
-                                <div className="border-t pt-2">
-                                    <Badge variant={isCorrect(qi) ? "default" : "destructive"}>{isCorrect(qi) ? "Correct" : "Incorrect"}</Badge>
-                                    {typeof answer === "number" ? (
-                                        !isCorrect(qi) && <p>the answer is {String.fromCharCode(65 + answer)}</p>
-                                    ) : answer.defect ? (
-                                        <p>
-                                            the defect is at{" "}
-                                            <button className="underline" onClick={() => jumpTo(answer.defect!)}>
-                                                {describe(answer.defect)}
-                                            </button>
+                                {q.kind === "locate" ? (
+                                    <div className="space-y-2">
+                                        {!done && (
+                                            <div className="flex flex-wrap gap-2">
+                                                <Button size="sm" variant="secondary" onClick={() => markSelection(qi)}>
+                                                    <TextSelect /> Mark selected lines
+                                                </Button>
+                                                <Button size="sm" variant="outline" onClick={() => setMarks((m) => m.map((v, i) => (i === qi ? "none" : v)))}>
+                                                    No defect
+                                                </Button>
+                                            </div>
+                                        )}
+                                        <p className="text-xs text-muted-foreground">
+                                            {marks[qi] === null && "Select line(s) in the editor, then mark them."}
+                                            {marks[qi] === "none" && "Your answer: no defect"}
+                                            {marks[qi] && marks[qi] !== "none" && (
+                                                <>
+                                                    Your answer:{" "}
+                                                    <button className="text-foreground underline underline-offset-2" onClick={() => jumpTo(marks[qi] as DefectLocation)}>
+                                                        {describe(marks[qi] as DefectLocation)}
+                                                    </button>
+                                                </>
+                                            )}
                                         </p>
-                                    ) : (
-                                        <p>there is no defect in this code</p>
-                                    )}
-                                    {explanation && <p className="mt-1 whitespace-pre-wrap">{explanation}</p>}
-                                </div>
-                            )}
-                        </Card>
-                    );
-                })}
-                <div className="flex items-center gap-3">
-                    <span>score: {score}/{doneCount} submitted ({questions.length} total)</span>
-                    {doneCount > 0 && (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                                setPicked(questions.map(() => null));
-                                setMarks(questions.map(() => null));
-                                setSubmitted(questions.map(() => false));
-                            }}
-                        >
-                            Reset
-                        </Button>
-                    )}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-1.5" role="radiogroup">
+                                        {q.choices.map((c, ci) => {
+                                            const selected = picked[qi] === ci;
+                                            const isAnswer = done && ci === answer;
+                                            const isWrongPick = done && selected && ci !== answer;
+                                            return (
+                                                <button
+                                                    key={ci}
+                                                    type="button"
+                                                    role="radio"
+                                                    aria-checked={selected}
+                                                    disabled={done}
+                                                    onClick={() => setPicked((p) => p.map((v, i) => (i === qi ? ci : v)))}
+                                                    className={cn(
+                                                        "flex w-full items-start gap-2.5 rounded-lg border px-3 py-2 text-left transition-colors",
+                                                        !done && (selected ? "border-foreground/60 bg-muted" : "hover:border-foreground/30 hover:bg-muted/40"),
+                                                        isAnswer && "border-emerald-500/60 bg-emerald-500/10",
+                                                        isWrongPick && "border-red-500/60 bg-red-500/10",
+                                                        done && !isAnswer && !isWrongPick && "opacity-60",
+                                                    )}
+                                                >
+                                                    <span
+                                                        className={cn(
+                                                            "mt-px flex size-5 shrink-0 items-center justify-center rounded-md border text-[11px] font-medium",
+                                                            selected && !done && "border-foreground bg-foreground text-background",
+                                                        )}
+                                                    >
+                                                        {String.fromCharCode(65 + ci)}
+                                                    </span>
+                                                    <span className="leading-snug">{c}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                {!done ? (
+                                    <Button size="sm" className="w-fit" disabled={!canSubmit(qi)} onClick={() => submit(qi)}>
+                                        Submit
+                                    </Button>
+                                ) : (
+                                    <div className="space-y-1.5 rounded-lg bg-muted/40 p-3 text-[13px] leading-relaxed">
+                                        {typeof answer === "number" ? (
+                                            !correct && <p className="font-medium">The answer is {String.fromCharCode(65 + answer)}.</p>
+                                        ) : answer.defect ? (
+                                            <p className="font-medium">
+                                                The defect is at{" "}
+                                                <button className="underline underline-offset-2" onClick={() => jumpTo(answer.defect!)}>
+                                                    {describe(answer.defect)}
+                                                </button>
+                                                .
+                                            </p>
+                                        ) : (
+                                            <p className="font-medium">There is no defect in this code.</p>
+                                        )}
+                                        {explanation && <p className="whitespace-pre-wrap text-muted-foreground">{explanation}</p>}
+                                    </div>
+                                )}
+                            </Card>
+                        );
+                    })}
                 </div>
             </aside>
         </div>
     );
 }
+
+// Editor theme matching the page: the app's dark background, no line-highlight box.
+const defineTheme: BeforeMount = (monaco) => {
+    monaco.editor.defineTheme("readcode-dark", {
+        base: "vs-dark",
+        inherit: true,
+        rules: [],
+        colors: {
+            "editor.background": "#0a0a0a",
+            "editorGutter.background": "#0a0a0a",
+            "editorLineNumber.foreground": "#525252",
+            "editorLineNumber.activeForeground": "#a3a3a3",
+        },
+    });
+};
 
 function locateCorrect(mark: LocateMark, answer: LocateAnswer): boolean {
     if (mark === null) return false;
@@ -264,10 +330,14 @@ function FileTree({ node, current, onOpen, depth }: {
                         <button
                             onClick={() => onOpen(child.path)}
                             title={child.path}
-                            style={{ paddingLeft: depth * 12 + 16 }}
-                            className={`block w-full truncate pr-1 text-left rounded-sm ${child.path === current ? "bg-accent text-accent-foreground" : "hover:bg-muted"}`}
+                            style={{ paddingLeft: depth * 12 + 12 }}
+                            className={cn(
+                                "flex w-full items-center gap-1.5 truncate py-1 pr-2 text-left",
+                                child.path === current ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                            )}
                         >
-                            {child.name}
+                            <FileCode className="size-3.5 shrink-0" />
+                            <span className="truncate">{child.name}</span>
                         </button>
                     </li>
                 ) : (
@@ -286,10 +356,11 @@ function Folder({ node, current, onOpen, depth }: {
         <li>
             <button
                 onClick={() => setOpen((o) => !o)}
-                style={{ paddingLeft: depth * 12 }}
-                className="block w-full truncate rounded-sm pr-1 text-left hover:bg-muted"
+                style={{ paddingLeft: depth * 12 + 8 }}
+                className="flex w-full items-center gap-1 truncate py-1 pr-2 text-left text-muted-foreground hover:text-foreground"
             >
-                {open ? "▾" : "▸"} {node.name}/
+                <ChevronDown className={cn("size-3.5 shrink-0 transition-transform", !open && "-rotate-90")} />
+                {node.name}
             </button>
             {open && <FileTree node={node} current={current} onOpen={onOpen} depth={depth + 1} />}
         </li>
