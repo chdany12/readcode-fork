@@ -1,25 +1,32 @@
-// Build plans/NNN.json from externally produced classifications in plans/weights/NNN.json
-// (format: {"weights": [{"label": "...", "weight": 0.0-1.0}, ...], "languages": {"Java": 1.0, ...}},
-// same as the classifier's output; "languages" is optional for files written before it existed).
+// Build plans from classifier weight files. One plan per weights file, written to --out under the same file name.
+// Weights file format: {"weights": [{"label": "...", "weight": 0.0-1.0}, ...], "languages": {"Java": 1.0, ...}}
+// (the classifier's output; "languages" is optional for files written before it existed).
 //
-// Usage: node pipeline/src/plan.ts [plansDir]   (default: postings/plans)
+// Usage: node pipeline/src/plan.ts --taxonomy <taxonomy.json> --out <dir> <weights.json>...
+//   e.g. node pipeline/src/plan.ts --taxonomy pipeline/taxonomy/v0.1.0.json --out postings/plans postings/plans/weights/*.json
 
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
 
 import { Taxonomy, type Classification } from "../../shared/types.ts";
 import { planFromClassification } from "./pipeline.ts";
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const TAXONOMY_VERSION = "0.1.0";
+const USAGE = "Usage: node pipeline/src/plan.ts --taxonomy <taxonomy.json> --out <dir> <weights.json>...";
+const { values, positionals } = parseArgs({
+    options: { taxonomy: { type: "string" }, out: { type: "string" } },
+    allowPositionals: true,
+});
+if (!values.taxonomy || !values.out || positionals.length === 0) {
+    console.error(USAGE);
+    process.exit(1);
+}
 
-const plansDir = path.resolve(process.argv[2] ?? path.join(ROOT, "postings", "plans"));
-const taxonomy = Taxonomy.parse(JSON.parse(readFileSync(path.join(ROOT, "pipeline", "taxonomy", `v${TAXONOMY_VERSION}.json`), "utf8")));
+const taxonomy = Taxonomy.parse(JSON.parse(readFileSync(values.taxonomy, "utf8")));
+mkdirSync(values.out, { recursive: true });
 
-let n = 0;
-for (const file of readdirSync(path.join(plansDir, "weights")).filter((f) => f.endsWith(".json")).sort()) {
-    const raw = JSON.parse(readFileSync(path.join(plansDir, "weights", file), "utf8")) as { weights: { label: string; weight: number }[]; languages?: Record<string, number> };
+for (const file of positionals) {
+    const raw = JSON.parse(readFileSync(file, "utf8")) as { weights: { label: string; weight: number }[]; languages?: Record<string, number> };
     const byLabel = new Map<string, number>();
     for (const { label, weight } of raw.weights) {
         if (!taxonomy.labels.includes(label)) throw new Error(`${file}: unknown label ${label}`);
@@ -31,7 +38,6 @@ for (const file of readdirSync(path.join(plansDir, "weights")).filter((f) => f.e
         languages: raw.languages ?? {},
     };
     const plan = planFromClassification(classification, taxonomy);
-    writeFileSync(path.join(plansDir, file), JSON.stringify(plan, null, 2) + "\n");
-    n++;
+    writeFileSync(path.join(values.out, path.basename(file)), JSON.stringify(plan, null, 2) + "\n");
 }
-console.log(`wrote ${n} plans to ${plansDir}`);
+console.log(`wrote ${positionals.length} plans to ${values.out}`);

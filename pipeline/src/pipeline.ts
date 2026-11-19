@@ -22,14 +22,8 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 import { LanguageList, Plan, Taxonomy, type Classification } from "../../shared/types.ts";
-import { readFileSync } from "node:fs";
 import { classify } from "./classifier.ts";
 import { generateExample, writeExample } from "./exampleGenerator.ts";
-
-const PIPELINE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const TAXONOMY_DIR = path.join(PIPELINE_DIR, "taxonomy");
-
-const TAXONOMY_VERSION = "0.1.0";
 
 const EXAMPLES_PER_POSTING = 20;
 const MIN_PER_TOPIC = 2;
@@ -38,10 +32,7 @@ const DEFAULT_LANGUAGE = "TypeScript"; // when a posting names no language
 
 
 // use a job description file to create a plan file
-async function plan(jobDescription: string): Promise<Plan> {
-    const taxonomy: Taxonomy = JSON.parse(readFileSync(path.join(TAXONOMY_DIR, `v${TAXONOMY_VERSION}.json`), "utf8"));
-    const languages = LanguageList.parse(JSON.parse(readFileSync(path.join(TAXONOMY_DIR, "languages.json"), "utf8")));
-
+async function plan(jobDescription: string, taxonomy: Taxonomy, languages: LanguageList): Promise<Plan> {
     // 1. classify
     const classification = await classify(jobDescription, taxonomy, languages);
     return planFromClassification(classification, taxonomy);
@@ -125,30 +116,37 @@ function largestRemainder(total: number, shares: number[]): number[] {
 }
 
 // exampleOut: folder to write the generated example to. Without it, only report the topic.
-async function pipeline(plan: Plan, exampleOut?: string) {
+async function pipeline(plan: Plan, taxonomy: Taxonomy, exampleOut?: string) {
     // TODO: count bank, compute shortfall; for now take the top target
     const topic = plan.targets[0].label;
     console.log(`going to create an example for ${topic}`);
     if (!exampleOut) return;
 
-    const taxonomy = Taxonomy.parse(JSON.parse(readFileSync(path.join(TAXONOMY_DIR, `v${plan.taxonomyVersion}.json`), "utf8")));
     const example = await generateExample(topic, taxonomy);
     await writeExample(example, exampleOut);
     console.log(`Example written to ${exampleOut}`);
 }
 
+// Every mode needs --taxonomy <taxonomy.json>; classifying (standard, --create_plan) also needs --languages <languages.json>.
 // standard:     node pipeline/src/pipeline.ts <job_description_file.txt>                          plan → pipeline
 // plan only:    node pipeline/src/pipeline.ts <job_description_file.txt> --create_plan <out.json>  plan → write file
 // reuse a plan: node pipeline/src/pipeline.ts --use_plan <plan.json>                               read file → pipeline
 // add --example_out <dir> to standard or --use_plan to generate the example into <dir> (public.json, key.json, src/)
 async function main() {
     const { values, positionals } = parseArgs({
-        options: { create_plan: { type: "string" },
+        options: { taxonomy:    { type: "string" },
+                   languages:   { type: "string" },
+                   create_plan: { type: "string" },
                    use_plan:    { type: "string" },
                    example_out: { type: "string" } },
         allowPositionals: true,
     });
-    const usage = "Usage: node pipeline/src/pipeline.ts <job_description_file.txt> [--create_plan <out.json>] | --use_plan <plan.json>  [--example_out <dir>]";
+    const usage = "Usage: node pipeline/src/pipeline.ts --taxonomy <taxonomy.json> (--languages <languages.json> <job_description_file.txt> [--create_plan <out.json>] | --use_plan <plan.json>) [--example_out <dir>]";
+    if (!values.taxonomy) {
+        console.error(usage);
+        process.exit(1);
+    }
+    const taxonomy = Taxonomy.parse(JSON.parse(await readFile(values.taxonomy, "utf8")));
 
     if (values.create_plan && values.use_plan) {
         console.error("--create_plan and --use_plan can't be used together.\n" + usage);
@@ -162,17 +160,18 @@ async function main() {
     // --use_plan: skip planning, run the pipeline on a saved plan
     if (values.use_plan) {
         const saved = Plan.parse(JSON.parse(await readFile(values.use_plan, "utf8")));
-        await pipeline(saved, values.example_out);
+        await pipeline(saved, taxonomy, values.example_out);
         return;
     }
 
     const jobDescriptionFile = positionals[0];
-    if (!jobDescriptionFile) {
+    if (!jobDescriptionFile || !values.languages) {
         console.error(usage);
         process.exit(1);
     }
     const description = await readFile(jobDescriptionFile, "utf8");
-    const result = await plan(description);
+    const languages = LanguageList.parse(JSON.parse(await readFile(values.languages, "utf8")));
+    const result = await plan(description, taxonomy, languages);
 
     // --create_plan: save the plan and stop
     if (values.create_plan) {
@@ -182,7 +181,7 @@ async function main() {
     }
 
     // standard: plan, then pipeline
-    await pipeline(result, values.example_out);
+    await pipeline(result, taxonomy, values.example_out);
 }
 
 // run only when executed directly, not when imported

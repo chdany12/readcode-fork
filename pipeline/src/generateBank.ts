@@ -11,32 +11,36 @@
 //   --mode assemble  validate each draft and write the example, exactly as the API path does.
 //
 // Usage: node --env-file-if-exists=.env pipeline/src/generateBank.ts --mode <api|prepare|assemble>
-//            [--plan <master.json>] [--out <dir>] [--limit <n>] [--concurrency <n>]
+//            --plan <master.json> --taxonomy <taxonomy.json> --out <dir> [--limit <n>] [--concurrency <n>]
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 import { Plan, Taxonomy, type LabelId } from "../../shared/types.ts";
 import { SYSTEM_PROMPT, exampleFromDraft, generateExample, prepareRequest, writeExample } from "./exampleGenerator.ts";
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const MAX_ATTEMPTS = 3; // api mode: generation can fail validation (e.g. a defect snippet that doesn't match)
 
 const { values } = parseArgs({
     options: {
         mode: { type: "string", default: "api" },
-        plan: { type: "string", default: path.join(ROOT, "postings", "plans", "master.json") },
-        out: { type: "string", default: path.join(ROOT, "examples") },
+        plan: { type: "string" },
+        taxonomy: { type: "string" },
+        out: { type: "string" },
         limit: { type: "string" },
         concurrency: { type: "string", default: "4" },
     },
 });
 
-const plan = Plan.parse(JSON.parse(readFileSync(values.plan!, "utf8")));
-const taxonomy = Taxonomy.parse(JSON.parse(readFileSync(path.join(ROOT, "pipeline", "taxonomy", `v${plan.taxonomyVersion}.json`), "utf8")));
-const out = values.out!;
+if (!values.plan || !values.taxonomy || !values.out) {
+    console.error("Usage: node pipeline/src/generateBank.ts --mode <api|prepare|assemble> --plan <master.json> --taxonomy <taxonomy.json> --out <dir> [--limit <n>] [--concurrency <n>]");
+    process.exit(1);
+}
+const plan = Plan.parse(JSON.parse(readFileSync(values.plan, "utf8")));
+const taxonomy = Taxonomy.parse(JSON.parse(readFileSync(values.taxonomy, "utf8")));
+if (taxonomy.version !== plan.taxonomyVersion) throw new Error(`plan uses taxonomy ${plan.taxonomyVersion}, but --taxonomy is ${taxonomy.version}`);
+const out = values.out;
 const jobsDir = path.join(out, ".work", "jobs");
 const draftsDir = path.join(out, ".work", "drafts");
 
