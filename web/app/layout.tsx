@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Nav from "./Nav";
+import { Suspense } from "react";
+import Nav, { NavBar } from "./Nav";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,7 +26,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`dark ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex h-screen flex-col">
-        <Nav />
+        {/* the nav reads the URL, which is only known at request time */}
+        <Suspense fallback={<NavBar pathname={null} />}>
+          <Nav />
+        </Suspense>
         <div className="flex min-h-0 flex-1 flex-col overflow-auto">{children}</div>
       </body>
     </html>

@@ -5,6 +5,7 @@ import { ChevronRight, ExternalLink, FileSearch } from "lucide-react";
 import { listJobMatches } from "@/lib/jobs";
 import { jobTitle, topicName } from "@/lib/format";
 import { buttonVariants } from "@/components/ui/button";
+import { logoFor } from "@/lib/companies";
 
 // A role's practice plan: the posting's topics, how central each is, and the exercises for it.
 export default function RolePage({ params }: PageProps<"/jobs/[id]">) {
@@ -28,9 +29,20 @@ async function Role({ params }: { params: PageProps<"/jobs/[id]">["params"] }) {
     return (
         <>
             <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">← Home</Link>
-            <div className="mt-4 text-sm text-muted-foreground">{job.company}</div>
-            <h1 className="text-2xl font-semibold tracking-tight">{jobTitle(job.title)}</h1>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 text-sm text-muted-foreground">
+            {/* header: company logo tile beside company name and title */}
+            <div className="mt-6 flex items-center gap-4">
+                {logoFor(job.company) && (
+                    <span className="flex size-14 shrink-0 items-center justify-center rounded-xl border bg-muted/40 p-3">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={logoFor(job.company)} alt="" className="max-h-full max-w-full object-contain" />
+                    </span>
+                )}
+                <div className="min-w-0">
+                    <div className="text-sm text-muted-foreground">{job.company}</div>
+                    <h1 className="text-2xl leading-tight font-semibold tracking-tight">{jobTitle(job.title)}</h1>
+                </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 text-sm text-muted-foreground">
                 {job.location && <span>{job.location}</span>}
                 <span>{examples.length} exercises · ~{Math.round(minutes / 60)} h</span>
                 {job.url && (

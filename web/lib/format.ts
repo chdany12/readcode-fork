@@ -15,6 +15,7 @@ export function topicName(label: string): string {
 // "backend.concurrency.race_conditions" -> "Concurrency"
 export function areaName(label: string): string {
     const a = label.split(".")[1] ?? label;
+    if (WORDS[a] && WORDS[a] === WORDS[a].toUpperCase()) return WORDS[a]; // acronyms: "api" -> "API"
     return a.charAt(0).toUpperCase() + a.slice(1);
 }
 

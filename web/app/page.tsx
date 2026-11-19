@@ -4,16 +4,10 @@ import { ChevronRight } from "lucide-react";
 import { listJobMatches, type JobMatch } from "@/lib/jobs";
 import { jobTitle } from "@/lib/format";
 import OwnPosting from "./OwnPosting";
+import { COMPANIES } from "@/lib/companies";
 import RoleCard from "./RoleCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-// Featured companies. Full-color logos in public/logos (from svgl.app; Amazon uses the AWS smile logo).
-const COMPANIES = [
-    { name: "Google", logo: "/logos/google.svg" },
-    { name: "Amazon", logo: "/logos/amazon.svg" },
-    { name: "Meta", logo: "/logos/meta.svg" },
-    { name: "Apple", logo: "/logos/apple.svg" },
-];
 const PER_COMPANY = 2;
 
 export default function Home() {
@@ -22,7 +16,7 @@ export default function Home() {
             <section className="relative py-16 text-center">
                 {/* soft glow behind the hero */}
                 <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 mx-auto h-72 max-w-3xl rounded-full bg-gradient-to-r from-sky-500/20 via-violet-500/20 to-emerald-500/20 blur-3xl" />
-                <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">Practice reading code the way your interview will test it</h1>
+                <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">Practice reading code for the role you want</h1>
                 <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
                     Paste a job posting. We weigh the concepts the role depends on and build a code-reading practice plan in that mix.
                 </p>
