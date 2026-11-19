@@ -6,27 +6,35 @@
       "count": 4
     },
     {
-      "label": "backend.security.authentication",
-      "count": 3
+      "label": "backend.testing.mocking_and_fakes",
+      "count": 2
     },
     {
-      "label": "backend.security.authorization_checks",
-      "count": 3
+      "label": "backend.testing.integration_tests",
+      "count": 2
     },
     {
-      "label": "backend.observability.structured_logging",
-      "count": 3
+      "label": "backend.design.dependency_injection",
+      "count": 2
     },
     {
-      "label": "backend.design.code_duplication",
-      "count": 3
+      "label": "backend.design.layering",
+      "count": 2
     },
     {
-      "label": "backend.api.rest_design",
+      "label": "backend.design.interface_design",
+      "count": 2
+    },
+    {
+      "label": "backend.design.coupling_and_cohesion",
       "count": 2
     },
     {
       "label": "backend.errors.error_propagation",
+      "count": 2
+    },
+    {
+      "label": "backend.errors.error_wrapping_and_context",
       "count": 2
     }
   ]

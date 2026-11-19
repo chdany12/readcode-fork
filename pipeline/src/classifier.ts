@@ -36,11 +36,14 @@ const MODEL = "claude-opus-5-5";
 
 const SYSTEM_PROMPT = `You classify software job postings against a taxonomy of backend engineering concepts.
 
-For each label, estimate how relevant that concept is to the day-to-day work implied by the posting, as a weight from 0 to 1:
+For EVERY label, estimate how relevant that concept is to the day-to-day work implied by the posting, as a weight from 0 to 1. Return a weight for every label; do not omit any.
 - 1.0: central to the role (explicitly required, or unavoidable given the domain and stack)
 - 0.5: likely to come up regularly
 - 0.1-0.3: plausible but peripheral
-- omit the label entirely if it is not relevant
+- 0.01-0.05: trace; almost any backend role touches it a little
+- 0: only if the concept genuinely cannot arise in this role
+
+Most backend concepts touch most backend roles at least a little, so expect few zeros. Use the full range and distinguish between labels (e.g. 0.7 vs 0.5 vs 0.35), rather than only the anchor values.
 
 Infer from the domain, stack, and scale, not only from literal mentions. For example, payments work implies idempotency and transactions even if those words never appear.
 Ignore company boilerplate, benefits, and EEO text.`;

@@ -2,20 +2,32 @@
   "taxonomyVersion": "0.1.0",
   "targets": [
     {
-      "label": "backend.api.rest_design",
-      "count": 4
-    },
-    {
       "label": "backend.config.configuration_loading",
-      "count": 4
+      "count": 3
     },
     {
       "label": "backend.observability.metrics",
       "count": 3
     },
     {
+      "label": "backend.observability.structured_logging",
+      "count": 2
+    },
+    {
+      "label": "backend.observability.health_checks",
+      "count": 2
+    },
+    {
       "label": "backend.resilience.retries_and_backoff",
-      "count": 3
+      "count": 2
+    },
+    {
+      "label": "backend.security.secrets_handling",
+      "count": 2
+    },
+    {
+      "label": "backend.config.defaults_and_validation",
+      "count": 2
     },
     {
       "label": "backend.testing.integration_tests",
@@ -23,10 +35,6 @@
     },
     {
       "label": "backend.resilience.timeouts",
-      "count": 2
-    },
-    {
-      "label": "backend.api.idempotency",
       "count": 2
     }
   ]

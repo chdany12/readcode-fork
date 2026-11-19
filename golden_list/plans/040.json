@@ -2,19 +2,39 @@
   "taxonomyVersion": "0.1.0",
   "targets": [
     {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "count": 3
+    },
+    {
+      "label": "backend.data.transactions_and_isolation_levels",
+      "count": 3
+    },
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "count": 2
+    },
+    {
       "label": "backend.concurrency.race_conditions",
-      "count": 6
+      "count": 2
     },
     {
       "label": "backend.concurrency.locking_and_lock_ordering",
-      "count": 6
+      "count": 2
     },
     {
-      "label": "backend.performance.profiling_and_hot_paths",
-      "count": 6
+      "label": "backend.concurrency.thread_and_worker_pools",
+      "count": 2
     },
     {
-      "label": "backend.concurrency.deadlocks",
+      "label": "backend.concurrency.atomic_operations",
+      "count": 2
+    },
+    {
+      "label": "backend.resources.memory_leaks",
+      "count": 2
+    },
+    {
+      "label": "backend.distributed.replication_and_consensus",
       "count": 2
     }
   ]

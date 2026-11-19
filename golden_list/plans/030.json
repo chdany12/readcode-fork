@@ -2,22 +2,6 @@
   "taxonomyVersion": "0.1.0",
   "targets": [
     {
-      "label": "backend.api.rest_design",
-      "count": 4
-    },
-    {
-      "label": "backend.design.interface_design",
-      "count": 4
-    },
-    {
-      "label": "backend.design.coupling_and_cohesion",
-      "count": 3
-    },
-    {
-      "label": "backend.integrations.third_party_adapters",
-      "count": 3
-    },
-    {
       "label": "backend.api.request_validation",
       "count": 2
     },
@@ -26,7 +10,35 @@
       "count": 2
     },
     {
-      "label": "backend.data.migrations",
+      "label": "backend.integrations.third_party_adapters",
+      "count": 2
+    },
+    {
+      "label": "backend.api.rest_design",
+      "count": 2
+    },
+    {
+      "label": "backend.api.idempotency",
+      "count": 2
+    },
+    {
+      "label": "backend.api.versioning",
+      "count": 2
+    },
+    {
+      "label": "backend.api.status_codes_and_error_responses",
+      "count": 2
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "count": 2
+    },
+    {
+      "label": "backend.security.authentication",
+      "count": 2
+    },
+    {
+      "label": "backend.design.dependency_injection",
       "count": 2
     }
   ]

@@ -2,24 +2,40 @@
   "taxonomyVersion": "0.1.0",
   "targets": [
     {
-      "label": "backend.resilience.timeouts",
-      "count": 4
+      "label": "backend.resources.streaming_large_payloads",
+      "count": 3
     },
     {
       "label": "backend.resilience.retries_and_backoff",
-      "count": 4
+      "count": 3
     },
     {
-      "label": "backend.resources.streaming_large_payloads",
-      "count": 4
+      "label": "backend.resilience.timeouts",
+      "count": 2
     },
     {
       "label": "backend.observability.metrics",
-      "count": 4
+      "count": 2
     },
     {
       "label": "backend.distributed.sharding_and_partitioning",
-      "count": 4
+      "count": 2
+    },
+    {
+      "label": "backend.api.serialization_and_deserialization",
+      "count": 2
+    },
+    {
+      "label": "backend.design.interface_design",
+      "count": 2
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "count": 2
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "count": 2
     }
   ]
 }

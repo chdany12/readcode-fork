@@ -3,7 +3,15 @@
   "targets": [
     {
       "label": "backend.integrations.third_party_adapters",
-      "count": 8
+      "count": 4
+    },
+    {
+      "label": "backend.api.rest_design",
+      "count": 3
+    },
+    {
+      "label": "backend.testing.unit_test_design",
+      "count": 3
     },
     {
       "label": "backend.resilience.timeouts",
@@ -14,19 +22,15 @@
       "count": 2
     },
     {
-      "label": "backend.api.rest_design",
+      "label": "backend.security.authentication",
       "count": 2
     },
     {
-      "label": "backend.api.idempotency",
+      "label": "backend.testing.integration_tests",
       "count": 2
     },
     {
-      "label": "backend.security.secrets_handling",
-      "count": 2
-    },
-    {
-      "label": "backend.observability.logging_sensitive_data",
+      "label": "backend.api.request_validation",
       "count": 2
     }
   ]

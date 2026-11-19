@@ -3,22 +3,30 @@
   "targets": [
     {
       "label": "backend.data.n_plus_one_queries",
-      "count": 6
+      "count": 4
     },
     {
       "label": "backend.data.orm_pitfalls",
-      "count": 6
-    },
-    {
-      "label": "backend.data.transactions_and_isolation_levels",
-      "count": 2
+      "count": 4
     },
     {
       "label": "backend.data.migrations",
       "count": 2
     },
     {
-      "label": "backend.data.pagination",
+      "label": "backend.api.rest_design",
+      "count": 2
+    },
+    {
+      "label": "backend.api.request_validation",
+      "count": 2
+    },
+    {
+      "label": "backend.data.transactions_and_isolation_levels",
+      "count": 2
+    },
+    {
+      "label": "backend.testing.unit_test_design",
       "count": 2
     },
     {

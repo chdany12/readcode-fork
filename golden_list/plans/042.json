@@ -2,24 +2,36 @@
   "taxonomyVersion": "0.1.0",
   "targets": [
     {
-      "label": "backend.concurrency.race_conditions",
+      "label": "backend.performance.profiling_and_hot_paths",
       "count": 4
     },
     {
-      "label": "backend.concurrency.locking_and_lock_ordering",
-      "count": 4
+      "label": "backend.concurrency.race_conditions",
+      "count": 3
     },
     {
       "label": "backend.concurrency.thread_and_worker_pools",
-      "count": 4
+      "count": 3
+    },
+    {
+      "label": "backend.concurrency.locking_and_lock_ordering",
+      "count": 2
     },
     {
       "label": "backend.resources.memory_leaks",
-      "count": 4
+      "count": 2
     },
     {
-      "label": "backend.performance.profiling_and_hot_paths",
-      "count": 4
+      "label": "backend.design.interface_design",
+      "count": 2
+    },
+    {
+      "label": "backend.concurrency.atomic_operations",
+      "count": 2
+    },
+    {
+      "label": "backend.concurrency.deadlocks",
+      "count": 2
     }
   ]
 }

@@ -3,15 +3,15 @@
   "targets": [
     {
       "label": "backend.messaging.deduplication",
-      "count": 5
-    },
-    {
-      "label": "backend.distributed.sharding_and_partitioning",
-      "count": 5
+      "count": 3
     },
     {
       "label": "backend.resources.streaming_large_payloads",
-      "count": 4
+      "count": 3
+    },
+    {
+      "label": "backend.distributed.sharding_and_partitioning",
+      "count": 3
     },
     {
       "label": "backend.performance.profiling_and_hot_paths",
@@ -19,7 +19,19 @@
     },
     {
       "label": "backend.resilience.retries_and_backoff",
-      "count": 3
+      "count": 2
+    },
+    {
+      "label": "backend.concurrency.thread_and_worker_pools",
+      "count": 2
+    },
+    {
+      "label": "backend.api.idempotency",
+      "count": 2
+    },
+    {
+      "label": "backend.resources.memory_leaks",
+      "count": 2
     }
   ]
 }

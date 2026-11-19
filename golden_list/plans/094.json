@@ -3,30 +3,14 @@
   "targets": [
     {
       "label": "backend.design.interface_design",
-      "count": 4
-    },
-    {
-      "label": "backend.data.n_plus_one_queries",
-      "count": 2
-    },
-    {
-      "label": "backend.security.authorization_checks",
-      "count": 2
-    },
-    {
-      "label": "backend.design.layering",
-      "count": 2
+      "count": 3
     },
     {
       "label": "backend.design.coupling_and_cohesion",
-      "count": 2
+      "count": 3
     },
     {
-      "label": "backend.caching.cache_invalidation",
-      "count": 2
-    },
-    {
-      "label": "backend.api.serialization_and_deserialization",
+      "label": "backend.api.rest_design",
       "count": 2
     },
     {
@@ -34,7 +18,23 @@
       "count": 2
     },
     {
+      "label": "backend.design.layering",
+      "count": 2
+    },
+    {
+      "label": "backend.data.n_plus_one_queries",
+      "count": 2
+    },
+    {
+      "label": "backend.design.dependency_injection",
+      "count": 2
+    },
+    {
       "label": "backend.design.code_duplication",
+      "count": 2
+    },
+    {
+      "label": "backend.data.pagination",
       "count": 2
     }
   ]

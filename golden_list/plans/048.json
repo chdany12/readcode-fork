@@ -2,19 +2,35 @@
   "taxonomyVersion": "0.1.0",
   "targets": [
     {
-      "label": "backend.data.transactions_and_isolation_levels",
-      "count": 6
+      "label": "backend.data.money_and_ledgers",
+      "count": 4
     },
     {
       "label": "backend.api.idempotency",
-      "count": 6
+      "count": 4
     },
     {
-      "label": "backend.data.money_and_ledgers",
-      "count": 6
+      "label": "backend.data.transactions_and_isolation_levels",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "count": 2
+    },
+    {
+      "label": "backend.distributed.cross_service_consistency",
+      "count": 2
     },
     {
       "label": "backend.concurrency.race_conditions",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "count": 2
+    },
+    {
+      "label": "backend.api.request_validation",
       "count": 2
     }
   ]

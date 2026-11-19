@@ -10,11 +10,11 @@
       "count": 3
     },
     {
-      "label": "backend.api.rest_design",
+      "label": "backend.messaging.queues_and_consumers",
       "count": 3
     },
     {
-      "label": "backend.messaging.queues_and_consumers",
+      "label": "backend.data.nosql_modeling",
       "count": 3
     },
     {
@@ -22,15 +22,15 @@
       "count": 2
     },
     {
+      "label": "backend.api.rest_design",
+      "count": 2
+    },
+    {
       "label": "backend.messaging.message_ordering",
       "count": 2
     },
     {
-      "label": "backend.distributed.sharding_and_partitioning",
-      "count": 2
-    },
-    {
-      "label": "backend.data.nosql_modeling",
+      "label": "backend.resilience.retries_and_backoff",
       "count": 2
     }
   ]

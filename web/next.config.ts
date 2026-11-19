@@ -7,17 +7,10 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: { "/**": ["../examples/**/*", "../twilio_example/**/*"] }, // bundle the examples
   experimental: {
     agentFeedback: true,
+    agentUpgrade: "security",
   },
   cacheComponents: true,
   partialPrefetching: true,
-  turbopack: {
-    rules: {
-      "*.css": {
-        loaders: ["@tailwindcss/turbopack"],
-        as: "*.css",
-      },
-    },
-  },
 };
 
 export default nextConfig;

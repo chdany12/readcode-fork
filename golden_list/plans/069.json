@@ -3,18 +3,10 @@
   "targets": [
     {
       "label": "backend.api.rest_design",
-      "count": 8
+      "count": 4
     },
     {
-      "label": "backend.resilience.timeouts",
-      "count": 2
-    },
-    {
-      "label": "backend.resilience.retries_and_backoff",
-      "count": 2
-    },
-    {
-      "label": "backend.caching.cache_invalidation",
+      "label": "backend.design.coupling_and_cohesion",
       "count": 2
     },
     {
@@ -26,7 +18,23 @@
       "count": 2
     },
     {
-      "label": "backend.design.coupling_and_cohesion",
+      "label": "backend.design.layering",
+      "count": 2
+    },
+    {
+      "label": "backend.distributed.cross_service_consistency",
+      "count": 2
+    },
+    {
+      "label": "backend.performance.profiling_and_hot_paths",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.timeouts",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
       "count": 2
     }
   ]

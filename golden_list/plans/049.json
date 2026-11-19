@@ -2,11 +2,7 @@
   "taxonomyVersion": "0.1.0",
   "targets": [
     {
-      "label": "backend.data.transactions_and_isolation_levels",
-      "count": 3
-    },
-    {
-      "label": "backend.data.migrations",
+      "label": "backend.data.money_and_ledgers",
       "count": 3
     },
     {
@@ -14,19 +10,31 @@
       "count": 3
     },
     {
+      "label": "backend.data.transactions_and_isolation_levels",
+      "count": 2
+    },
+    {
       "label": "backend.observability.structured_logging",
-      "count": 3
+      "count": 2
     },
     {
       "label": "backend.observability.metrics",
-      "count": 3
+      "count": 2
     },
     {
       "label": "backend.observability.tracing",
-      "count": 3
+      "count": 2
     },
     {
-      "label": "backend.data.money_and_ledgers",
+      "label": "backend.data.migrations",
+      "count": 2
+    },
+    {
+      "label": "backend.resilience.retries_and_backoff",
+      "count": 2
+    },
+    {
+      "label": "backend.distributed.cross_service_consistency",
       "count": 2
     }
   ]
