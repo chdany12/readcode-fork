@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { ChevronRight, ExternalLink, FileCode } from "lucide-react";
+import { ChevronRight, ExternalLink, FileSearch } from "lucide-react";
 import { listJobMatches } from "@/lib/jobs";
 import { jobTitle, topicName } from "@/lib/format";
 import { buttonVariants } from "@/components/ui/button";
@@ -65,10 +65,18 @@ async function Role({ params }: { params: PageProps<"/jobs/[id]">["params"] }) {
                                         title={e.title}
                                         className="group/row -mx-2 flex items-center gap-2 rounded-md px-2 py-2 hover:bg-muted"
                                     >
-                                        <FileCode className="size-4 shrink-0 text-muted-foreground" />
-                                        <span className="min-w-0 flex-1 truncate">{e.shortName}</span>
-                                        <span className="shrink-0 text-xs text-muted-foreground">{e.durationMinutes} min</span>
-                                        <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover/row:translate-x-0.5 group-hover/row:text-foreground" />
+                                        <FileSearch className="size-5 shrink-0 text-muted-foreground group-hover/row:text-foreground" />
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block truncate">{e.shortName}</span>
+                                            <span className="block text-xs text-muted-foreground">Code review · {e.questionCount} questions · {e.durationMinutes} min</span>
+                                        </span>
+                                        {/* a round chevron that widens into "Practice" on hover */}
+                            <span className="flex h-7 shrink-0 items-center rounded-full border px-1.5 text-foreground transition-all duration-200 group-hover/row:border-foreground/40 group-hover/row:pl-3">
+                                <span className="max-w-0 overflow-hidden text-xs font-medium whitespace-nowrap opacity-0 transition-all duration-200 group-hover/row:mr-1 group-hover/row:max-w-20 group-hover/row:opacity-100">
+                                    Practice
+                                </span>
+                                <ChevronRight className="size-4" />
+                            </span>
                                     </Link>
                                 </li>
                             ))}

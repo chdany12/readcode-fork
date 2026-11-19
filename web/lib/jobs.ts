@@ -20,10 +20,12 @@ export type JobMatch = {
     needed: number;      // examples in the posting's plan
     matched: number;     // of those, available in the bank
     topics: TopicMatch[];
+    profile: { label: string; weight: number }[]; // every taxonomy label in taxonomy order, 0 if unweighted
 };
 
 export async function listJobMatches(): Promise<JobMatch[]> {
     const postings = JSON.parse(await readFile(path.join(GOLDEN, "backend_jobs.json"), "utf8")) as Posting[];
+    const taxonomy = JSON.parse(await readFile(path.join(/*turbopackIgnore: true*/ EXAMPLES_ROOT, "pipeline", "taxonomy", "v0.1.0.json"), "utf8")) as { labels: string[] };
     const byTopic = new Map<string, ExampleSummary[]>();
     for (const e of await listExamples()) byTopic.set(e.topic, [...(byTopic.get(e.topic) ?? []), e]);
 
@@ -48,6 +50,7 @@ export async function listJobMatches(): Promise<JobMatch[]> {
                 needed: topics.reduce((s, t) => s + t.needed, 0),
                 matched: topics.reduce((s, t) => s + t.examples.length, 0),
                 topics,
+                profile: taxonomy.labels.map((label) => ({ label, weight: weights.get(label) ?? 0 })),
             };
         }),
     );
