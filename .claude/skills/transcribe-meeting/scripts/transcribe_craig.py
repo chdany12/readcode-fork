@@ -6,6 +6,10 @@ timestamps from different tracks line up. We transcribe each track with
 faster-whisper (VAD skips the long silences) and merge the segments by time.
 
     python transcribe_craig.py RECORDING.zip OUT.md [--model small] [--language en]
+
+A single audio or video file (one mixed track, e.g. a phone or OBS recording) also works,
+but then nobody is labelled: every line is "speaker?" and the speakers have to be worked
+out from what is said.
 """
 
 import argparse
@@ -17,6 +21,7 @@ import zipfile
 from pathlib import Path
 
 AUDIO_EXT = {".aac", ".flac", ".ogg", ".opus", ".m4a", ".mp3", ".wav"}
+MIXED = "speaker?"
 
 
 def speaker_name(path: Path) -> str:
@@ -101,7 +106,7 @@ def load_model(name: str, device: str):
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("zip", type=Path)
+    ap.add_argument("zip", type=Path, help="Craig zip, or one mixed audio/video file")
     ap.add_argument("out", type=Path)
     ap.add_argument("--model", default="small", help="tiny/base/small/medium/large-v3/turbo")
     ap.add_argument("--language", default=None, help="e.g. en; default: auto-detect per track")
@@ -113,20 +118,24 @@ def main() -> int:
 
     segments = []
     info_txt = ""
+    mixed = not zipfile.is_zipfile(args.zip)
     with tempfile.TemporaryDirectory() as tmp:
-        with zipfile.ZipFile(args.zip) as z:
-            for member in z.namelist():
-                name = Path(member).name
-                if name.lower() == "info.txt":
-                    info_txt = z.read(member).decode("utf-8", "replace")
-                elif name and Path(name).suffix.lower() in AUDIO_EXT:
-                    (Path(tmp) / name).write_bytes(z.read(member))
-        tracks = sorted(p for p in Path(tmp).iterdir() if p.suffix.lower() in AUDIO_EXT)
+        if mixed:  # any format PyAV can decode, whatever its extension
+            tracks = [args.zip]
+        else:
+            with zipfile.ZipFile(args.zip) as z:
+                for member in z.namelist():
+                    name = Path(member).name
+                    if name.lower() == "info.txt":
+                        info_txt = z.read(member).decode("utf-8", "replace")
+                    elif name and Path(name).suffix.lower() in AUDIO_EXT:
+                        (Path(tmp) / name).write_bytes(z.read(member))
+            tracks = sorted(p for p in Path(tmp).iterdir() if p.suffix.lower() in AUDIO_EXT)
         if not tracks:
             print("no audio tracks in the zip", file=sys.stderr)
             return 1
         for track in tracks:
-            who = speaker_name(track)
+            who = MIXED if mixed else speaker_name(track)
             t0 = time.time()
             parts, info = model.transcribe(
                 decode(track),
@@ -150,7 +159,7 @@ def main() -> int:
     # Merge consecutive segments from the same speaker into one turn.
     turns = []
     for start, who, text in segments:
-        if turns and turns[-1][1] == who:
+        if turns and turns[-1][1] == who and not mixed:  # mixed: every line is "speaker?"
             turns[-1][2].append(text)
         else:
             turns.append((start, who, [text]))
@@ -159,8 +168,10 @@ def main() -> int:
     if info_txt:
         lines += ["```", info_txt.strip(), "```", ""]
     lines += [
-        f"Transcribed automatically with Whisper `{args.model}`; names are Discord handles. "
-        "Expect misheard words, especially names and jargon.",
+        f"Transcribed automatically with Whisper `{args.model}`; "
+        + ("one mixed track, so speakers are not separated (`speaker?`). " if mixed
+           else "names are Discord handles. ")
+        + "Expect misheard words, especially names and jargon.",
         "",
     ]
     for start, who, texts in turns:

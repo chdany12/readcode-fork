@@ -17,6 +17,8 @@ free, no API key, and the audio never leaves your machine.
 1. **Record** with Craig in the voice channel, then download the **multi-track** zip from
    the link Craig sends (one audio file per speaker, e.g. `craig-xxxx.aac.zip`). Keep it
    outside the repo.
+   Only have one audio or video file (a phone or OBS recording, or Craig's single-track
+   download)? That works too, but the transcript can't tell speakers apart.
 2. In Claude Code, type:
    ```
    /transcribe-meeting C:\Users\you\Downloads\craig-xxxx.aac.zip

@@ -1,6 +1,6 @@
 ---
 name: transcribe-meeting
-description: Transcribe a team meeting recorded by Craig (the Discord recording bot) into a speaker-labelled Markdown transcript plus a short summary. Use when the user gives a Craig zip (craig-*.zip with one .aac/.flac track per speaker, info.txt, raw.dat), says "transcribe the meeting", or invokes /transcribe-meeting.
+description: Transcribe a team meeting recorded by Craig (the Discord recording bot) into a speaker-labelled Markdown transcript plus a short summary. Use when the user gives a Craig zip (craig-*.zip with one .aac/.flac track per speaker, info.txt, raw.dat) or a single meeting audio/video file, says "transcribe the meeting", or invokes /transcribe-meeting.
 ---
 
 # Transcribe a Craig meeting recording
@@ -10,6 +10,10 @@ from the recording start, plus `info.txt` (guild, channel, start time, tracks) a
 `raw.dat` (ignored). The script transcribes each track locally with Whisper
 (faster-whisper, free, no API) and merges them by timestamp, so speakers are exact
 (from the track) and only the words can be wrong. Works on Windows, macOS and Linux.
+
+A single mixed file (one track for everyone: phone, OBS, Zoom, or Craig's "single track"
+download) also works, but every line comes out as `speaker?`. If the user has a Craig zip
+option, prefer the multi-track one; otherwise go ahead with what they have.
 
 ## Steps
 
@@ -25,7 +29,7 @@ from the recording start, plus `info.txt` (guild, channel, start time, tracks) a
    the script adds their DLL folders itself on Windows and falls back to CPU if CUDA fails.
    Macs run on CPU. The first run downloads the model (~0.5 GB for `small`, ~1.5 GB for `medium`).
 2. **Read `info.txt`** from the zip for the start time (UTC; convert to the user's local
-   date) and the speaker list.
+   date) and the speaker list. For a single file, ask the user the date and who attended.
 3. **Run** in the background:
    ```bash
    <venv-python> -I .claude/skills/transcribe-meeting/scripts/transcribe_craig.py <zip> docs/meetings/<YYYY-MM-DD>-transcript.md
@@ -37,6 +41,9 @@ from the recording start, plus `info.txt` (guild, channel, start time, tracks) a
 4. **Check** the output: every speaker in `info.txt` appears; no long runs of repeated
    lines (Whisper hallucination); the detected language per track (printed) is right.
    Rerun with `--language` or a bigger model if not.
+   For a mixed file, don't relabel the transcript; in the notes, attribute decisions and
+   action items only where the speaker is clear from what is said (names, "I'll take that"),
+   and mark those attributions as inferred.
 5. **Summarize** in `docs/meetings/<YYYY-MM-DD>-notes.md`: start with a `# ` title line and a
    "Who's who" line, then `## Decided` (a table: #, decision, when, notes), `## Action items`
    (owner) and `## Open questions`. Link to the transcript; quote timestamps for each
