@@ -6,6 +6,7 @@ import { listJobMatches } from "@/lib/jobs";
 import { jobTitle, topicName } from "@/lib/format";
 import { buttonVariants } from "@/components/ui/button";
 import { logoFor } from "@/lib/companies";
+import { ExerciseKindTag, questionsLabel } from "@/components/exercise-kind-tag";
 
 // A role's practice plan: the posting's topics, how central each is, and the exercises for it.
 export default function RolePage({ params }: PageProps<"/jobs/[id]">) {
@@ -80,8 +81,8 @@ async function Role({ params }: { params: PageProps<"/jobs/[id]">["params"] }) {
                                     >
                                         <FileSearch className="size-5 shrink-0 text-muted-foreground group-hover/row:text-foreground" />
                                         <span className="min-w-0 flex-1">
-                                            <span className="block truncate">{e.shortName}</span>
-                                            <span className="block text-xs text-muted-foreground">Code review · {e.questionCount} questions · {e.durationMinutes} min</span>
+                                            <span className="flex min-w-0 items-center gap-2"><span className="truncate">{e.shortName}</span><ExerciseKindTag kind={e.kind} /></span>
+                                            <span className="block text-xs text-muted-foreground">{questionsLabel(e.questionCount)} · {e.durationMinutes} min</span>
                                         </span>
                                         {/* a round chevron that widens into "Practice" on hover */}
                             <span className="flex h-7 shrink-0 items-center rounded-full border px-1.5 text-foreground transition-all duration-200 group-hover/row:border-foreground/40 group-hover/row:pl-3">
