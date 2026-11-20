@@ -53,8 +53,10 @@ from the recording start, plus `info.txt` (guild, channel, start time, tracks) a
    decisions). The message is the "Decided" and "Action items" sections (max 2000 chars),
    with the notes and transcript attached; `@` mentions are disabled.
    The webhook URL is read from the `READCODE_DISCORD_WEBHOOK` environment variable. Never
-   write it into the repo, a command line that gets logged, or the notes. If it's unset, ask
-   the user to set it themselves (they get the URL from whoever made the webhook, or make one:
+   write it into the repo, a command line that gets logged, or the notes. If it's unset and
+   the user just wants to post, don't block on it: give them the preview text in a code block
+   to copy-paste into Discord, and the paths of the notes and transcript to attach by hand
+   (both are small text files). To post directly next time, ask the user to set it themselves (they get the URL from whoever made the webhook, or make one:
    channel settings > Integrations > Webhooks > New Webhook > Copy URL), then restart Claude Code:
    - Windows: `setx READCODE_DISCORD_WEBHOOK "<url>"`. `setx` only reaches programs started
      afterwards; if the session still doesn't see it, read it for one command from

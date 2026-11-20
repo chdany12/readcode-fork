@@ -29,8 +29,10 @@ free, no API key, and the audio never leaves your machine.
 4. **Check** what it wrote in `docs/meetings/<date>-transcript.md` and `<date>-notes.md`.
    Names of people and tools are often misheard, and decisions are its reading of the
    conversation, so correct anything wrong before sharing.
-5. **Post to Discord** (optional). It shows you the message first and sends only when you
-   say yes. This needs the channel's webhook URL: ask Danny for it privately (never paste it
+5. **Post to Discord** (optional). Without any setup, it gives you the message to
+   copy-paste, plus the notes and transcript files to attach (small text files, unlike the
+   audio). To have it post for you, it shows the message first and sends only when you
+   say yes. That needs the channel's webhook URL: ask Danny for it privately (never paste it
    in a channel or commit it), then set it once and restart Claude Code:
    - Windows (PowerShell): `setx READCODE_DISCORD_WEBHOOK "<url>"`
    - Mac/Linux: add `export READCODE_DISCORD_WEBHOOK="<url>"` to `~/.zshrc` or `~/.bashrc`
